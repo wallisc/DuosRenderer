@@ -14,11 +14,11 @@ D3D11Renderer::D3D11Renderer()
 	FAIL_CHK(FAILED(hr), "Failed D3D11CreateDevice");
 }
 
-void D3D11Renderer::CreateGeometry(_In_ CreateGeometryDescriptor *pCreateGeometryDescriptor, _Out_ Geometry **ppGeometry)
+Geometry* D3D11Renderer::CreateGeometry(_In_ CreateGeometryDescriptor *pCreateGeometryDescriptor)
 {
-	*ppGeometry = new D3D11Geometry(m_pDevice, pCreateGeometryDescriptor);
-	MEM_CHK(ppGeometry);
-
+	D3D11Geometry* pGeometry = new D3D11Geometry(m_pDevice, pCreateGeometryDescriptor);
+	MEM_CHK(pGeometry);
+	return pGeometry;
 }
 
 void D3D11Renderer::DestroyGeometry(_In_ Geometry *pGeometry)
@@ -26,14 +26,45 @@ void D3D11Renderer::DestroyGeometry(_In_ Geometry *pGeometry)
 	delete pGeometry;
 }
 
-void D3D11Renderer::CreateLight(_In_ CreateLightDescriptor *pCreateLightDescriptor, _Out_ Light **ppLight)
+Light *D3D11Renderer::CreateLight(_In_ CreateLightDescriptor *pCreateLightDescriptor)
 {
-	*ppLight = new D3D11Light(pCreateLightDescriptor);
-	MEM_CHK(ppLight);
+	D3D11Light *pLight = new D3D11Light(pCreateLightDescriptor);
+	MEM_CHK(pLight);
+	return pLight;
+}
+
+Scene *D3D11Renderer::CreateScene()
+{
+	Scene *pScene = new D3D11Scene();
+	MEM_CHK(pScene);
+	return pScene;
+}
+
+void D3D11Renderer::DestroyScene(Scene* pScene)
+{
+	delete pScene;
 }
 
 void D3D11Renderer::DrawScene(Camera *pCamera, Scene *pScene)
 {
+	D3D11Scene *pD3D11Scene = D3D11_RENDERER_CAST<D3D11Scene*>(pScene);
+	const unsigned int Strides = sizeof(Vertex);
+	const unsigned int Offsets = 0;
+	for (auto pGeometry : pD3D11Scene->m_GeometryList)
+	{
+		ID3D11Buffer *pVertexBuffer = pGeometry->GetVertexBuffer();
+		ID3D11Buffer *pIndexBuffer = pGeometry->GetIndexBuffer();
+		m_pImmediateContext->IASetVertexBuffers(0, 1, &pVertexBuffer, &Strides, &Offsets);
+		m_pImmediateContext->IASetIndexBuffer(pIndexBuffer, DXGI_FORMAT_R32_UINT, 0);
+		if (pIndexBuffer)
+		{
+			m_pImmediateContext->DrawIndexed(pGeometry->GetIndexCount(), 0, 0);
+		}
+		else
+		{
+			m_pImmediateContext->Draw(pGeometry->GetVertexCount(), 0);
+		}
+	}
 }
 
 D3D11Geometry::D3D11Geometry(_In_ ID3D11Device *pDevice, _In_ CreateGeometryDescriptor *pCreateGeometryDescriptor) :
@@ -41,6 +72,8 @@ D3D11Geometry::D3D11Geometry(_In_ ID3D11Device *pDevice, _In_ CreateGeometryDesc
 {
 	HRESULT hr = S_OK;
 	m_UsesIndexBuffer = pCreateGeometryDescriptor->m_NumIndices != 0;
+	m_VertexCount = pCreateGeometryDescriptor->m_NumVertices;
+	m_IndexCount = pCreateGeometryDescriptor->m_NumIndices;
 	if (m_UsesIndexBuffer)
 	{
 		D3D11_BUFFER_DESC IndexBufferDesc;
@@ -73,3 +106,20 @@ void D3D11Geometry::Update(_In_ Transform *pTransform)
 {
 	assert(false); // Implement
 }
+
+D3D11Light::D3D11Light(_In_ CreateLightDescriptor *pCreateLightDescriptor)
+{
+	switch (pCreateLightDescriptor->m_LightType)
+	{
+	default:
+		assert(false);
+		break;
+	}
+}
+
+void D3D11Scene::AddGeometry(_In_ Geometry *pGeometry)
+{
+	D3D11Geometry *pD3D11Geometry = D3D11_RENDERER_CAST<D3D11Geometry*>(pGeometry);
+	m_GeometryList.push_back(pD3D11Geometry);
+}
+

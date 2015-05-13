@@ -22,6 +22,7 @@ class CreateDirectionalLight
 
 class CreateLightDescriptor
 {
+public:
 	enum LightType
 	{
 		POINT_LIGHT,
@@ -47,20 +48,23 @@ class Transform
 
 class Geometry
 {
+public:
 	virtual void Update(_In_ Transform *pTransform) = 0;
 };
 
 class Scene
 {
+public:
 	virtual void AddGeometry(_In_ Geometry *pGeometry) = 0;
 };
 
 class Renderer
 {
 public:
-	virtual void CreateGeometry(_In_ CreateGeometryDescriptor *pCreateGeometryDescriptor, _Out_ Geometry **ppGeometry) = 0;
+	virtual Geometry *CreateGeometry(_In_ CreateGeometryDescriptor *pCreateGeometryDescriptor) = 0;
 	virtual void DestroyGeometry(_In_ Geometry *pGeometry) = 0;
-	virtual void CreateLight(_In_ CreateLightDescriptor *pCreateLightDescriptor, _Out_ Light **ppLight) = 0;
-	virtual void DrawScene(Camera *pCamera, Scene *pScene) = 0;
+	virtual Light *CreateLight(_In_ CreateLightDescriptor *pCreateLightDescriptor) = 0;
+	virtual Scene *CreateScene() = 0;
+	virtual void DestroyScene(Scene *pScene) = 0;
 };
 
