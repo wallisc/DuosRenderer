@@ -4,10 +4,12 @@
 class D3D11Geometry : public Geometry
 {
 public:
-	D3D11Geometry(_In_ CreateGeometryDescriptor *pCreateGeometryDescriptor);
+	D3D11Geometry(_In_ ID3D11Device *pDevice, _In_ CreateGeometryDescriptor *pCreateGeometryDescriptor);
 	void Update(_In_ Transform *pTransform);
 private:
-	ID3D11VertexShader* m_pVertexBuffer;
+	bool m_UsesIndexBuffer;
+	ID3D11Buffer* m_pVertexBuffer;
+	ID3D11Buffer* m_pIndexBuffer;
 };
 
 class D3D11Light : public Light

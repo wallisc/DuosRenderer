@@ -433,6 +433,7 @@
     <ClInclude Include="DDSTextureLoader.h" />
     <ClInclude Include="D3D11Renderer.h" />
     <ClInclude Include="Renderer.h" />
+    <ClInclude Include="RendererException.h" />
     <CLInclude Include="resource.h" />
     <ResourceCompile Include="ScreenSpaceReflection.rc" />
   </ItemGroup>
