@@ -25,15 +25,6 @@
     <ClInclude Include="RendererException.h" />
   </ItemGroup>
   <ItemGroup>
-    <FxCompile Include="Deferred_PS.hlsl">
-      <Filter>Shaders</Filter>
-    </FxCompile>
-    <FxCompile Include="Deferred_VS.hlsl">
-      <Filter>Shaders</Filter>
-    </FxCompile>
-    <FxCompile Include="DeferredRender.fx">
-      <Filter>Shaders</Filter>
-    </FxCompile>
     <FxCompile Include="Geometry_PS.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>

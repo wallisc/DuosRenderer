@@ -54,9 +54,6 @@ struct PS_INPUT
 struct PS_OUTPUT
 {
     float4 Color : COLOR0;
-    float4 ScreenRefl : COLOR1;
-    float2 Material : COLOR2;
-    float4 CamPos : COLOR3;
 };
 
 //--------------------------------------------------------------------------------------
@@ -89,8 +86,5 @@ PS_OUTPUT PS( PS_INPUT input) : SV_Target
     float3 ScreenRefl = mul( float4(refl, 0), View );
 
    output.Color = txDiffuse.Sample( samLinear, input.Tex );
-   output.ScreenRefl = float4(ScreenRefl, 0);
-   output.Material = float4(reflectivity, 0, 0, 0);
-   output.CamPos = input.CamPos;
    return output;
 }

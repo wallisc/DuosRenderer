@@ -60,13 +60,8 @@ D3D_FEATURE_LEVEL                   g_featureLevel = D3D_FEATURE_LEVEL_11_0;
 ID3D11Device*                       g_pd3dDevice = nullptr;
 ID3D11Device1*                      g_pd3dDevice1 = nullptr;
 ID3D11DeviceContext*                g_pImmediateContext = nullptr;
-ID3D11DeviceContext1*               g_pImmediateContext1 = nullptr;
 IDXGISwapChain*                     g_pSwapChain = nullptr;
 IDXGISwapChain1*                    g_pSwapChain1 = nullptr;
-ID3D11RenderTargetView*             g_pGBufferReflRTV = nullptr;
-ID3D11RenderTargetView*             g_pGBufferColorRTV = nullptr;
-ID3D11RenderTargetView*             g_pGBufferMaterialRTV = nullptr;
-ID3D11RenderTargetView*             g_pGBufferCameraPosRTV = nullptr;
 ID3D11RenderTargetView*             g_pFinalOutputView = nullptr;
 ID3D11DepthStencilView*             g_pDepthStencilView = nullptr;
 ID3D11DepthStencilState*            g_pDepthState = nullptr;
@@ -74,13 +69,7 @@ ID3D11Texture2D*                    g_pDepthStencil = nullptr;
 ID3D11VertexShader*                 g_pVertexShader = nullptr;
 ID3D11PixelShader*                  g_pPixelShader = nullptr;
 ID3D11InputLayout*                  g_pVertexLayout = nullptr;
-ID3D11PixelShader*                  g_pDeferredPixelShader = nullptr;
-ID3D11VertexShader*                 g_pDeferredVertexShader = nullptr;
-ID3D11VertexShader*                 g_pDebugVertexShader = nullptr;
-ID3D11InputLayout*                  g_pDebugVertexLayout = nullptr;
-ID3D11InputLayout*                  g_pDeferredVertexLayout = nullptr;
 ID3D11Buffer*                       g_pBoxVertexBuffer = nullptr;
-ID3D11Buffer*                       g_pDebugVertexBuffer = nullptr;
 ID3D11Buffer*                       g_pPlaneVertexBuffer = nullptr;
 ID3D11Buffer*                       g_pBoxIndexBuffer = nullptr;
 ID3D11Buffer*                       g_pCBNeverChanges = nullptr;
@@ -88,10 +77,6 @@ ID3D11Buffer*                       g_pCBChangeOnResize = nullptr;
 ID3D11Buffer*                       g_pCBBoxMaterial = nullptr;
 ID3D11Buffer*                       g_pCBPlaneMaterial = nullptr;
 ID3D11Buffer*                       g_pCBChangesEveryFrame = nullptr;
-ID3D11ShaderResourceView*           g_pGBufferReflSRV = nullptr;
-ID3D11ShaderResourceView*           g_pGBufferCameraPosSRV = nullptr;
-ID3D11ShaderResourceView*           g_pGBufferColorSRV = nullptr;
-ID3D11ShaderResourceView*           g_pGBufferMaterialSRV = nullptr;
 ID3D11ShaderResourceView*           g_pPlaneTextureRV = nullptr;
 ID3D11ShaderResourceView*           g_pTextureRV = nullptr;
 ID3D11SamplerState*                 g_pSamplerLinear = nullptr;
@@ -203,7 +188,7 @@ HRESULT CompileShaderFromFile( WCHAR* szFileName, LPCSTR szEntryPoint, LPCSTR sz
     // the shaders to be optimized and to run exactly the way they will run in 
     // the release configuration of this program.
     dwShaderFlags |= D3DCOMPILE_DEBUG;
-
+	
     // Disable optimizations to further improve shader debugging
     dwShaderFlags |= D3DCOMPILE_SKIP_OPTIMIZATION;
 #endif
@@ -306,10 +291,6 @@ HRESULT InitDevice()
     {
         // DirectX 11.1 or later
         hr = g_pd3dDevice->QueryInterface( __uuidof(ID3D11Device1), reinterpret_cast<void**>(&g_pd3dDevice1) );
-        if (SUCCEEDED(hr))
-        {
-            (void) g_pImmediateContext->QueryInterface( __uuidof(ID3D11DeviceContext1), reinterpret_cast<void**>(&g_pImmediateContext1) );
-        }
 
         DXGI_SWAP_CHAIN_DESC1 sd;
         ZeroMemory(&sd, sizeof(sd));
@@ -328,25 +309,6 @@ HRESULT InitDevice()
         }
 
         dxgiFactory2->Release();
-    }
-    else
-    {
-        // DirectX 11.0 systems
-        DXGI_SWAP_CHAIN_DESC sd;
-        ZeroMemory(&sd, sizeof(sd));
-        sd.BufferCount = 1;
-        sd.BufferDesc.Width = width;
-        sd.BufferDesc.Height = height;
-        sd.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-        sd.BufferDesc.RefreshRate.Numerator = 60;
-        sd.BufferDesc.RefreshRate.Denominator = 1;
-        sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-        sd.OutputWindow = g_hWnd;
-        sd.SampleDesc.Count = 1;
-        sd.SampleDesc.Quality = 0;
-        sd.Windowed = TRUE;
-
-        hr = dxgiFactory->CreateSwapChain( g_pd3dDevice, &sd, &g_pSwapChain );
     }
 
     // Note this tutorial doesn't handle full-screen swapchains so we block the ALT+ENTER shortcut
@@ -378,66 +340,10 @@ HRESULT InitDevice()
     firstPassTexture.CPUAccessFlags = 0;
     firstPassTexture.MiscFlags = 0;
 
-	ID3D11Texture2D* pGBufferTexture;
-    hr = g_pd3dDevice->CreateTexture2D( &firstPassTexture, nullptr, &pGBufferTexture);
-    if( FAILED( hr ) )
-        return hr;
-
-    hr = g_pd3dDevice->CreateRenderTargetView( pGBufferTexture, nullptr, &g_pGBufferColorRTV );
-    if( FAILED( hr ) )
-        return hr;
-
-    hr = g_pd3dDevice->CreateShaderResourceView( pGBufferTexture, nullptr, &g_pGBufferColorSRV);
-    if( FAILED( hr ) )
-        return hr;
-	pGBufferTexture->Release();
-
     hr = g_pd3dDevice->CreateRenderTargetView( pBackBuffer, nullptr, &g_pFinalOutputView );
     pBackBuffer->Release();
     if( FAILED( hr ) )
         return hr;
-
-    ID3D11Texture2D *pReflTexture;
-    hr = g_pd3dDevice->CreateTexture2D( &firstPassTexture, nullptr, &pReflTexture);
-    if( FAILED( hr ) )
-        return hr;
-
-    hr = g_pd3dDevice->CreateShaderResourceView( pReflTexture, nullptr, &g_pGBufferReflSRV);
-    if( FAILED( hr ) )
-        return hr;
-
-    hr = g_pd3dDevice->CreateRenderTargetView( pReflTexture, nullptr, &g_pGBufferReflRTV);
-    if( FAILED( hr ) )
-        return hr;
-    pReflTexture->Release();
-
-    ID3D11Texture2D *pWorldPosTexture;
-    hr = g_pd3dDevice->CreateTexture2D( &firstPassTexture, nullptr, &pWorldPosTexture);
-    if( FAILED( hr ) )
-        return hr;
-
-    hr = g_pd3dDevice->CreateShaderResourceView( pWorldPosTexture, nullptr, &g_pGBufferCameraPosSRV);
-    if( FAILED( hr ) )
-        return hr;
-
-    hr = g_pd3dDevice->CreateRenderTargetView( pWorldPosTexture, nullptr, &g_pGBufferCameraPosRTV);
-    if( FAILED( hr ) )
-        return hr;
-    pWorldPosTexture->Release();
-
-    ID3D11Texture2D *pMaterialTexture;
-    hr = g_pd3dDevice->CreateTexture2D( &firstPassTexture, nullptr, &pMaterialTexture);
-    if( FAILED( hr ) )
-        return hr;
-
-    hr = g_pd3dDevice->CreateShaderResourceView( pMaterialTexture, nullptr, &g_pGBufferMaterialSRV);
-    if( FAILED( hr ) )
-        return hr;
-
-    hr = g_pd3dDevice->CreateRenderTargetView( pMaterialTexture, nullptr, &g_pGBufferMaterialRTV);
-    if( FAILED( hr ) )
-        return hr;
-    pMaterialTexture->Release();
 
     D3D11_DEPTH_STENCIL_DESC depthStencilDesc = {};
     depthStencilDesc.DepthFunc = D3D11_COMPARISON_LESS_EQUAL;
@@ -489,54 +395,6 @@ HRESULT InitDevice()
     vp.TopLeftY = 0;
     g_pImmediateContext->RSSetViewports( 1, &vp );
 
-	// Compile the vertex shader
-    ID3DBlob* pDebugVSBlob = nullptr;
-    hr = CompileShaderFromFile( L"DeferredRender.fx", "DebugVS", "vs_4_0", &pDebugVSBlob );
-    if( FAILED( hr ) )
-    {
-        MessageBox( nullptr,
-                    L"The FX file cannot be compiled.  Please run this executable from the directory that contains the FX file.", L"Error", MB_OK );
-        return hr;
-    }
-	// Create the vertex shader
-    hr = g_pd3dDevice->CreateVertexShader( pDebugVSBlob->GetBufferPointer(), pDebugVSBlob->GetBufferSize(), nullptr, &g_pDebugVertexShader );
-    if( FAILED( hr ) )
-    {    
-        pDebugVSBlob->Release();
-        return hr;
-    }
-
-	// Define the input layout
-    D3D11_INPUT_ELEMENT_DESC debugLayout[] =
-    {
-        { "SV_POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
-        { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0 },
-    };
-
-    // Create the input layout
-    hr = g_pd3dDevice->CreateInputLayout( debugLayout, ARRAYSIZE( debugLayout ), pDebugVSBlob->GetBufferPointer(),
-                                          pDebugVSBlob->GetBufferSize(), &g_pDebugVertexLayout );
-
-	// Create vertex buffer for screen plane
-    PlaneVertex debugVertices[] =
-    {
-		{ XMFLOAT3( -1.0f, 1.0f, 0.0f ), XMFLOAT2( 0.0f, 0.0f )},
-		{ XMFLOAT3( 3.0f, 1.0f, 0.0f ), XMFLOAT2( 2.0f, 0.0f )},
-		{ XMFLOAT3( -1.0f, -3.0f, 0.0f ), XMFLOAT2( 0.0f, 2.0f )},
-	};
-
-	D3D11_BUFFER_DESC debugbd;
-    ZeroMemory( &debugbd, sizeof(debugbd) );
-    debugbd.Usage = D3D11_USAGE_DEFAULT;
-    debugbd.ByteWidth = sizeof( PlaneVertex ) * 3;
-    debugbd.BindFlags = D3D11_BIND_VERTEX_BUFFER;
-    debugbd.CPUAccessFlags = 0;
-    D3D11_SUBRESOURCE_DATA DebugInitData;
-    ZeroMemory( &DebugInitData, sizeof(DebugInitData) );
-    DebugInitData.pSysMem = debugVertices;
-    hr = g_pd3dDevice->CreateBuffer( &debugbd, &DebugInitData, &g_pDebugVertexBuffer );
-    if( FAILED( hr ) )
-        return hr;
     // Compile the vertex shader
     ID3DBlob* pVSBlob = nullptr;
     hr = CompileShaderFromFile( L"GeometryRender.fx", "VS", "vs_4_0", &pVSBlob );
@@ -555,24 +413,6 @@ HRESULT InitDevice()
         return hr;
     }
 
-    ID3DBlob* pDeferredVSBlob = nullptr;
-    hr = CompileShaderFromFile( L"DeferredRender.fx", "VS", "vs_5_0", &pDeferredVSBlob  );
-    if( FAILED( hr ) )
-    {
-        MessageBox( nullptr,
-                    L"The FX file cannot be compiled.  Please run this executable from the directory that contains the FX file.", L"Error", MB_OK );
-        return hr;
-    }
-    
-    // Create the vertex shader
-    hr = g_pd3dDevice->CreateVertexShader( pDeferredVSBlob ->GetBufferPointer(), pDeferredVSBlob ->GetBufferSize(), nullptr, &g_pDeferredVertexShader );
-    if( FAILED( hr ) )
-    {    
-        pDeferredVSBlob ->Release();
-        return hr;
-    }
-
-
     // Define the input layout
     D3D11_INPUT_ELEMENT_DESC layout[] =
     {
@@ -586,13 +426,7 @@ HRESULT InitDevice()
     hr = g_pd3dDevice->CreateInputLayout( layout, numElements, pVSBlob->GetBufferPointer(),
                                           pVSBlob->GetBufferSize(), &g_pVertexLayout );
 
-    hr = g_pd3dDevice->CreateInputLayout( layout, 0, pDeferredVSBlob->GetBufferPointer(),
-                                          pDeferredVSBlob->GetBufferSize(), &g_pDeferredVertexLayout );
     pVSBlob->Release();
-    if( FAILED( hr ) )
-        return hr;
-
-    pDeferredVSBlob->Release();
     if( FAILED( hr ) )
         return hr;
 
@@ -608,12 +442,6 @@ HRESULT InitDevice()
 
     // Create the pixel shader
     hr = g_pd3dDevice->CreatePixelShader( pPSBlob->GetBufferPointer(), pPSBlob->GetBufferSize(), nullptr, &g_pPixelShader );
-    pPSBlob->Release();
-    if( FAILED( hr ) )
-        return hr;
-
-    hr = CompileShaderFromFile( L"DeferredRender.fx", "PS", "ps_5_0", &pPSBlob );
-    hr = g_pd3dDevice->CreatePixelShader( pPSBlob->GetBufferPointer(), pPSBlob->GetBufferSize(), nullptr, &g_pDeferredPixelShader );
     pPSBlob->Release();
     if( FAILED( hr ) )
         return hr;
@@ -837,11 +665,8 @@ void CleanupDevice()
     if( g_pDepthStencil ) g_pDepthStencil->Release();
     if( g_pDepthStencilView ) g_pDepthStencilView->Release();
     if( g_pDepthState ) g_pDepthState->Release();
-    if( g_pGBufferColorSRV ) g_pGBufferColorSRV->Release();
-    if( g_pGBufferColorRTV ) g_pGBufferColorRTV->Release();
     if( g_pSwapChain1 ) g_pSwapChain1->Release();
     if( g_pSwapChain ) g_pSwapChain->Release();
-    if( g_pImmediateContext1 ) g_pImmediateContext1->Release();
     if( g_pImmediateContext ) g_pImmediateContext->Release();
     if( g_pd3dDevice1 ) g_pd3dDevice1->Release();
     if( g_pd3dDevice ) g_pd3dDevice->Release();
@@ -910,10 +735,6 @@ void Render()
     // Clear resources
     //
     g_pImmediateContext->ClearRenderTargetView( g_pFinalOutputView, Colors::Gray );
-    g_pImmediateContext->ClearRenderTargetView( g_pGBufferColorRTV, Colors::Gray );
-    g_pImmediateContext->ClearRenderTargetView( g_pGBufferMaterialRTV, Colors::Black );
-    g_pImmediateContext->ClearRenderTargetView( g_pGBufferCameraPosRTV, Colors::Black );
-    g_pImmediateContext->ClearRenderTargetView( g_pGBufferReflRTV, Colors::Black);
     g_pImmediateContext->ClearDepthStencilView( g_pDepthStencilView, D3D11_CLEAR_DEPTH, 1.0f, 0 );
 
     //
@@ -942,10 +763,7 @@ void Render()
     
     ID3D11RenderTargetView* RenderTargets[] = 
     {
-       g_pGBufferColorRTV,
-       g_pGBufferReflRTV,
-       g_pGBufferMaterialRTV,
-       g_pGBufferCameraPosRTV
+       g_pFinalOutputView
     };
 
     g_pImmediateContext->IASetInputLayout( g_pVertexLayout );
@@ -965,32 +783,7 @@ void Render()
     g_pImmediateContext->IASetIndexBuffer( NULL, DXGI_FORMAT_R16_UINT, 0 );
     g_pImmediateContext->DrawInstanced(6, 1, 0, 0);
 
-    // Set the input layout
-    ID3D11ShaderResourceView *DeferredSRVs[] =
-    {
-       g_pGBufferColorSRV,
-       g_pGBufferReflSRV,
-       g_pGBufferMaterialSRV,
-       g_pGBufferCameraPosSRV
-    };
-
     g_pImmediateContext->OMSetRenderTargets( 1, &g_pFinalOutputView, nullptr);
-    g_pImmediateContext->PSSetShaderResources( 0, ARRAYSIZE(DeferredSRVs), DeferredSRVs);
-
-    // Do the "post process" pass
-    g_pImmediateContext->IASetInputLayout( g_pDeferredVertexLayout );
-    g_pImmediateContext->VSSetShader( g_pDeferredVertexShader, nullptr, 0 );
-    g_pImmediateContext->PSSetShader( g_pDeferredPixelShader, nullptr, 0 );
-
-#if 1
-    g_pImmediateContext->VSSetShader( g_pDebugVertexShader, nullptr, 0 );
-    g_pImmediateContext->IASetInputLayout( g_pDebugVertexLayout );
-	stride = sizeof(PlaneVertex);
-    g_pImmediateContext->IASetVertexBuffers( 0, 1, &g_pDebugVertexBuffer, &stride, &offset );
-    g_pImmediateContext->DrawInstanced(3, 1, 0, 0);
-#else
-    g_pImmediateContext->DrawInstanced(3, 1, 0, 0);
-#endif
 
     ID3D11ShaderResourceView *NullViews[4] = {};
     g_pImmediateContext->PSSetShaderResources( 0, ARRAYSIZE(NullViews), NullViews);
