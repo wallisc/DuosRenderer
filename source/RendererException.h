@@ -35,4 +35,4 @@ public:
 
 #define ORIG_CHK(expression, ExceptionType, ErrorMessage ) if(expression) { throw new ExceptionType(ErrorMessage); }
 #define FAIL_CHK(expression, ErrorMessage ) ORIG_CHK(expression, UnrecoverableRendererException, ErrorMessage )
-#define MEM_CHK(expression) ORIG_CHK(expression, OutOfMemoryRendererException, "Failed new operator" )
+#define MEM_CHK(pointer) ORIG_CHK(!pointer, OutOfMemoryRendererException, "Failed new operator" )

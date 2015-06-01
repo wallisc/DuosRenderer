@@ -5,6 +5,15 @@
 #include <directxmath.h>
 #include <directxcolors.h>
 
+struct CBCamera
+{
+	DirectX::XMMATRIX m_View;
+	DirectX::XMMATRIX m_Projection;
+	DirectX::XMVECTOR m_CamPos;
+	DirectX::XMVECTOR m_Dimensions;
+	DirectX::XMVECTOR m_ClipDistance;
+};
+
 class D3D11Geometry : public Geometry
 {
 public:
@@ -40,8 +49,11 @@ public:
 	~D3D11Camera();
 
 	void Update(_In_ Transform *pTransform);
-
+	ID3D11Buffer *GetCameraConstantBuffer();
 private:
+	CBCamera m_CameraCpuData;
+	ID3D11Buffer *m_pCameraBuffer;
+
 	REAL m_Width;
 	REAL m_Height;
 	DirectX::XMMATRIX m_ViewMatrix;
@@ -91,9 +103,14 @@ private:
 	IDXGISwapChain1* m_pSwapChain1;
 	IDXGISwapChain* m_pSwapChain;
 
+	ID3D11RenderTargetView* m_pSwapchainRenderTargetView;
+	ID3D11DepthStencilView* m_pDepthBuffer;
+
 	ID3D11VertexShader* m_pForwardVertexShader;
 	ID3D11PixelShader* m_pForwardPixelShader;
 	ID3D11InputLayout* m_pForwardInputLayout;
+
+	ID3D11SamplerState *m_pSamplerState;
 };
 
 #define D3D11_RENDERER_CAST reinterpret_cast

@@ -1,18 +1,31 @@
+#pragma once
 #include <vector>
 
 typedef float REAL;
 
-enum
+struct Vec2
 {
-	X_INDEX = 0,
-	Y_INDEX,
-	Z_INDEX
+	Vec2() : x(0), y(0) {}
+	Vec2(REAL nX, REAL nY) : x(nX), y(nY) {}
+	REAL x;
+	REAL y;
+};
+
+struct Vec3
+{
+	Vec3() : x(0), y(0), z(0) {}
+	Vec3(REAL nX, REAL nY, REAL nZ) : x(nX), y(nY), z(nZ) {}
+
+	REAL x;
+	REAL y;
+	REAL z;
 };
 
 struct Vertex
 {
-	REAL m_Position[4];
-	REAL m_Tex[2];
+	Vec3 m_Position;
+	Vec3 m_Normal;
+	Vec2 m_Tex;
 };
 
 struct CreateGeometryDescriptor
@@ -46,9 +59,9 @@ public:
 class CreateCameraDescriptor
 {
 public:
-	REAL m_Position[3];
-	REAL m_LookAt[3];
-	REAL m_Up[3];
+	Vec3 m_Position;
+	Vec3 m_LookAt;
+	Vec3 m_Up;
 
 	REAL m_NearClip;
 	REAL m_FarClip;
@@ -87,6 +100,8 @@ public:
 class Renderer
 {
 public:
+	virtual void DrawScene(Camera *pCamera, Scene *pScene) = 0;
+
 	virtual Geometry *CreateGeometry(_In_ CreateGeometryDescriptor *pCreateGeometryDescriptor) = 0;
 	virtual void DestroyGeometry(_In_ Geometry *pGeometry) = 0;
 
