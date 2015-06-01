@@ -400,6 +400,7 @@
     <ClCompile Include="D3D11Renderer.cpp" />
     <ClCompile Include="DDSTextureLoader.cpp" />
     <ClCompile Include="Main.cpp" />
+    <ClCompile Include="RTRenderer.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="DDSTextureLoader.h" />
@@ -407,6 +408,7 @@
     <ClInclude Include="Renderer.h" />
     <ClInclude Include="RendererException.h" />
     <CLInclude Include="resource.h" />
+    <ClInclude Include="RTRenderer.h" />
     <ResourceCompile Include="ScreenSpaceReflection.rc" />
   </ItemGroup>
   <ItemGroup>
