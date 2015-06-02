@@ -9,6 +9,9 @@
       <UniqueIdentifier>{2c3d4c8c-5d1a-459a-a05a-a4e4b608a44e}</UniqueIdentifier>
       <Extensions>fx;fxh;hlsl</Extensions>
     </Filter>
+    <Filter Include="RaytraceShaders">
+      <UniqueIdentifier>{bef786a3-fcb1-41c9-88b3-2c2b59b788fc}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="DDSTextureLoader.cpp" />
@@ -35,6 +38,12 @@
     </FxCompile>
     <FxCompile Include="GeometryRender.fx">
       <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="Copy_PS.hlsl">
+      <Filter>RaytraceShaders</Filter>
+    </FxCompile>
+    <FxCompile Include="Plane_VS.hlsl">
+      <Filter>RaytraceShaders</Filter>
     </FxCompile>
   </ItemGroup>
   <ItemGroup>

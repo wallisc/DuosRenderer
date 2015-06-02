@@ -77,26 +77,14 @@ void RTRenderer::CompileShaders()
 	// Compile the forward rendering shaders
 	{
 		CComPtr<ID3DBlob> pVSBlob = nullptr;
-		HRESULT hr = CompileShaderHelper2(L"GeometryRender.fx", "VS", "vs_4_0", &pVSBlob);
+		HRESULT hr = CompileShaderHelper2(L"Plane_VS.hlsl", "main", "vs_5_0", &pVSBlob);
 		FAIL_CHK(FAILED(hr), "The FX file cannot be compiled.  Please run this executable from the directory that contains the FX file.");
 
 		hr = m_pDevice->CreateVertexShader(pVSBlob->GetBufferPointer(), pVSBlob->GetBufferSize(), nullptr, &m_pForwardVertexShader);
 		FAIL_CHK(FAILED(hr), "Failed to CreateVertexShader");
 
-		// Define the input layout
-		D3D11_INPUT_ELEMENT_DESC layout[] =
-		{
-			{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
-			{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0 },
-			{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 24, D3D11_INPUT_PER_VERTEX_DATA, 0 },
-		};
-		UINT numElements = ARRAYSIZE(layout);
-
-		hr = m_pDevice->CreateInputLayout(layout, numElements, pVSBlob->GetBufferPointer(),
-			pVSBlob->GetBufferSize(), &m_pForwardInputLayout);
-
 		CComPtr<ID3DBlob> pPSBlob = nullptr;
-		hr = CompileShaderHelper2(L"GeometryRender.fx", "PS", "ps_4_0", &pPSBlob);
+		hr = CompileShaderHelper2(L"Copy_PS.hlsl", "main", "ps_4_0", &pPSBlob);
 		FAIL_CHK(FAILED(hr), "The FX file cannot be compiled.  Please run this executable from the directory that contains the FX file.");
 
 		hr = m_pDevice->CreatePixelShader(pPSBlob->GetBufferPointer(), pPSBlob->GetBufferSize(), nullptr, &m_pForwardPixelShader);
@@ -144,32 +132,6 @@ void RTRenderer::InitializeSwapchain(HWND WindowHandle, unsigned int width, unsi
 		hr = m_pSwapChain1->QueryInterface(__uuidof(IDXGISwapChain), reinterpret_cast<void**>(&m_pSwapChain));
 	}
 
-	ID3D11Texture2D *pDepthStencil;
-	D3D11_TEXTURE2D_DESC descDepth;
-	ZeroMemory(&descDepth, sizeof(descDepth));
-	descDepth.Width = width;
-	descDepth.Height = height;
-	descDepth.MipLevels = 1;
-	descDepth.ArraySize = 1;
-	descDepth.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
-	descDepth.SampleDesc.Count = 1;
-	descDepth.SampleDesc.Quality = 0;
-	descDepth.Usage = D3D11_USAGE_DEFAULT;
-	descDepth.BindFlags = D3D11_BIND_DEPTH_STENCIL;
-	descDepth.CPUAccessFlags = 0;
-	descDepth.MiscFlags = 0;
-	hr = m_pDevice->CreateTexture2D(&descDepth, nullptr, &pDepthStencil);
-	FAIL_CHK(FAILED(hr), "Failed creating a depth stencil resource");
-
-	// Create the depth stencil view
-	D3D11_DEPTH_STENCIL_VIEW_DESC descDSV;
-	ZeroMemory(&descDSV, sizeof(descDSV));
-	descDSV.Format = descDepth.Format;
-	descDSV.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
-	descDSV.Texture2D.MipSlice = 0;
-	hr = m_pDevice->CreateDepthStencilView(pDepthStencil, &descDSV, &m_pDepthBuffer);
-	FAIL_CHK(FAILED(hr), "Failed creating a depth stencil view");
-
 	ID3D11Texture2D* pBackBuffer = nullptr;
 	hr = m_pSwapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), reinterpret_cast<void**>(&pBackBuffer));
 
@@ -190,35 +152,7 @@ void RTRenderer::InitializeSwapchain(HWND WindowHandle, unsigned int width, unsi
 
 void RTRenderer::SetDefaultState()
 {
-	HRESULT hr = S_OK;
-	D3D11_DEPTH_STENCIL_DESC depthStencilDesc = {};
-	depthStencilDesc.DepthFunc = D3D11_COMPARISON_LESS_EQUAL;
-	depthStencilDesc.DepthEnable = TRUE;
-	depthStencilDesc.StencilEnable = FALSE;
-	depthStencilDesc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
-
-	CComPtr<ID3D11DepthStencilState> pDepthStencilState;
-	hr = m_pDevice->CreateDepthStencilState(&depthStencilDesc, &pDepthStencilState);
-	FAIL_CHK(FAILED(hr), "Failed CreateDepthStencilState");
-
-	m_pImmediateContext->OMSetDepthStencilState(pDepthStencilState, 0);
-
-	// Create the sample state
-	D3D11_SAMPLER_DESC sampDesc;
-	ZeroMemory(&sampDesc, sizeof(sampDesc));
-	sampDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
-	sampDesc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
-	sampDesc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
-	sampDesc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
-	sampDesc.ComparisonFunc = D3D11_COMPARISON_NEVER;
-	sampDesc.MinLOD = 0;
-	sampDesc.MaxLOD = D3D11_FLOAT32_MAX;
-	hr = m_pDevice->CreateSamplerState(&sampDesc, &m_pSamplerState);
-	FAIL_CHK(FAILED(hr), "Failed creating the sampler state");
-
-	m_pImmediateContext->PSSetSamplers(0, 1, &m_pSamplerState);
 	m_pImmediateContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	m_pImmediateContext->IASetInputLayout(m_pForwardInputLayout);
 }
 
 Geometry* RTRenderer::CreateGeometry(_In_ CreateGeometryDescriptor *pCreateGeometryDescriptor)
@@ -271,82 +205,21 @@ void RTRenderer::DestroyScene(Scene* pScene)
 
 void RTRenderer::DrawScene(Camera *pCamera, Scene *pScene)
 {
-	RTCamera *pRTCamera = D3D11_RENDERER_CAST<RTCamera*>(pCamera);
-	m_pImmediateContext->ClearRenderTargetView(m_pSwapchainRenderTargetView, Colors::Blue);
-	m_pImmediateContext->ClearDepthStencilView(m_pDepthBuffer, D3D11_CLEAR_DEPTH, 1.0f, 0);
-
-	ID3D11Buffer *pCameraConstantBuffer = pRTCamera->GetCameraConstantBuffer();
-	m_pImmediateContext->PSSetConstantBuffers(0, 1, &pCameraConstantBuffer);
-	m_pImmediateContext->VSSetConstantBuffers(0, 1, &pCameraConstantBuffer);
-
 	m_pImmediateContext->PSSetShader(m_pForwardPixelShader, NULL, 0);
 	m_pImmediateContext->VSSetShader(m_pForwardVertexShader, NULL, 0);
-	m_pImmediateContext->OMSetRenderTargets(1, &m_pSwapchainRenderTargetView, m_pDepthBuffer);
+	m_pImmediateContext->OMSetRenderTargets(1, &m_pSwapchainRenderTargetView, NULL);
 
+	m_pImmediateContext->Draw(3, 0);
 
-	RTScene *pRTScene = D3D11_RENDERER_CAST<RTScene*>(pScene);
-	const unsigned int Strides = sizeof(Vertex);
-	const unsigned int Offsets = 0;
-	for (auto pGeometry : pRTScene->m_GeometryList)
-	{
-		ID3D11Buffer *pVertexBuffer = pGeometry->GetVertexBuffer();
-		ID3D11Buffer *pIndexBuffer = pGeometry->GetIndexBuffer();
-		m_pImmediateContext->IASetVertexBuffers(0, 1, &pVertexBuffer, &Strides, &Offsets);
-		m_pImmediateContext->IASetIndexBuffer(pIndexBuffer, DXGI_FORMAT_R32_UINT, 0);
-		if (pIndexBuffer)
-		{
-			m_pImmediateContext->DrawIndexed(pGeometry->GetIndexCount(), 0, 0);
-		}
-		else
-		{
-			m_pImmediateContext->Draw(pGeometry->GetVertexCount(), 0);
-		}
-	}
-
-	ID3D11ShaderResourceView *NullViews[4] = {};
-	m_pImmediateContext->PSSetShaderResources(0, ARRAYSIZE(NullViews), NullViews);
 	m_pSwapChain->Present(0, 0);
 }
 
-RTGeometry::RTGeometry(_In_ ID3D11Device *pDevice, _In_ CreateGeometryDescriptor *pCreateGeometryDescriptor) :
-m_pIndexBuffer(0), m_pVertexBuffer(0)
+RTGeometry::RTGeometry(_In_ ID3D11Device *pDevice, _In_ CreateGeometryDescriptor *pCreateGeometryDescriptor)
 {
-	HRESULT hr = S_OK;
-	m_UsesIndexBuffer = pCreateGeometryDescriptor->m_NumIndices != 0;
-	m_VertexCount = pCreateGeometryDescriptor->m_NumVertices;
-	m_IndexCount = pCreateGeometryDescriptor->m_NumIndices;
-	if (m_UsesIndexBuffer)
-	{
-		D3D11_BUFFER_DESC IndexBufferDesc;
-		ZeroMemory(&IndexBufferDesc, sizeof(IndexBufferDesc));
-		IndexBufferDesc.Usage = D3D11_USAGE_DEFAULT;
-		IndexBufferDesc.ByteWidth = sizeof(unsigned int)* pCreateGeometryDescriptor->m_NumIndices;
-		IndexBufferDesc.BindFlags = D3D11_BIND_INDEX_BUFFER;
-		IndexBufferDesc.CPUAccessFlags = 0;
-		D3D11_SUBRESOURCE_DATA IndexBufferData;
-		ZeroMemory(&IndexBufferData, sizeof(IndexBufferData));
-		IndexBufferData.pSysMem = pCreateGeometryDescriptor->m_pIndices;
-		hr = pDevice->CreateBuffer(&IndexBufferDesc, &IndexBufferData, &m_pIndexBuffer);
-		FAIL_CHK(FAILED(hr), "Failed to create Index Buffer");
-	}
-
-	D3D11_BUFFER_DESC VertexBufferDesc;
-	ZeroMemory(&VertexBufferDesc, sizeof(VertexBufferDesc));
-	VertexBufferDesc.Usage = D3D11_USAGE_DEFAULT;
-	VertexBufferDesc.ByteWidth = sizeof(Vertex)* pCreateGeometryDescriptor->m_NumVertices;
-	VertexBufferDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
-	VertexBufferDesc.CPUAccessFlags = 0;
-	D3D11_SUBRESOURCE_DATA VertexBufferData;
-	ZeroMemory(&VertexBufferData, sizeof(VertexBufferData));
-	VertexBufferData.pSysMem = pCreateGeometryDescriptor->m_pVertices;
-	hr = pDevice->CreateBuffer(&VertexBufferDesc, &VertexBufferData, &m_pVertexBuffer);
-	FAIL_CHK(FAILED(hr), "Failed to create Index Buffer");
 }
 
 RTGeometry::~RTGeometry()
 {
-	m_pVertexBuffer->Release();
-	if (m_pIndexBuffer) { m_pIndexBuffer->Release(); };
 }
 
 void RTGeometry::Update(_In_ Transform *pTransform)
@@ -372,38 +245,6 @@ void RTScene::AddGeometry(_In_ Geometry *pGeometry)
 
 RTCamera::RTCamera(ID3D11Device *pDevice, CreateCameraDescriptor *pCreateCameraDescriptor)
 {
-	m_Width = pCreateCameraDescriptor->m_Width;
-	m_Height = pCreateCameraDescriptor->m_Height;
-
-	XMVECTOR Eye = RealArrayToXMVector2(pCreateCameraDescriptor->m_Position, POSITION);
-	XMVECTOR At = RealArrayToXMVector2(pCreateCameraDescriptor->m_LookAt, POSITION);
-	XMVECTOR Up = RealArrayToXMVector2(pCreateCameraDescriptor->m_Up, DIRECTION);
-
-	m_CameraCpuData.m_CamPos = Eye;
-	m_CameraCpuData.m_ClipDistance = XMVectorSet(pCreateCameraDescriptor->m_FarClip, 0, 0, 0);
-	m_CameraCpuData.m_Dimensions = XMVectorSet(pCreateCameraDescriptor->m_Width, pCreateCameraDescriptor->m_Height, 0, 0);
-	m_CameraCpuData.m_Projection = XMMatrixPerspectiveFovLH(XM_PIDIV4,
-		pCreateCameraDescriptor->m_Width / pCreateCameraDescriptor->m_Height,
-		pCreateCameraDescriptor->m_NearClip,
-		pCreateCameraDescriptor->m_FarClip);
-
-	m_CameraCpuData.m_View = XMMatrixLookAtLH(Eye, At, Up);
-
-	D3D11_BUFFER_DESC CameraBufferDesc;
-	ZeroMemory(&CameraBufferDesc, sizeof(CameraBufferDesc));
-	CameraBufferDesc.Usage = D3D11_USAGE_DEFAULT;
-	CameraBufferDesc.ByteWidth = sizeof(CBCamera2);
-	CameraBufferDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-	CameraBufferDesc.CPUAccessFlags = 0;
-
-	D3D11_SUBRESOURCE_DATA InitCameraData;
-	ZeroMemory(&InitCameraData, sizeof(InitCameraData));
-	InitCameraData.pSysMem = &m_CameraCpuData;
-
-	HRESULT hr = pDevice->CreateBuffer(&CameraBufferDesc, &InitCameraData, &m_pCameraBuffer);
-	FAIL_CHK(FAILED(hr), "Failed creating the constant buffer for the camera");
-
-
 }
 
 RTCamera::~RTCamera()
@@ -415,9 +256,3 @@ void RTCamera::Update(_In_ Transform *pTransform)
 {
 	assert(false);
 }
-
-ID3D11Buffer* RTCamera::GetCameraConstantBuffer()
-{
-	return m_pCameraBuffer;
-}
-
