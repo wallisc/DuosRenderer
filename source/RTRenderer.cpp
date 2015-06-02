@@ -6,55 +6,6 @@
 
 using namespace DirectX;
 
-enum VectorType
-{
-	DIRECTION,
-	POSITION
-};
-
-XMVECTOR RealArrayToXMVector2(_In_reads_(3) Vec3 Vector, VectorType Type)
-{
-	return XMVectorSet(Vector.x, Vector.y, Vector.z, Type == DIRECTION ? (REAL)0.0 : (REAL)1.0);
-}
-
-//--------------------------------------------------------------------------------------
-// Helper for compiling shaders with D3DCompile
-//
-// With VS 11, we could load up prebuilt .cso files instead...
-//--------------------------------------------------------------------------------------
-HRESULT CompileShaderHelper2(WCHAR* szFileName, LPCSTR szEntryPoint, LPCSTR szShaderModel, ID3DBlob** ppBlobOut)
-{
-	HRESULT hr = S_OK;
-
-	DWORD dwShaderFlags = D3DCOMPILE_ENABLE_STRICTNESS;
-#ifdef _DEBUG
-	// Set the D3DCOMPILE_DEBUG flag to embed debug information in the shaders.
-	// Setting this flag improves the shader debugging experience, but still allows 
-	// the shaders to be optimized and to run exactly the way they will run in 
-	// the release configuration of this program.
-	dwShaderFlags |= D3DCOMPILE_DEBUG;
-
-	// Disable optimizations to further improve shader debugging
-	dwShaderFlags |= D3DCOMPILE_SKIP_OPTIMIZATION;
-#endif
-
-	ID3DBlob* pErrorBlob = nullptr;
-	hr = D3DCompileFromFile(szFileName, nullptr, nullptr, szEntryPoint, szShaderModel,
-		dwShaderFlags, 0, ppBlobOut, &pErrorBlob);
-	if (FAILED(hr))
-	{
-		if (pErrorBlob)
-		{
-			OutputDebugStringA(reinterpret_cast<const char*>(pErrorBlob->GetBufferPointer()));
-			pErrorBlob->Release();
-		}
-		return hr;
-	}
-	if (pErrorBlob) pErrorBlob->Release();
-
-	return S_OK;
-}
-
 RTRenderer::RTRenderer(HWND WindowHandle, unsigned int width, unsigned int height)
 {
 	UINT CeateDeviceFlags = 0;
@@ -67,29 +18,6 @@ RTRenderer::RTRenderer(HWND WindowHandle, unsigned int width, unsigned int heigh
 	FAIL_CHK(FAILED(hr), "Failed D3D11CreateDevice");
 
 	InitializeSwapchain(WindowHandle, width, height);
-
-	CompileShaders();
-	SetDefaultState();
-}
-
-void RTRenderer::CompileShaders()
-{
-	// Compile the forward rendering shaders
-	{
-		CComPtr<ID3DBlob> pVSBlob = nullptr;
-		HRESULT hr = CompileShaderHelper2(L"Plane_VS.hlsl", "main", "vs_5_0", &pVSBlob);
-		FAIL_CHK(FAILED(hr), "The FX file cannot be compiled.  Please run this executable from the directory that contains the FX file.");
-
-		hr = m_pDevice->CreateVertexShader(pVSBlob->GetBufferPointer(), pVSBlob->GetBufferSize(), nullptr, &m_pForwardVertexShader);
-		FAIL_CHK(FAILED(hr), "Failed to CreateVertexShader");
-
-		CComPtr<ID3DBlob> pPSBlob = nullptr;
-		hr = CompileShaderHelper2(L"Copy_PS.hlsl", "main", "ps_4_0", &pPSBlob);
-		FAIL_CHK(FAILED(hr), "The FX file cannot be compiled.  Please run this executable from the directory that contains the FX file.");
-
-		hr = m_pDevice->CreatePixelShader(pPSBlob->GetBufferPointer(), pPSBlob->GetBufferSize(), nullptr, &m_pForwardPixelShader);
-		FAIL_CHK(FAILED(hr), "Failed to CreatePixelShader");
-	}
 }
 
 void RTRenderer::InitializeSwapchain(HWND WindowHandle, unsigned int width, unsigned int height)
@@ -131,28 +59,22 @@ void RTRenderer::InitializeSwapchain(HWND WindowHandle, unsigned int width, unsi
 	{
 		hr = m_pSwapChain1->QueryInterface(__uuidof(IDXGISwapChain), reinterpret_cast<void**>(&m_pSwapChain));
 	}
+	hr = m_pSwapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), reinterpret_cast<void**>(&m_pBackBuffer));
 
-	ID3D11Texture2D* pBackBuffer = nullptr;
-	hr = m_pSwapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), reinterpret_cast<void**>(&pBackBuffer));
-
-	hr = m_pDevice->CreateRenderTargetView(pBackBuffer, nullptr, &m_pSwapchainRenderTargetView);
-	pBackBuffer->Release();
 	FAIL_CHK(FAILED(hr), "Failed to create render target view for back buffer");
 
-	// Setup the viewport
-	D3D11_VIEWPORT vp;
-	vp.Width = (FLOAT)width;
-	vp.Height = (FLOAT)height;
-	vp.MinDepth = 0.0f;
-	vp.MaxDepth = 1.0f;
-	vp.TopLeftX = 0;
-	vp.TopLeftY = 0;
-	m_pImmediateContext->RSSetViewports(1, &vp);
-}
-
-void RTRenderer::SetDefaultState()
-{
-	m_pImmediateContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	D3D11_TEXTURE2D_DESC MappableTextureDesc = {};
+	MappableTextureDesc.ArraySize = 1;
+	MappableTextureDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	MappableTextureDesc.Height = height;
+	MappableTextureDesc.Width = width;
+	MappableTextureDesc.MipLevels = 1;
+	MappableTextureDesc.Usage = D3D11_USAGE_DYNAMIC;
+	MappableTextureDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+	MappableTextureDesc.SampleDesc.Count = 1;
+	MappableTextureDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+	hr = m_pDevice->CreateTexture2D(&MappableTextureDesc, NULL, &m_pMappableTexture);
+	FAIL_CHK(FAILED(hr), "Failed to create mappable resource");
 }
 
 Geometry* RTRenderer::CreateGeometry(_In_ CreateGeometryDescriptor *pCreateGeometryDescriptor)
@@ -205,12 +127,21 @@ void RTRenderer::DestroyScene(Scene* pScene)
 
 void RTRenderer::DrawScene(Camera *pCamera, Scene *pScene)
 {
-	m_pImmediateContext->PSSetShader(m_pForwardPixelShader, NULL, 0);
-	m_pImmediateContext->VSSetShader(m_pForwardVertexShader, NULL, 0);
-	m_pImmediateContext->OMSetRenderTargets(1, &m_pSwapchainRenderTargetView, NULL);
+	RTScene *pRTScene = RT_RENDERER_CAST<RTScene*>(pScene);
+	RTCamera *pRTCamera = RT_RENDERER_CAST<RTCamera*>(pCamera);
 
-	m_pImmediateContext->Draw(3, 0);
+	D3D11_MAPPED_SUBRESOURCE MappedResource;
+	m_pImmediateContext->Map(m_pMappableTexture, 0, D3D11_MAP_WRITE_DISCARD, 0, &MappedResource);
 
+	UINT m_Width = 800;
+	UINT m_Height = 600;
+	void *pRow = MappedResource.pData;
+
+	RTD3DMappedCanvas Canvas(MappedResource.pData, MappedResource.RowPitch, DXGI_FORMAT_R8G8B8A8_UNORM);
+	RTracer::Trace(pRTScene, pRTCamera, &Canvas);
+	m_pImmediateContext->Unmap(m_pMappableTexture, 0);
+
+	m_pImmediateContext->CopyResource(m_pBackBuffer, m_pMappableTexture);
 	m_pSwapChain->Present(0, 0);
 }
 
@@ -239,20 +170,52 @@ RTLight::RTLight(_In_ CreateLightDescriptor *pCreateLightDescriptor)
 
 void RTScene::AddGeometry(_In_ Geometry *pGeometry)
 {
-	RTGeometry *pRTGeometry = D3D11_RENDERER_CAST<RTGeometry*>(pGeometry);
+	RTGeometry *pRTGeometry = RT_RENDERER_CAST<RTGeometry*>(pGeometry);
 	m_GeometryList.push_back(pRTGeometry);
 }
 
-RTCamera::RTCamera(ID3D11Device *pDevice, CreateCameraDescriptor *pCreateCameraDescriptor)
-{
-}
+RTCamera::RTCamera(ID3D11Device *pDevice, CreateCameraDescriptor *pCreateCameraDescriptor) :
+	m_Width(pCreateCameraDescriptor->m_Width), m_Height(pCreateCameraDescriptor->m_Height) {}
 
 RTCamera::~RTCamera()
 {
 
 }
 
+UINT RTCamera::GetWidth() { return m_Width; }
+UINT RTCamera::GetHeight() { return m_Height; }
+
 void RTCamera::Update(_In_ Transform *pTransform)
 {
 	assert(false);
+}
+
+RTD3DMappedCanvas::RTD3DMappedCanvas(void *pMappedSurface, UINT RowPitch, DXGI_FORMAT Format) :
+	m_pMappedSurface(pMappedSurface), m_RowPitch(RowPitch) 
+{
+	// Supports any format as long as the formats name is DXGI_FORMAT_R8G8B8A8_UNORM
+	assert(Format == DXGI_FORMAT_R8G8B8A8_UNORM);
+}
+
+void RTD3DMappedCanvas::WritePixel(UINT x, UINT y, Vec3 Color)
+{
+	byte *pPixel = ((byte *)m_pMappedSurface) + m_RowPitch * y + x * sizeof(byte)* 4;
+	pPixel[0] = Color.x;
+	pPixel[1] = Color.y;
+	pPixel[2] = Color.z;
+	pPixel[3] = 0;
+}
+
+void RTracer::Trace(RTScene *pScene, RTCamera *pCamera, RTCanvas *pCanvas)
+{
+	UINT Width = pCamera->GetWidth();
+	UINT Height = pCamera->GetHeight();
+
+	for (UINT y = 0; y < Height; y++)
+	{
+		for (UINT x = 0; x < Width; x++)
+		{
+			pCanvas->WritePixel(x, y, Vec3((((float)x / (float)Width) * 255.0), (BYTE)(((float)y / (float)Height) * 255.0), 0.0f));
+		}
+	}
 }

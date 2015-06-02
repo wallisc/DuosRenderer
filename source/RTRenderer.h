@@ -27,6 +27,11 @@ public:
 	~RTCamera();
 
 	void Update(_In_ Transform *pTransform);
+
+	UINT GetWidth();
+	UINT GetHeight();
+private:
+	UINT m_Width, m_Height;
 };
 
 class RTScene : public Scene
@@ -62,10 +67,7 @@ public:
 	void DrawScene(Camera *pCamera, Scene *pScene);
 
 private:
-	void SetDefaultState();
-	void CompileShaders();
 	void InitializeSwapchain(HWND WindowHandle, unsigned int width, unsigned int height);
-
 
 	ID3D11Device *m_pDevice;
 	ID3D11DeviceContext *m_pImmediateContext;
@@ -73,11 +75,31 @@ private:
 	IDXGISwapChain1* m_pSwapChain1;
 	IDXGISwapChain* m_pSwapChain;
 
-	ID3D11RenderTargetView* m_pSwapchainRenderTargetView;
-
-	ID3D11VertexShader* m_pForwardVertexShader;
-	ID3D11PixelShader* m_pForwardPixelShader;
 	ID3D11Texture2D* m_pBackBuffer;
+	ID3D11Texture2D *m_pMappableTexture;
 };
 
-#define D3D11_RENDERER_CAST reinterpret_cast
+class RTCanvas
+{ 
+public:
+	virtual void WritePixel(UINT x, UINT y, Vec3 Color) = 0;
+};
+
+class RTD3DMappedCanvas : public RTCanvas
+{
+public:
+	RTD3DMappedCanvas(void *pMappedSurface, UINT RowPitch, DXGI_FORMAT Format);
+	void WritePixel(UINT x, UINT y, Vec3 Color);
+
+private:
+	UINT m_RowPitch;
+	void *m_pMappedSurface;
+};
+
+class RTracer
+{
+public:
+	static void Trace(RTScene *pScene, RTCamera *pCamera, RTCanvas *pCanvas);
+};
+
+#define RT_RENDERER_CAST reinterpret_cast
