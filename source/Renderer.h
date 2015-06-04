@@ -63,6 +63,7 @@ public:
 	Vec3 m_LookAt;
 	Vec3 m_Up;
 
+	REAL m_FieldOfView;
 	REAL m_NearClip;
 	REAL m_FarClip;
 	REAL m_Width;

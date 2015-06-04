@@ -1,10 +1,17 @@
 #include "RTRenderer.h"
 #include "RendererException.h"
 
-#include <d3dcompiler.h>
+#include <directxmath.h>
 #include <atlbase.h>
+#include <algorithm>
+#include "glm/glm.hpp"
+#include "glm/vec3.hpp"
 
-using namespace DirectX;
+glm::vec3 RealArrayToGlmVec3(_In_reads_(3) Vec3 Vector)
+{
+	return glm::vec3(Vector.x, Vector.y, Vector.z);
+}
+
 
 RTRenderer::RTRenderer(HWND WindowHandle, unsigned int width, unsigned int height)
 {
@@ -79,7 +86,7 @@ void RTRenderer::InitializeSwapchain(HWND WindowHandle, unsigned int width, unsi
 
 Geometry* RTRenderer::CreateGeometry(_In_ CreateGeometryDescriptor *pCreateGeometryDescriptor)
 {
-	RTGeometry* pGeometry = new RTGeometry(m_pDevice, pCreateGeometryDescriptor);
+	RTGeometry* pGeometry = new RTGeometry(pCreateGeometryDescriptor);
 	MEM_CHK(pGeometry);
 	return pGeometry;
 }
@@ -139,14 +146,40 @@ void RTRenderer::DrawScene(Camera *pCamera, Scene *pScene)
 
 	RTD3DMappedCanvas Canvas(MappedResource.pData, MappedResource.RowPitch, DXGI_FORMAT_R8G8B8A8_UNORM);
 	RTracer::Trace(pRTScene, pRTCamera, &Canvas);
-	m_pImmediateContext->Unmap(m_pMappableTexture, 0);
+ 	m_pImmediateContext->Unmap(m_pMappableTexture, 0);
 
 	m_pImmediateContext->CopyResource(m_pBackBuffer, m_pMappableTexture);
 	m_pSwapChain->Present(0, 0);
 }
 
-RTGeometry::RTGeometry(_In_ ID3D11Device *pDevice, _In_ CreateGeometryDescriptor *pCreateGeometryDescriptor)
+RTGeometry::RTGeometry(_In_ CreateGeometryDescriptor *pCreateGeometryDescriptor)
 {
+	if (pCreateGeometryDescriptor->m_NumIndices)
+	{
+		for (UINT i = 0; i < pCreateGeometryDescriptor->m_NumIndices; i += 3)
+		{
+			UINT Index0 = pCreateGeometryDescriptor->m_pIndices[i];
+			UINT Index1 = pCreateGeometryDescriptor->m_pIndices[i + 1];
+			UINT Index2 = pCreateGeometryDescriptor->m_pIndices[i + 2];
+
+			glm::vec3 Triangle[3];
+			Triangle[0] = RealArrayToGlmVec3(pCreateGeometryDescriptor->m_pVertices[Index0].m_Position);
+			Triangle[1] = RealArrayToGlmVec3(pCreateGeometryDescriptor->m_pVertices[Index1].m_Position);
+			Triangle[2] = RealArrayToGlmVec3(pCreateGeometryDescriptor->m_pVertices[Index2].m_Position);
+			m_Mesh.push_back(RTTriangle(Triangle));
+		}
+	}
+	else
+	{
+		for (UINT i = 0; i < pCreateGeometryDescriptor->m_NumVertices; i += 3)
+		{
+			glm::vec3 Triangle[3];
+			Triangle[0] = RealArrayToGlmVec3(pCreateGeometryDescriptor->m_pVertices[i].m_Position);
+			Triangle[1] = RealArrayToGlmVec3(pCreateGeometryDescriptor->m_pVertices[i + 1].m_Position);
+			Triangle[2] = RealArrayToGlmVec3(pCreateGeometryDescriptor->m_pVertices[i + 2].m_Position);
+			m_Mesh.push_back(RTTriangle(Triangle));
+		}
+	}
 }
 
 RTGeometry::~RTGeometry()
@@ -156,6 +189,18 @@ RTGeometry::~RTGeometry()
 void RTGeometry::Update(_In_ Transform *pTransform)
 {
 	assert(false); // Implement
+}
+
+float RTGeometry::Intersects(RTRay *pRay)
+{
+	float t = FLT_MAX;
+	for (RTTriangle Triangle : m_Mesh)
+	{
+		float Interesect = Triangle.Intersects(pRay);
+		if (Interesect > 0.0f) t = std::min(Interesect, t);
+	}
+
+	return t == FLT_MAX ? -1.0 : t;
 }
 
 RTLight::RTLight(_In_ CreateLightDescriptor *pCreateLightDescriptor)
@@ -175,11 +220,40 @@ void RTScene::AddGeometry(_In_ Geometry *pGeometry)
 }
 
 RTCamera::RTCamera(ID3D11Device *pDevice, CreateCameraDescriptor *pCreateCameraDescriptor) :
-	m_Width(pCreateCameraDescriptor->m_Width), m_Height(pCreateCameraDescriptor->m_Height) {}
+	m_Width(pCreateCameraDescriptor->m_Width), m_Height(pCreateCameraDescriptor->m_Height),
+	m_NearClip(pCreateCameraDescriptor->m_NearClip), m_FarClip(pCreateCameraDescriptor->m_FarClip),
+	m_FieldOfView(pCreateCameraDescriptor->m_FieldOfView)
+{
+	m_Position = RealArrayToGlmVec3(pCreateCameraDescriptor->m_Position);
+ 	m_LookAt = RealArrayToGlmVec3(pCreateCameraDescriptor->m_LookAt);
+	m_Up = RealArrayToGlmVec3(pCreateCameraDescriptor->m_Up);
+}
 
 RTCamera::~RTCamera()
 {
 
+}
+
+glm::vec3 RTCamera::GetFocalPoint()
+{
+	float Hypotnuse = 0.5f * GetAspectRatio() / sin(m_FieldOfView / 2.0f);
+	float FocalLength = cos(m_FieldOfView / 2.0f) * Hypotnuse;
+	return m_Position - glm::normalize(m_LookAt - m_Position) * FocalLength;
+}
+
+float RTCamera::GetAspectRatio()
+{
+	return (float)m_Height / (float)m_Width;
+}
+
+const glm::vec3& RTCamera::GetPosition()
+{
+	return m_Position;
+}
+
+const glm::vec3& RTCamera::GetLookAt()
+{
+	return m_LookAt;
 }
 
 UINT RTCamera::GetWidth() { return m_Width; }
@@ -200,9 +274,9 @@ RTD3DMappedCanvas::RTD3DMappedCanvas(void *pMappedSurface, UINT RowPitch, DXGI_F
 void RTD3DMappedCanvas::WritePixel(UINT x, UINT y, Vec3 Color)
 {
 	byte *pPixel = ((byte *)m_pMappedSurface) + m_RowPitch * y + x * sizeof(byte)* 4;
-	pPixel[0] = Color.x;
-	pPixel[1] = Color.y;
-	pPixel[2] = Color.z;
+	pPixel[0] = Color.x * 255.0f;
+	pPixel[1] = Color.y * 255.0f;
+	pPixel[2] = Color.z * 255.0f;
 	pPixel[3] = 0;
 }
 
@@ -211,11 +285,82 @@ void RTracer::Trace(RTScene *pScene, RTCamera *pCamera, RTCanvas *pCanvas)
 	UINT Width = pCamera->GetWidth();
 	UINT Height = pCamera->GetHeight();
 
+	glm::vec3 FocalPoint = pCamera->GetFocalPoint();
+
 	for (UINT y = 0; y < Height; y++)
 	{
 		for (UINT x = 0; x < Width; x++)
 		{
-			pCanvas->WritePixel(x, y, Vec3((((float)x / (float)Width) * 255.0), (BYTE)(((float)y / (float)Height) * 255.0), 0.0f));
+			float AspectRatio = pCamera->GetAspectRatio(); 
+ 			glm::vec3 coord((float)x / (float)Width, AspectRatio * (float)(Height - y) / (float)Height, 0.0f);
+			coord = coord - glm::vec3(0.5f, AspectRatio / 2.0f, 0.0f);
+
+			glm::vec3 LensPoint = pCamera->GetPosition() + coord;
+			glm::vec3 RayDirection = glm::normalize(LensPoint - FocalPoint);
+
+			RTRay Ray(LensPoint, LensPoint - FocalPoint);
+			bool Intersected = false;
+			for (RTGeometry *pGeometry : pScene->GetGeometryList())
+			{
+ 				if (pGeometry->Intersects(&Ray) > 0.0f)
+				{
+					pCanvas->WritePixel(x, y, Vec3(1.0f, 0.0f, 0.0f));
+					Intersected = true;
+					break;
+				}
+			}
+			if (!Intersected) pCanvas->WritePixel(x, y, Vec3(0.0f, 0.0f, 1.0f));
 		}
 	}
 }
+
+RTTriangle::RTTriangle(glm::vec3 Vertices[3])
+{
+	m_V0 = Vertices[0];
+	m_V1 = Vertices[1];
+	m_V2 = Vertices[2];
+	m_Normal = glm::normalize(glm::cross(m_V1 - m_V0, m_V2 - m_V0));
+}
+
+float RTTriangle::Intersects(RTRay *pRay)
+{
+	float numer = glm::dot(-m_Normal, pRay->GetOrigin() - m_V0);
+	float denom = glm::dot(m_Normal, pRay->GetDirection());
+
+	if (denom == 0.0f || numer == 0.0f)
+		return -1.0f;
+
+	float t = numer / denom;
+
+	// intersection point
+	glm::vec3 Intersection = pRay->GetPoint(t);
+
+	glm::vec3 A = m_V0, B = m_V1, C = m_V2;
+	glm::vec3 AB = B - A;
+	glm::vec3 AC = C - A;
+
+	glm::vec3 AP = Intersection - A;
+	glm::vec3 ABxAP = glm::cross(AB, AP);
+	float v_num = glm::dot(m_Normal, ABxAP);
+	if (v_num < 0.0f) return -1.0f;
+
+	// edge 2
+	glm::vec3 BP = Intersection - B;
+	glm::vec3 BC = C - B;
+	glm::vec3 BCxBP = glm::cross(BC, BP);
+	if (glm::dot(m_Normal, BCxBP) < 0.0f)
+		return -1.0f; // P is on the left side
+
+	// edge 3, needed to compute u
+	glm::vec3 CP = Intersection - C;
+	// we have computed AC already so we can avoid computing CA by
+	// inverting the vectors in the cross product:
+	// Cross(CA, CP) = cross(CP, AC);
+	glm::vec3 CAxCP = glm::cross(CP, AC);
+	float u_num = glm::dot(m_Normal, CAxCP);
+	if (u_num < 0.0f)
+		return -1.0f; // P is on the left side;
+
+	return t;
+}
+

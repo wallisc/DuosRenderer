@@ -405,6 +405,29 @@
   <ItemGroup>
     <ClInclude Include="DDSTextureLoader.h" />
     <ClInclude Include="D3D11Renderer.h" />
+    <ClInclude Include="glm\common.hpp" />
+    <ClInclude Include="glm\exponential.hpp" />
+    <ClInclude Include="glm\ext.hpp" />
+    <ClInclude Include="glm\fwd.hpp" />
+    <ClInclude Include="glm\geometric.hpp" />
+    <ClInclude Include="glm\glm.hpp" />
+    <ClInclude Include="glm\integer.hpp" />
+    <ClInclude Include="glm\mat2x2.hpp" />
+    <ClInclude Include="glm\mat2x3.hpp" />
+    <ClInclude Include="glm\mat2x4.hpp" />
+    <ClInclude Include="glm\mat3x2.hpp" />
+    <ClInclude Include="glm\mat3x3.hpp" />
+    <ClInclude Include="glm\mat3x4.hpp" />
+    <ClInclude Include="glm\mat4x2.hpp" />
+    <ClInclude Include="glm\mat4x3.hpp" />
+    <ClInclude Include="glm\mat4x4.hpp" />
+    <ClInclude Include="glm\matrix.hpp" />
+    <ClInclude Include="glm\packing.hpp" />
+    <ClInclude Include="glm\trigonometric.hpp" />
+    <ClInclude Include="glm\vec2.hpp" />
+    <ClInclude Include="glm\vec3.hpp" />
+    <ClInclude Include="glm\vec4.hpp" />
+    <ClInclude Include="glm\vector_relational.hpp" />
     <ClInclude Include="Renderer.h" />
     <ClInclude Include="RendererException.h" />
     <CLInclude Include="resource.h" />
@@ -415,6 +438,7 @@
     <Image Include="crate.dds" />
   </ItemGroup>
   <ItemGroup>
+    <Text Include="glm\CMakeLists.txt" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets" />

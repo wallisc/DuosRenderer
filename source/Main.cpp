@@ -11,8 +11,8 @@
 
 using namespace DirectX;
 
-#define WIDTH 800
-#define HEIGHT 600
+#define WIDTH 400
+#define HEIGHT 300
 
 //--------------------------------------------------------------------------------------
 // Global Variables
@@ -248,13 +248,14 @@ void InitSceneAndCamera(_In_ Renderer *pRenderer, _Out_ Scene **ppScene, _Out_ C
 	pScene->AddGeometry(pPlane);
 
 	CreateCameraDescriptor CameraDescriptor = {};
-	CameraDescriptor.m_Height = 600;
-	CameraDescriptor.m_Width = 800;
+	CameraDescriptor.m_Height = HEIGHT;
+	CameraDescriptor.m_Width = WIDTH;
 	CameraDescriptor.m_Position = Vec3(0.0f, 3.0f, -11.0f);
 	CameraDescriptor.m_LookAt = Vec3(0.0f, 1.0f, 0.0f);
 	CameraDescriptor.m_Up = Vec3(0.0f, 1.0f, 0.0f);
 	CameraDescriptor.m_NearClip = 0.01f;
 	CameraDescriptor.m_FarClip = 100.0f;
+	CameraDescriptor.m_FieldOfView = 0.78f;
 
 	*ppCamera = pRenderer->CreateCamera(&CameraDescriptor);
 }

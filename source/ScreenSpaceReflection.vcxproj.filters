@@ -9,12 +9,15 @@
       <UniqueIdentifier>{2c3d4c8c-5d1a-459a-a05a-a4e4b608a44e}</UniqueIdentifier>
       <Extensions>fx;fxh;hlsl</Extensions>
     </Filter>
+    <Filter Include="glm">
+      <UniqueIdentifier>{b392f26b-0285-4da9-bae8-567eef89d2c3}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="DDSTextureLoader.cpp" />
-    <ClCompile Include="Main.cpp" />
     <ClCompile Include="D3D11Renderer.cpp" />
     <ClCompile Include="RTRenderer.cpp" />
+    <ClCompile Include="Main.cpp" />
   </ItemGroup>
   <ItemGroup>
     <CLInclude Include="resource.h">
@@ -25,6 +28,73 @@
     <ClInclude Include="D3D11Renderer.h" />
     <ClInclude Include="RendererException.h" />
     <ClInclude Include="RTRenderer.h" />
+    <ClInclude Include="glm\common.hpp" />
+    <ClInclude Include="glm\exponential.hpp">
+      <Filter>glm</Filter>
+    </ClInclude>
+    <ClInclude Include="glm\ext.hpp">
+      <Filter>glm</Filter>
+    </ClInclude>
+    <ClInclude Include="glm\fwd.hpp">
+      <Filter>glm</Filter>
+    </ClInclude>
+    <ClInclude Include="glm\geometric.hpp">
+      <Filter>glm</Filter>
+    </ClInclude>
+    <ClInclude Include="glm\glm.hpp">
+      <Filter>glm</Filter>
+    </ClInclude>
+    <ClInclude Include="glm\integer.hpp">
+      <Filter>glm</Filter>
+    </ClInclude>
+    <ClInclude Include="glm\packing.hpp">
+      <Filter>glm</Filter>
+    </ClInclude>
+    <ClInclude Include="glm\mat2x2.hpp">
+      <Filter>glm</Filter>
+    </ClInclude>
+    <ClInclude Include="glm\mat2x3.hpp">
+      <Filter>glm</Filter>
+    </ClInclude>
+    <ClInclude Include="glm\mat2x4.hpp">
+      <Filter>glm</Filter>
+    </ClInclude>
+    <ClInclude Include="glm\mat3x2.hpp">
+      <Filter>glm</Filter>
+    </ClInclude>
+    <ClInclude Include="glm\mat3x3.hpp">
+      <Filter>glm</Filter>
+    </ClInclude>
+    <ClInclude Include="glm\mat3x4.hpp">
+      <Filter>glm</Filter>
+    </ClInclude>
+    <ClInclude Include="glm\mat4x2.hpp">
+      <Filter>glm</Filter>
+    </ClInclude>
+    <ClInclude Include="glm\mat4x3.hpp">
+      <Filter>glm</Filter>
+    </ClInclude>
+    <ClInclude Include="glm\mat4x4.hpp">
+      <Filter>glm</Filter>
+    </ClInclude>
+    <ClInclude Include="glm\matrix.hpp">
+      <Filter>glm</Filter>
+    </ClInclude>
+    <ClInclude Include="glm\trigonometric.hpp">
+      <Filter>glm</Filter>
+    </ClInclude>
+    <ClInclude Include="glm\vec2.hpp">
+      <Filter>glm</Filter>
+    </ClInclude>
+    <ClInclude Include="glm\vec3.hpp">
+      <Filter>glm</Filter>
+    </ClInclude>
+    <ClInclude Include="glm\vec4.hpp">
+      <Filter>glm</Filter>
+    </ClInclude>
+    <ClInclude Include="glm\vector_relational.hpp">
+      <Filter>glm</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="Geometry_PS.hlsl">
@@ -46,5 +116,8 @@
     <Image Include="crate.dds">
       <Filter>Resource Files</Filter>
     </Image>
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="glm\CMakeLists.txt" />
   </ItemGroup>
 </Project>

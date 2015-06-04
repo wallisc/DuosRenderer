@@ -1,17 +1,46 @@
 #include "Renderer.h"
 
 #include <d3d11_1.h>
-#include <d3dcompiler.h>
-#include <directxmath.h>
-#include <directxcolors.h>
+#include "glm/vec3.hpp"
 
-class RTGeometry : public Geometry
+class RTRay
 {
 public:
-	RTGeometry(_In_ ID3D11Device *pDevice, _In_ CreateGeometryDescriptor *pCreateGeometryDescriptor);
+	RTRay(glm::vec3 Origin, glm::vec3 Direction) : m_Origin(Origin), m_Direction(Direction) {}
+
+	const glm::vec3 &GetOrigin() const { return m_Origin; }
+	const glm::vec3 &GetDirection() const { return m_Direction; }
+	glm::vec3 GetPoint(float t) { return m_Origin + m_Direction * t;  }
+private:
+	glm::vec3 m_Origin;
+	glm::vec3 m_Direction;
+};
+
+class RTIntersectable
+{
+	virtual float Intersects(RTRay *pRay) = 0;
+};
+
+class RTTriangle : public RTIntersectable
+{
+public:
+	RTTriangle(glm::vec3 Vertices[3]);
+	float Intersects(RTRay *pRay);
+private:
+	glm::vec3 m_V0, m_V1, m_V2;
+	glm::vec3 m_Normal;
+};
+
+class RTGeometry : public Geometry, public RTIntersectable
+{
+public:
+	RTGeometry(_In_ CreateGeometryDescriptor *pCreateGeometryDescriptor);
 	~RTGeometry();
 
 	void Update(_In_ Transform *pTransform);
+	float Intersects(RTRay *pRay);
+private:
+	std::vector<RTTriangle> m_Mesh;
 };
 
 class RTLight : public Light
@@ -30,8 +59,20 @@ public:
 
 	UINT GetWidth();
 	UINT GetHeight();
+	glm::vec3 GetFocalPoint();
+	float GetAspectRatio();
+	const glm::vec3 &GetPosition();
+	const glm::vec3 &GetLookAt();
+
 private:
 	UINT m_Width, m_Height;
+	glm::vec3 m_Position;
+	glm::vec3 m_LookAt;
+	glm::vec3 m_Up;
+	
+	REAL m_FieldOfView;
+	REAL m_NearClip;
+	REAL m_FarClip;
 };
 
 class RTScene : public Scene
@@ -39,8 +80,6 @@ class RTScene : public Scene
 public:
 	void AddGeometry(_In_ Geometry *pGeometry);
 
-	friend class RTRenderer;
-protected:
 	std::vector<RTGeometry *> &GetGeometryList() { return m_GeometryList; }
 
 private:

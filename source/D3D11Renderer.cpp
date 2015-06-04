@@ -2,6 +2,7 @@
 #include "RendererException.h"
 
 #include <d3dcompiler.h>
+#include <directxcolors.h>
 #include <atlbase.h>
 
 using namespace DirectX;
@@ -382,12 +383,12 @@ D3D11Camera::D3D11Camera(ID3D11Device *pDevice, CreateCameraDescriptor *pCreateC
 	m_CameraCpuData.m_CamPos = Eye;
 	m_CameraCpuData.m_ClipDistance = XMVectorSet(pCreateCameraDescriptor->m_FarClip, 0, 0, 0);
 	m_CameraCpuData.m_Dimensions = XMVectorSet(pCreateCameraDescriptor->m_Width, pCreateCameraDescriptor->m_Height, 0, 0);
-	m_CameraCpuData.m_Projection = XMMatrixPerspectiveFovLH(XM_PIDIV4,
+	m_CameraCpuData.m_Projection = XMMatrixPerspectiveFovLH(pCreateCameraDescriptor->m_FieldOfView,
 		pCreateCameraDescriptor->m_Width / pCreateCameraDescriptor->m_Height,
 		pCreateCameraDescriptor->m_NearClip,
-		pCreateCameraDescriptor->m_FarClip);
+	 	pCreateCameraDescriptor->m_FarClip);
 
-	m_CameraCpuData.m_View = XMMatrixLookAtLH(Eye, At, Up);
+    	m_CameraCpuData.m_View = XMMatrixLookAtLH(Eye, At, Up);
 
 	D3D11_BUFFER_DESC CameraBufferDesc;
 	ZeroMemory(&CameraBufferDesc, sizeof(CameraBufferDesc));
