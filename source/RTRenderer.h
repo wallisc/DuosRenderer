@@ -2,32 +2,59 @@
 
 #include <d3d11_1.h>
 #include "glm/vec3.hpp"
+#include "glm/vec2.hpp"
 
 class RTRay
 {
 public:
-	RTRay(glm::vec3 Origin, glm::vec3 Direction) : m_Origin(Origin), m_Direction(Direction) {}
+	RTRay(glm::vec3 Origin = glm::vec3(), glm::vec3 Direction = glm::vec3()) : m_Origin(Origin), m_Direction(Direction) {}
 
 	const glm::vec3 &GetOrigin() const { return m_Origin; }
 	const glm::vec3 &GetDirection() const { return m_Direction; }
-	glm::vec3 GetPoint(float t) { return m_Origin + m_Direction * t;  }
+	glm::vec3 GetPoint(float t) const { return m_Origin + m_Direction * t; }
 private:
 	glm::vec3 m_Origin;
 	glm::vec3 m_Direction;
 };
 
+class IntersectionResult;
+
 class RTIntersectable
 {
-	virtual float Intersects(RTRay *pRay) = 0;
+public:
+	virtual bool Intersects(RTRay *pRay, _Out_ IntersectionResult *pResult = nullptr) = 0;
+	virtual glm::vec2 GetUVAt(const IntersectionResult &Result) const = 0;
 };
 
-class RTTriangle : public RTIntersectable
+class IntersectionResult
 {
 public:
-	RTTriangle(glm::vec3 Vertices[3]);
-	float Intersects(RTRay *pRay);
+	IntersectionResult(const RTIntersectable *pGeometry = nullptr, float Param = -1.0f) :
+		m_IntersectedGeometry(pGeometry), m_Param(Param) {}
+
+	float GetParam() const { return m_Param; }
+	const RTIntersectable* GetIntersectedGeometry() const { return m_IntersectedGeometry; }
+	void SetIntersectedGeometry(const RTIntersectable *pGeometry) { m_IntersectedGeometry = pGeometry; }
+	void SetParam(float Param) { m_Param = Param; }
+	void SetRay(const RTRay &Ray) { m_Ray = Ray; }
+	const RTRay &GetRay() const { return m_Ray; }
+private: 
+	const RTIntersectable *m_IntersectedGeometry; 
+	RTRay m_Ray;
+	float m_Param;
+};
+
+class RTTriangle : public RTIntersectable, public Geometry
+{
+public:
+	RTTriangle(glm::vec3 Vertices[3], glm::vec2 UVCoordinates[3]);
+	bool Intersects(RTRay *pRay, _Out_ IntersectionResult *pResult);
+
+	void Update(_In_ Transform *pTransform);
+	glm::vec2 GetUVAt(const IntersectionResult &Result) const;
 private:
 	glm::vec3 m_V0, m_V1, m_V2;
+	glm::vec2 m_Tex0, m_Tex1, m_Tex2;
 	glm::vec3 m_Normal;
 };
 
@@ -38,7 +65,9 @@ public:
 	~RTGeometry();
 
 	void Update(_In_ Transform *pTransform);
-	float Intersects(RTRay *pRay);
+	bool Intersects(RTRay *pRay, _Out_ IntersectionResult *pResult = nullptr);
+	glm::vec2 GetUVAt(const IntersectionResult &Result) const { assert(false); return glm::vec2(); }
+
 private:
 	std::vector<RTTriangle> m_Mesh;
 };
@@ -99,6 +128,10 @@ public:
 
 	Camera *CreateCamera(_In_ CreateCameraDescriptor *pCreateCameraDescriptor);
 	void DestroyCamera(Camera *pCamera);
+
+
+	Material *CreateMaterial(_In_ CreateMaterialDescriptor *pCreateMaterialDescriptor) { return nullptr; }
+	void DestroyMaterial(Material* pMaterial) {}
 
 	Scene *CreateScene();
 	void DestroyScene(Scene *pScene);

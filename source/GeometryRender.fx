@@ -68,6 +68,6 @@ PS_OUTPUT PS( PS_INPUT input) : SV_Target
     //float3 d = normalize(input.WorldPos.xyz - CamPos.xyz);
 
 	//output.Color = txDiffuse.Sample( samLinear, input.Tex );
-	output.Color = float4(1, 0, 0, 1);
+	output.Color = float4(input.Tex.x, input.Tex.y, 0, 1);
    return output;
 }

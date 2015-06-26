@@ -28,6 +28,8 @@ struct Vertex
 	Vec2 m_Tex;
 };
 
+class Material;
+
 struct CreateGeometryDescriptor
 {
 	Vertex *m_pVertices;
@@ -35,6 +37,13 @@ struct CreateGeometryDescriptor
 
 	unsigned int m_NumIndices;
 	unsigned int *m_pIndices;
+
+	Material *m_pMaterial;
+};
+
+struct CreateMaterialDescriptor
+{
+	wchar_t *m_TextureName;
 };
 
 class CreateDirectionalLight
@@ -78,6 +87,11 @@ class Transform
 {
 };
 
+class Material
+{
+
+};
+
 class Transformable
 {
 public:
@@ -111,6 +125,9 @@ public:
 
 	virtual Camera *CreateCamera(_In_ CreateCameraDescriptor *pCreateCameraDescriptor) = 0;
 	virtual void DestroyCamera(Camera *pCamera) = 0;
+
+	virtual Material *CreateMaterial(_In_ CreateMaterialDescriptor *pCreateMaterialDescriptor) = 0;
+	virtual void DestroyMaterial(Material* pMaterial) = 0;
 
 	virtual Scene *CreateScene() = 0;
 	virtual void DestroyScene(Scene *pScene) = 0;

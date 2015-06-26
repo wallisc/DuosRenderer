@@ -32,6 +32,14 @@ private:
 	ID3D11Buffer* m_pIndexBuffer;
 };
 
+class D3D11Material : public Material
+{
+public: 
+	D3D11Material(_In_ ID3D11Device *pDevice, CreateMaterialDescriptor *pCreateMaterialDescriptor);
+private:
+	ID3D11ShaderResourceView *pTextureResourceView;
+};
+
 class D3D11Light : public Light
 {
 public:
@@ -83,6 +91,9 @@ public:
 
 	Camera *CreateCamera(_In_ CreateCameraDescriptor *pCreateCameraDescriptor);
 	void DestroyCamera(Camera *pCamera);
+
+	Material *CreateMaterial(_In_ CreateMaterialDescriptor *pCreateMaterialDescriptor);
+	void DestroyMaterial(Material* pMaterial);
 
 	Scene *CreateScene();
 	void DestroyScene(Scene *pScene);

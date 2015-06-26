@@ -1,5 +1,6 @@
 #include "D3D11Renderer.h"
 #include "RendererException.h"
+#include "DDSTextureLoader.h"
 
 #include <d3dcompiler.h>
 #include <directxcolors.h>
@@ -257,6 +258,25 @@ void D3D11Renderer::DestroyCamera(Camera *pCamera)
 {
 	delete pCamera;
 }
+
+D3D11Material::D3D11Material(_In_ ID3D11Device *pDevice, CreateMaterialDescriptor *pCreateMaterialDescriptor)
+{
+	HRESULT result = CreateDDSTextureFromFile(pDevice, pCreateMaterialDescriptor->m_TextureName, nullptr, &pTextureResourceView);
+	FAIL_CHK(SUCCEEDED(result), "Failed to create SRV for texture");
+}
+
+Material *D3D11Renderer::CreateMaterial(_In_ CreateMaterialDescriptor *pCreateMaterialDescriptor)
+{
+	D3D11Material *pMaterial = new D3D11Material(m_pDevice, pCreateMaterialDescriptor);
+	MEM_CHK(pMaterial);
+	return pMaterial;
+}
+
+void D3D11Renderer::DestroyMaterial(Material* pMaterial)
+{
+	delete pMaterial;
+}
+
 
 Scene *D3D11Renderer::CreateScene()
 {
