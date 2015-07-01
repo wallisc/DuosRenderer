@@ -4,6 +4,34 @@
 #include "glm/vec3.hpp"
 #include "glm/vec2.hpp"
 
+class RTMaterial : public Material
+{
+public:
+	RTMaterial(CreateMaterialDescriptor *pCreateMaterialDescriptor);
+
+	glm::vec3 GetColor(glm::vec2 uv) 
+	{
+		glm::tvec2<int> coord = glm::vec2(uv.x * m_Width, uv.y * m_Height);
+		unsigned char *pPixel = &m_pImage[(coord.x + coord.y * m_Width) * cSizeofComponent * cComponentCount];
+		return glm::vec3(
+			ConvertCharToFloat(pPixel[0]), 
+			ConvertCharToFloat(pPixel[1]), 
+			ConvertCharToFloat(pPixel[2]));
+	}
+private:
+	float ConvertCharToFloat(unsigned char CharColor)
+	{
+		return (float)CharColor / 256.0f;
+	}
+
+	static const int cComponentCount = 3;
+	static const unsigned int cSizeofComponent = sizeof(unsigned char);
+
+	unsigned char* m_pImage;
+	int m_Width;
+	int m_Height;
+};
+
 class RTRay
 {
 public:
@@ -37,11 +65,14 @@ public:
 	void SetIntersectedGeometry(const RTIntersectable *pGeometry) { m_IntersectedGeometry = pGeometry; }
 	void SetParam(float Param) { m_Param = Param; }
 	void SetRay(const RTRay &Ray) { m_Ray = Ray; }
+	void SetMaterial(RTMaterial *pMaterial) { m_pMaterial = pMaterial; }
+	RTMaterial *GetMaterial() { return m_pMaterial; }
 	const RTRay &GetRay() const { return m_Ray; }
 private: 
-	const RTIntersectable *m_IntersectedGeometry; 
+	const RTIntersectable *m_IntersectedGeometry;
 	RTRay m_Ray;
 	float m_Param;
+	RTMaterial *m_pMaterial;
 };
 
 class RTTriangle : public RTIntersectable, public Geometry
@@ -67,9 +98,11 @@ public:
 	void Update(_In_ Transform *pTransform);
 	bool Intersects(RTRay *pRay, _Out_ IntersectionResult *pResult = nullptr);
 	glm::vec2 GetUVAt(const IntersectionResult &Result) const { assert(false); return glm::vec2(); }
+	RTMaterial *GetMaterial() { return m_pMaterial; }
 
 private:
 	std::vector<RTTriangle> m_Mesh;
+	RTMaterial *m_pMaterial;
 };
 
 class RTLight : public Light
@@ -129,9 +162,8 @@ public:
 	Camera *CreateCamera(_In_ CreateCameraDescriptor *pCreateCameraDescriptor);
 	void DestroyCamera(Camera *pCamera);
 
-
-	Material *CreateMaterial(_In_ CreateMaterialDescriptor *pCreateMaterialDescriptor) { return nullptr; }
-	void DestroyMaterial(Material* pMaterial) {}
+	Material *CreateMaterial(_In_ CreateMaterialDescriptor *pCreateMaterialDescriptor);
+	void DestroyMaterial(Material* pMaterial);
 
 	Scene *CreateScene();
 	void DestroyScene(Scene *pScene);

@@ -3,7 +3,6 @@
 #include <d3dcompiler.h>
 #include <directxmath.h>
 #include <directxcolors.h>
-#include "DDSTextureLoader.h"
 #include "resource.h"
 #include "Renderer.h"
 #include "D3D11Renderer.h"
@@ -223,10 +222,15 @@ void InitSceneAndCamera(_In_ Renderer *pRenderer, _Out_ Scene **ppScene, _Out_ C
 		22, 20, 21,
 		23, 20, 22
 	};
+
+	CreateMaterialDescriptor CreateBoxMaterialDescriptor;
+	CreateBoxMaterialDescriptor.m_TextureName = "crate.png";
+	Material *pBoxMaterial = pRenderer->CreateMaterial(&CreateBoxMaterialDescriptor);
 	CreateBoxDescriptor.m_pVertices = BoxVertices;
 	CreateBoxDescriptor.m_NumVertices = ARRAYSIZE(BoxVertices);
 	CreateBoxDescriptor.m_pIndices = BoxIndices;
 	CreateBoxDescriptor.m_NumIndices = ARRAYSIZE(BoxIndices);
+	CreateBoxDescriptor.m_pMaterial = pBoxMaterial;
 
 	Geometry *pBox = pRenderer->CreateGeometry(&CreateBoxDescriptor);
 	pScene->AddGeometry(pBox);
@@ -242,6 +246,11 @@ void InitSceneAndCamera(_In_ Renderer *pRenderer, _Out_ Scene **ppScene, _Out_ C
 		{ Vec3(5.0f, -1.0f, -5.0f), Vec3(0.0f, 1.0f, 0.0f), Vec2(0.0f, 0.0f), },
 		{ Vec3(-5.0f, -1.0f, 5.0f), Vec3(0.0f, 1.0f, 0.0f), Vec2(1.0f, 1.0f), },
 	};
+	CreateMaterialDescriptor CreatePlaneMaterialDescriptor;
+	CreatePlaneMaterialDescriptor.m_TextureName = "tile.png";
+	Material *pPlaneMaterial = pRenderer->CreateMaterial(&CreatePlaneMaterialDescriptor);
+
+	CreatePlaneDescriptor.m_pMaterial = pPlaneMaterial;
 	CreatePlaneDescriptor.m_NumVertices = ARRAYSIZE(PlaneVertices);
 	CreatePlaneDescriptor.m_pVertices = PlaneVertices;
 	Geometry *pPlane = pRenderer->CreateGeometry(&CreatePlaneDescriptor);
@@ -255,7 +264,7 @@ void InitSceneAndCamera(_In_ Renderer *pRenderer, _Out_ Scene **ppScene, _Out_ C
 	CameraDescriptor.m_Up = Vec3(0.0f, 1.0f, 0.0f);
 	CameraDescriptor.m_NearClip = 0.01f;
 	CameraDescriptor.m_FarClip = 100.0f;
-	CameraDescriptor.m_FieldOfView = 0.78f;
+	CameraDescriptor.m_FieldOfView = .78f;
 
 	*ppCamera = pRenderer->CreateCamera(&CameraDescriptor);
 }

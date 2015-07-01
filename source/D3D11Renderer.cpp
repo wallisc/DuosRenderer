@@ -1,7 +1,8 @@
 #include "D3D11Renderer.h"
 #include "RendererException.h"
-#include "DDSTextureLoader.h"
+#include "dxtk/inc/WICTextureLoader.h"
 
+#include <atlconv.h>
 #include <d3dcompiler.h>
 #include <directxcolors.h>
 #include <atlbase.h>
@@ -261,8 +262,14 @@ void D3D11Renderer::DestroyCamera(Camera *pCamera)
 
 D3D11Material::D3D11Material(_In_ ID3D11Device *pDevice, CreateMaterialDescriptor *pCreateMaterialDescriptor)
 {
-	HRESULT result = CreateDDSTextureFromFile(pDevice, pCreateMaterialDescriptor->m_TextureName, nullptr, &pTextureResourceView);
-	FAIL_CHK(SUCCEEDED(result), "Failed to create SRV for texture");
+	CA2WEX<MAX_ALLOWED_STR_LENGTH> WideTextureName(pCreateMaterialDescriptor->m_TextureName);
+	std::wstring wTextureName();
+	HRESULT result = CreateWICTextureFromFile(pDevice,
+		WideTextureName,
+		nullptr,
+		&pTextureResourceView,
+		20 * 1024 * 1024);
+	FAIL_CHK(FAILED(result), "Failed to create SRV for texture");
 }
 
 Material *D3D11Renderer::CreateMaterial(_In_ CreateMaterialDescriptor *pCreateMaterialDescriptor)
@@ -314,6 +321,8 @@ void D3D11Renderer::DrawScene(Camera *pCamera, Scene *pScene)
 		ID3D11Buffer *pIndexBuffer = pGeometry->GetIndexBuffer();
 		m_pImmediateContext->IASetVertexBuffers(0, 1, &pVertexBuffer, &Strides, &Offsets);
 		m_pImmediateContext->IASetIndexBuffer(pIndexBuffer, DXGI_FORMAT_R32_UINT, 0);
+		ID3D11ShaderResourceView *pDiffuseTexture = pGeometry->GetMaterial()->GetShaderResourceView();
+		m_pImmediateContext->PSSetShaderResources(0, 1, &pDiffuseTexture);
 		if (pIndexBuffer)
 		{
 			m_pImmediateContext->DrawIndexed(pGeometry->GetIndexCount(), 0, 0);
@@ -336,6 +345,7 @@ D3D11Geometry::D3D11Geometry(_In_ ID3D11Device *pDevice, _In_ CreateGeometryDesc
 	m_UsesIndexBuffer = pCreateGeometryDescriptor->m_NumIndices != 0;
 	m_VertexCount = pCreateGeometryDescriptor->m_NumVertices;
 	m_IndexCount = pCreateGeometryDescriptor->m_NumIndices;
+	m_pMaterial = D3D11_RENDERER_CAST<D3D11Material *>(pCreateGeometryDescriptor->m_pMaterial);
 	if (m_UsesIndexBuffer)
 	{
 		D3D11_BUFFER_DESC IndexBufferDesc;

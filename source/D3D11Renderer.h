@@ -12,6 +12,15 @@ struct CBCamera
 	DirectX::XMVECTOR m_ClipDistance;
 };
 
+class D3D11Material : public Material
+{
+public:
+	D3D11Material(_In_ ID3D11Device *pDevice, CreateMaterialDescriptor *pCreateMaterialDescriptor);
+	ID3D11ShaderResourceView *GetShaderResourceView() const { return pTextureResourceView; }
+private:
+	ID3D11ShaderResourceView *pTextureResourceView;
+};
+
 class D3D11Geometry : public Geometry
 {
 public:
@@ -24,20 +33,15 @@ public:
 	ID3D11Buffer *GetIndexBuffer() const { return m_pIndexBuffer; }
 	unsigned int GetVertexCount() const { return m_VertexCount; }
 	unsigned int GetIndexCount() const { return m_IndexCount; }
+	D3D11Material *GetMaterial() const { return m_pMaterial; }
+
 private:
 	bool m_UsesIndexBuffer;
 	unsigned int m_VertexCount;
 	unsigned int m_IndexCount;
 	ID3D11Buffer* m_pVertexBuffer;
 	ID3D11Buffer* m_pIndexBuffer;
-};
-
-class D3D11Material : public Material
-{
-public: 
-	D3D11Material(_In_ ID3D11Device *pDevice, CreateMaterialDescriptor *pCreateMaterialDescriptor);
-private:
-	ID3D11ShaderResourceView *pTextureResourceView;
+	D3D11Material *m_pMaterial;
 };
 
 class D3D11Light : public Light

@@ -12,18 +12,28 @@
     <Filter Include="glm">
       <UniqueIdentifier>{b392f26b-0285-4da9-bae8-567eef89d2c3}</UniqueIdentifier>
     </Filter>
+    <Filter Include="stb_image">
+      <UniqueIdentifier>{e63f720c-c2d0-40ab-aadf-918c995e473a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="dxtk">
+      <UniqueIdentifier>{651ad9f5-031f-4fec-a1c8-a0ae1f06c39d}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="DDSTextureLoader.cpp" />
     <ClCompile Include="D3D11Renderer.cpp" />
     <ClCompile Include="RTRenderer.cpp" />
     <ClCompile Include="Main.cpp" />
+    <ClCompile Include="dxtk\Src\pch.cpp">
+      <Filter>dxtk</Filter>
+    </ClCompile>
+    <ClCompile Include="dxtk\Src\WICTextureLoader.cpp">
+      <Filter>dxtk</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <CLInclude Include="resource.h">
       <Filter>Resource Files</Filter>
     </CLInclude>
-    <ClInclude Include="DDSTextureLoader.h" />
     <ClInclude Include="Renderer.h" />
     <ClInclude Include="D3D11Renderer.h" />
     <ClInclude Include="RendererException.h" />
@@ -94,6 +104,21 @@
     </ClInclude>
     <ClInclude Include="glm\vector_relational.hpp">
       <Filter>glm</Filter>
+    </ClInclude>
+    <ClInclude Include="dxtk\Inc\DirectXHelpers.h">
+      <Filter>dxtk</Filter>
+    </ClInclude>
+    <ClInclude Include="dxtk\Inc\WICTextureLoader.h">
+      <Filter>dxtk</Filter>
+    </ClInclude>
+    <ClInclude Include="dxtk\Src\pch.h">
+      <Filter>dxtk</Filter>
+    </ClInclude>
+    <ClInclude Include="dxtk\Src\PlatformHelpers.h">
+      <Filter>dxtk</Filter>
+    </ClInclude>
+    <ClInclude Include="stb_image\stb_image.h">
+      <Filter>stb_image</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

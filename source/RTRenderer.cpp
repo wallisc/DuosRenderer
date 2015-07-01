@@ -1,11 +1,14 @@
 #include "RTRenderer.h"
 #include "RendererException.h"
 
-#include <directxmath.h>
 #include <atlbase.h>
 #include <algorithm>
 #include "glm/glm.hpp"
 #include "glm/vec3.hpp"
+
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image/stb_image.h"
+
 
 glm::vec3 RealArrayToGlmVec3(_In_ Vec3 Vector)
 {
@@ -17,6 +20,24 @@ glm::vec2 RealArrayToGlmVec2(_In_ Vec2 Vector)
 	return glm::vec2(Vector.x, Vector.y);
 }
 
+RTMaterial::RTMaterial(CreateMaterialDescriptor *pCreateMaterialDescriptor)
+{
+	int ComponentCount;
+	m_pImage = stbi_load(pCreateMaterialDescriptor->m_TextureName, &m_Width, &m_Height, &ComponentCount, STBI_rgb);
+	FAIL_CHK(ComponentCount != cComponentCount, "Stb_Image returned an unexpected component count");
+}
+
+Material *RTRenderer::CreateMaterial(_In_ CreateMaterialDescriptor *pCreateMaterialDescriptor)
+{
+	Material *pMaterial = new RTMaterial(pCreateMaterialDescriptor);
+	MEM_CHK(pMaterial);
+	return pMaterial;
+}
+
+void RTRenderer::DestroyMaterial(Material* pMaterial)
+{
+	delete pMaterial;
+}
 
 RTRenderer::RTRenderer(HWND WindowHandle, unsigned int width, unsigned int height)
 {
@@ -159,6 +180,7 @@ void RTRenderer::DrawScene(Camera *pCamera, Scene *pScene)
 
 RTGeometry::RTGeometry(_In_ CreateGeometryDescriptor *pCreateGeometryDescriptor)
 {
+	m_pMaterial = RT_RENDERER_CAST<RTMaterial *>(pCreateGeometryDescriptor->m_pMaterial);
 	if (pCreateGeometryDescriptor->m_NumIndices)
 	{
 		for (UINT i = 0; i < pCreateGeometryDescriptor->m_NumIndices; i += 3)
@@ -234,6 +256,7 @@ bool RTGeometry::Intersects(RTRay *pRay, IntersectionResult *pResult)
 	if (bFindExactIntersectingPrimitive)
 	{
 		*pResult = ClosestResult;
+		pResult->SetMaterial(GetMaterial());
 	}
 	return ClosestResult.GetParam() >= 0.0f && ClosestResult.GetParam() != FLT_MAX;
 }
@@ -350,7 +373,8 @@ void RTracer::Trace(RTScene *pScene, RTCamera *pCamera, RTCanvas *pCanvas)
 			if (ClosestResult.GetParam() >= 0.0f && ClosestResult.GetParam() != FLT_MAX)
 			{
 				glm::vec2 uv = ClosestResult.GetIntersectedGeometry()->GetUVAt(ClosestResult);
-				pCanvas->WritePixel(x, y, Vec3(uv.x, uv.y, 0.0f));
+				glm::vec3 color = ClosestResult.GetMaterial()->GetColor(uv);
+				pCanvas->WritePixel(x, y, Vec3(color.r, color.g, color.b));
 			}
 			else
 			{

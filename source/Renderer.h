@@ -1,6 +1,7 @@
 #pragma once
 #include <vector>
 
+#define MAX_ALLOWED_STR_LENGTH 256
 typedef float REAL;
 
 struct Vec2
@@ -43,7 +44,7 @@ struct CreateGeometryDescriptor
 
 struct CreateMaterialDescriptor
 {
-	wchar_t *m_TextureName;
+	char *m_TextureName;
 };
 
 class CreateDirectionalLight
