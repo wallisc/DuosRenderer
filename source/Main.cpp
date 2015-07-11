@@ -168,98 +168,114 @@ void InitSceneAndCamera(_In_ Renderer *pRenderer, _Out_ Scene **ppScene, _Out_ C
 	*ppScene = pRenderer->CreateScene();
 	Scene *pScene = *ppScene;
 
-	CreateGeometryDescriptor CreateBoxDescriptor = {};
-	Vertex BoxVertices[] =
 	{
-		{ Vec3(-1.0f, 1.0f, -1.0f), Vec3(0.0f, 1.0f, 0.0f), Vec2(1.0f, 0.0f), },
-		{ Vec3(1.0f, 1.0f, -1.0f), Vec3(0.0f, 1.0f, 0.0f), Vec2(0.0f, 0.0f), },
-		{ Vec3(1.0f, 1.0f, 1.0f), Vec3(0.0f, 1.0f, 0.0f), Vec2(0.0f, 1.0f), },
-		{ Vec3(-1.0f, 1.0f, 1.0f), Vec3(0.0f, 1.0f, 0.0f), Vec2(1.0f, 1.0f), },
+		CreateGeometryDescriptor CreateBoxDescriptor = {};
+		Vertex BoxVertices[] =
+		{
+			{ Vec3(-1.0f, 1.0f, -1.0f), Vec3(0.0f, 1.0f, 0.0f), Vec2(1.0f, 0.0f), },
+			{ Vec3(1.0f, 1.0f, -1.0f), Vec3(0.0f, 1.0f, 0.0f), Vec2(0.0f, 0.0f), },
+			{ Vec3(1.0f, 1.0f, 1.0f), Vec3(0.0f, 1.0f, 0.0f), Vec2(0.0f, 1.0f), },
+			{ Vec3(-1.0f, 1.0f, 1.0f), Vec3(0.0f, 1.0f, 0.0f), Vec2(1.0f, 1.0f), },
 
-		{ Vec3(-1.0f, -1.0f, -1.0f), Vec3(0.0f, -1.0f, 0.0f), Vec2(0.0f, 0.0f), },
-		{ Vec3(1.0f, -1.0f, -1.0f), Vec3(0.0f, -1.0f, 0.0f), Vec2(1.0f, 0.0f), },
-		{ Vec3(1.0f, -1.0f, 1.0f), Vec3(0.0f, -1.0f, 0.0f), Vec2(1.0f, 1.0f), },
-		{ Vec3(-1.0f, -1.0f, 1.0f), Vec3(0.0f, -1.0f, 0.0f), Vec2(0.0f, 1.0f), },
+			{ Vec3(-1.0f, -1.0f, -1.0f), Vec3(0.0f, -1.0f, 0.0f), Vec2(0.0f, 0.0f), },
+			{ Vec3(1.0f, -1.0f, -1.0f), Vec3(0.0f, -1.0f, 0.0f), Vec2(1.0f, 0.0f), },
+			{ Vec3(1.0f, -1.0f, 1.0f), Vec3(0.0f, -1.0f, 0.0f), Vec2(1.0f, 1.0f), },
+			{ Vec3(-1.0f, -1.0f, 1.0f), Vec3(0.0f, -1.0f, 0.0f), Vec2(0.0f, 1.0f), },
 
-		{ Vec3(-1.0f, -1.0f, 1.0f), Vec3(-1.0f, 0.0f, 0.0f), Vec2(0.0f, 1.0f), },
-		{ Vec3(-1.0f, -1.0f, -1.0f), Vec3(-1.0f, 0.0f, 0.0f), Vec2(1.0f, 1.0f), },
-		{ Vec3(-1.0f, 1.0f, -1.0f), Vec3(-1.0f, 0.0f, 0.0f), Vec2(1.0f, 0.0f), },
-		{ Vec3(-1.0f, 1.0f, 1.0f), Vec3(-1.0f, 0.0f, 0.0f), Vec2(0.0f, 0.0f), },
+			{ Vec3(-1.0f, -1.0f, 1.0f), Vec3(-1.0f, 0.0f, 0.0f), Vec2(0.0f, 1.0f), },
+			{ Vec3(-1.0f, -1.0f, -1.0f), Vec3(-1.0f, 0.0f, 0.0f), Vec2(1.0f, 1.0f), },
+			{ Vec3(-1.0f, 1.0f, -1.0f), Vec3(-1.0f, 0.0f, 0.0f), Vec2(1.0f, 0.0f), },
+			{ Vec3(-1.0f, 1.0f, 1.0f), Vec3(-1.0f, 0.0f, 0.0f), Vec2(0.0f, 0.0f), },
 
-		{ Vec3(1.0f, -1.0f, 1.0f), Vec3(1.0f, 0.0f, 0.0f), Vec2(1.0f, 1.0f), },
-		{ Vec3(1.0f, -1.0f, -1.0f), Vec3(1.0f, 0.0f, 0.0f), Vec2(0.0f, 1.0f), },
-		{ Vec3(1.0f, 1.0f, -1.0f), Vec3(1.0f, 0.0f, 0.0f), Vec2(0.0f, 0.0f), },
-		{ Vec3(1.0f, 1.0f, 1.0f), Vec3(1.0f, 0.0f, 0.0f), Vec2(1.0f, 0.0f), },
+			{ Vec3(1.0f, -1.0f, 1.0f), Vec3(1.0f, 0.0f, 0.0f), Vec2(1.0f, 1.0f), },
+			{ Vec3(1.0f, -1.0f, -1.0f), Vec3(1.0f, 0.0f, 0.0f), Vec2(0.0f, 1.0f), },
+			{ Vec3(1.0f, 1.0f, -1.0f), Vec3(1.0f, 0.0f, 0.0f), Vec2(0.0f, 0.0f), },
+			{ Vec3(1.0f, 1.0f, 1.0f), Vec3(1.0f, 0.0f, 0.0f), Vec2(1.0f, 0.0f), },
 
-		{ Vec3(-1.0f, -1.0f, -1.0f), Vec3(0.0f, 0.0f, -1.0f), Vec2(0.0f, 1.0f), },
-		{ Vec3(1.0f, -1.0f, -1.0f), Vec3(0.0f, 0.0f, -1.0f), Vec2(1.0f, 1.0f), },
-		{ Vec3(1.0f, 1.0f, -1.0f), Vec3(0.0f, 0.0f, -1.0f), Vec2(1.0f, 0.0f), },
-		{ Vec3(-1.0f, 1.0f, -1.0f), Vec3(0.0f, 0.0f, -1.0f), Vec2(0.0f, 0.0f), },
+			{ Vec3(-1.0f, -1.0f, -1.0f), Vec3(0.0f, 0.0f, -1.0f), Vec2(0.0f, 1.0f), },
+			{ Vec3(1.0f, -1.0f, -1.0f), Vec3(0.0f, 0.0f, -1.0f), Vec2(1.0f, 1.0f), },
+			{ Vec3(1.0f, 1.0f, -1.0f), Vec3(0.0f, 0.0f, -1.0f), Vec2(1.0f, 0.0f), },
+			{ Vec3(-1.0f, 1.0f, -1.0f), Vec3(0.0f, 0.0f, -1.0f), Vec2(0.0f, 0.0f), },
 
-		{ Vec3(-1.0f, -1.0f, 1.0f), Vec3(0.0f, 0.0f, 1.0f), Vec2(1.0f, 1.0f), },
-		{ Vec3(1.0f, -1.0f, 1.0f), Vec3(0.0f, 0.0f, 1.0f), Vec2(0.0f, 1.0f), },
-		{ Vec3(1.0f, 1.0f, 1.0f), Vec3(0.0f, 0.0f, 1.0f), Vec2(0.0f, 0.0f), },
-		{ Vec3(-1.0f, 1.0f, 1.0f), Vec3(0.0f, 0.0f, 1.0f), Vec2(1.0f, 0.0f), },
-	};
+			{ Vec3(-1.0f, -1.0f, 1.0f), Vec3(0.0f, 0.0f, 1.0f), Vec2(1.0f, 1.0f), },
+			{ Vec3(1.0f, -1.0f, 1.0f), Vec3(0.0f, 0.0f, 1.0f), Vec2(0.0f, 1.0f), },
+			{ Vec3(1.0f, 1.0f, 1.0f), Vec3(0.0f, 0.0f, 1.0f), Vec2(0.0f, 0.0f), },
+			{ Vec3(-1.0f, 1.0f, 1.0f), Vec3(0.0f, 0.0f, 1.0f), Vec2(1.0f, 0.0f), },
+		};
 
-	unsigned int BoxIndices[] =
+		unsigned int BoxIndices[] =
+		{
+			3, 1, 0,
+			2, 1, 3,
+
+			6, 4, 5,
+			7, 4, 6,
+
+			11, 9, 8,
+			10, 9, 11,
+
+			14, 12, 13,
+			15, 12, 14,
+
+			19, 17, 16,
+			18, 17, 19,
+
+			22, 20, 21,
+			23, 20, 22
+		};
+
+		CreateMaterialDescriptor CreateBoxMaterialDescriptor;
+		CreateBoxMaterialDescriptor.m_TextureName = "crate.png";
+		Material *pBoxMaterial = pRenderer->CreateMaterial(&CreateBoxMaterialDescriptor);
+		CreateBoxDescriptor.m_pVertices = BoxVertices;
+		CreateBoxDescriptor.m_NumVertices = ARRAYSIZE(BoxVertices);
+		CreateBoxDescriptor.m_pIndices = BoxIndices;
+		CreateBoxDescriptor.m_NumIndices = ARRAYSIZE(BoxIndices);
+		CreateBoxDescriptor.m_pMaterial = pBoxMaterial;
+
+		Geometry *pBox = pRenderer->CreateGeometry(&CreateBoxDescriptor);
+		pScene->AddGeometry(pBox);
+	}
+
 	{
-		3, 1, 0,
-		2, 1, 3,
+		CreateGeometryDescriptor CreatePlaneDescriptor = {};
+		Vertex PlaneVertices[] =
+		{
+			{ Vec3(-5.0f, -1.0f, 5.0f), Vec3(0.0f, 1.0f, 0.0f), Vec2(1.0f, 1.0f), },
+			{ Vec3(5.0f, -1.0f, -5.0f), Vec3(0.0f, 1.0f, 0.0f), Vec2(0.0f, 0.0f), },
+			{ Vec3(-5.0f, -1.0f, -5.0f), Vec3(0.0f, 1.0f, 0.0f), Vec2(1.0f, 0.0f), },
 
-		6, 4, 5,
-		7, 4, 6,
+			{ Vec3(5.0f, -1.0f, 5.0f), Vec3(0.0f, 1.0f, 0.0f), Vec2(0.0f, 1.0f), },
+			{ Vec3(5.0f, -1.0f, -5.0f), Vec3(0.0f, 1.0f, 0.0f), Vec2(0.0f, 0.0f), },
+			{ Vec3(-5.0f, -1.0f, 5.0f), Vec3(0.0f, 1.0f, 0.0f), Vec2(1.0f, 1.0f), },
+		};
+		CreateMaterialDescriptor CreatePlaneMaterialDescriptor;
+		CreatePlaneMaterialDescriptor.m_TextureName = "tile.png";
+		Material *pPlaneMaterial = pRenderer->CreateMaterial(&CreatePlaneMaterialDescriptor);
 
-		11, 9, 8,
-		10, 9, 11,
+		CreatePlaneDescriptor.m_pMaterial = pPlaneMaterial;
+		CreatePlaneDescriptor.m_NumVertices = ARRAYSIZE(PlaneVertices);
+		CreatePlaneDescriptor.m_pVertices = PlaneVertices;
+		Geometry *pPlane = pRenderer->CreateGeometry(&CreatePlaneDescriptor);
+		pScene->AddGeometry(pPlane);
+	}
 
-		14, 12, 13,
-		15, 12, 14,
-
-		19, 17, 16,
-		18, 17, 19,
-
-		22, 20, 21,
-		23, 20, 22
-	};
-
-	CreateMaterialDescriptor CreateBoxMaterialDescriptor;
-	CreateBoxMaterialDescriptor.m_TextureName = "crate.png";
-	Material *pBoxMaterial = pRenderer->CreateMaterial(&CreateBoxMaterialDescriptor);
-	CreateBoxDescriptor.m_pVertices = BoxVertices;
-	CreateBoxDescriptor.m_NumVertices = ARRAYSIZE(BoxVertices);
-	CreateBoxDescriptor.m_pIndices = BoxIndices;
-	CreateBoxDescriptor.m_NumIndices = ARRAYSIZE(BoxIndices);
-	CreateBoxDescriptor.m_pMaterial = pBoxMaterial;
-
-	Geometry *pBox = pRenderer->CreateGeometry(&CreateBoxDescriptor);
-	pScene->AddGeometry(pBox);
-
-	CreateGeometryDescriptor CreatePlaneDescriptor = {};
-	Vertex PlaneVertices[] =
 	{
-		{ Vec3(-5.0f, -1.0f, 5.0f), Vec3(0.0f, 1.0f, 0.0f), Vec2(1.0f, 1.0f), },
-		{ Vec3(5.0f, -1.0f, -5.0f), Vec3(0.0f, 1.0f, 0.0f), Vec2(0.0f, 0.0f), },
-		{ Vec3(-5.0f, -1.0f, -5.0f), Vec3(0.0f, 1.0f, 0.0f), Vec2(1.0f, 0.0f), },
+		CreateLightDescriptor CreateLight;
+		CreateDirectionalLight CreateDirectional;
+		CreateDirectional.m_Direction = Vec3(0.0f, -1.0, 1.0);
+		CreateLight.m_Color = Vec3(1.0f, 1.0f, 1.0f);
+		CreateLight.m_LightType = CreateLightDescriptor::DIRECTIONAL_LIGHT;
+		CreateLight.m_pCreateDirectionalLight = &CreateDirectional;
 
-		{ Vec3(5.0f, -1.0f, 5.0f), Vec3(0.0f, 1.0f, 0.0f), Vec2(0.0f, 1.0f), },
-		{ Vec3(5.0f, -1.0f, -5.0f), Vec3(0.0f, 1.0f, 0.0f), Vec2(0.0f, 0.0f), },
-		{ Vec3(-5.0f, -1.0f, 5.0f), Vec3(0.0f, 1.0f, 0.0f), Vec2(1.0f, 1.0f), },
-	};
-	CreateMaterialDescriptor CreatePlaneMaterialDescriptor;
-	CreatePlaneMaterialDescriptor.m_TextureName = "tile.png";
-	Material *pPlaneMaterial = pRenderer->CreateMaterial(&CreatePlaneMaterialDescriptor);
-
-	CreatePlaneDescriptor.m_pMaterial = pPlaneMaterial;
-	CreatePlaneDescriptor.m_NumVertices = ARRAYSIZE(PlaneVertices);
-	CreatePlaneDescriptor.m_pVertices = PlaneVertices;
-	Geometry *pPlane = pRenderer->CreateGeometry(&CreatePlaneDescriptor);
-	pScene->AddGeometry(pPlane);
+		Light *pLight = pRenderer->CreateLight(&CreateLight);
+		pScene->AddLight(pLight);
+	}
 
 	CreateCameraDescriptor CameraDescriptor = {};
 	CameraDescriptor.m_Height = HEIGHT;
 	CameraDescriptor.m_Width = WIDTH;
-	CameraDescriptor.m_Position = Vec3(0.0f, 3.0f, -11.0f);
+	CameraDescriptor.m_Position = Vec3(0.0f, 1.0f, -13.0f);
 	CameraDescriptor.m_LookAt = Vec3(0.0f, 1.0f, 0.0f);
 	CameraDescriptor.m_Up = Vec3(0.0f, 1.0f, 0.0f);
 	CameraDescriptor.m_NearClip = 0.01f;

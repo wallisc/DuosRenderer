@@ -15,7 +15,7 @@ enum VectorType
 	POSITION
 };
 
-XMVECTOR RealArrayToXMVector(_In_reads_(3) Vec3 Vector, VectorType Type)
+XMVECTOR RealArrayToXMVector(Vec3 Vector, VectorType Type)
 {
 	return XMVectorSet(Vector.x, Vector.y, Vector.z, Type == DIRECTION ? (REAL)0.0 : (REAL)1.0);
 }
@@ -238,7 +238,17 @@ void D3D11Renderer::DestroyGeometry(_In_ Geometry *pGeometry)
 
 Light *D3D11Renderer::CreateLight(_In_ CreateLightDescriptor *pCreateLightDescriptor)
 {
-	D3D11Light *pLight = new D3D11Light(pCreateLightDescriptor);
+	Light *pLight = nullptr;
+	switch (pCreateLightDescriptor->m_LightType)
+	{
+	case CreateLightDescriptor::DIRECTIONAL_LIGHT:
+		pLight = new D3D11DirectionalLight(m_pDevice, pCreateLightDescriptor);
+		break;
+	default:
+		assert(false);
+		break;
+	}
+
 	MEM_CHK(pLight);
 	return pLight;
 }
@@ -299,12 +309,18 @@ void D3D11Renderer::DestroyScene(Scene* pScene)
 
 void D3D11Renderer::DrawScene(Camera *pCamera, Scene *pScene)
 {
+	D3D11Scene *pD3D11Scene = D3D11_RENDERER_CAST<D3D11Scene*>(pScene);
 	D3D11Camera *pD3D11Camera = D3D11_RENDERER_CAST<D3D11Camera*>(pCamera);
 	m_pImmediateContext->ClearRenderTargetView(m_pSwapchainRenderTargetView, Colors::Gray);
 	m_pImmediateContext->ClearDepthStencilView(m_pDepthBuffer, D3D11_CLEAR_DEPTH, 1.0f, 0);
 
 	ID3D11Buffer *pCameraConstantBuffer = pD3D11Camera->GetCameraConstantBuffer();
 	m_pImmediateContext->PSSetConstantBuffers(0, 1, &pCameraConstantBuffer);
+	
+	assert(pD3D11Scene->GetDirectionalLightList().size() == 1); // TODO hard coded for one directional light
+	ID3D11Buffer *pDirectonalLightConstantBuffer = pD3D11Scene->GetDirectionalLightList()[0]->GetDirectionalLightConstantBuffer();
+	m_pImmediateContext->PSSetConstantBuffers(1, 1, &pDirectonalLightConstantBuffer);
+
 	m_pImmediateContext->VSSetConstantBuffers(0, 1, &pCameraConstantBuffer);
 
 	m_pImmediateContext->PSSetShader(m_pForwardPixelShader, NULL, 0);
@@ -312,7 +328,6 @@ void D3D11Renderer::DrawScene(Camera *pCamera, Scene *pScene)
 	m_pImmediateContext->OMSetRenderTargets(1, &m_pSwapchainRenderTargetView, m_pDepthBuffer);
 
 
-	D3D11Scene *pD3D11Scene = D3D11_RENDERER_CAST<D3D11Scene*>(pScene);
 	const unsigned int Strides = sizeof(Vertex);
 	const unsigned int Offsets = 0;
 	for (auto pGeometry : pD3D11Scene->m_GeometryList)
@@ -385,20 +400,49 @@ void D3D11Geometry::Update(_In_ Transform *pTransform)
 	assert(false); // Implement
 }
 
-D3D11Light::D3D11Light(_In_ CreateLightDescriptor *pCreateLightDescriptor)
+D3D11DirectionalLight::D3D11DirectionalLight(
+	_In_ ID3D11Device *pDevice, 
+	_In_ CreateLightDescriptor *pCreateLight) :
+	D3D11Light(CreateLightDescriptor::DIRECTIONAL_LIGHT)
 {
-	switch (pCreateLightDescriptor->m_LightType)
-	{
-	default:
-		assert(false);
-		break;
-	}
+	assert(pCreateLight->m_LightType == CreateLightDescriptor::DIRECTIONAL_LIGHT);
+
+	m_CpuLightData.m_Direction = XMVector3Normalize(RealArrayToXMVector(
+		pCreateLight->m_pCreateDirectionalLight->m_Direction, DIRECTION));
+	m_CpuLightData.m_Color = RealArrayToXMVector(pCreateLight->m_Color, DIRECTION);
+
+	D3D11_BUFFER_DESC LightBufferDesc;
+	ZeroMemory(&LightBufferDesc, sizeof(LightBufferDesc));
+	LightBufferDesc.Usage = D3D11_USAGE_DEFAULT;
+	LightBufferDesc.ByteWidth = sizeof(CBDirectionalLight);
+	LightBufferDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+	LightBufferDesc.CPUAccessFlags = 0;
+	D3D11_SUBRESOURCE_DATA LightBufferData;
+	ZeroMemory(&LightBufferData, sizeof(LightBufferData));
+	LightBufferData.pSysMem = &m_CpuLightData;
+	HRESULT hr = pDevice->CreateBuffer(&LightBufferDesc, &LightBufferData, &m_pLightConstantBuffer);
+	FAIL_CHK(FAILED(hr), "Failed to create Directional Light Constant Buffer");
 }
 
 void D3D11Scene::AddGeometry(_In_ Geometry *pGeometry)
 {
 	D3D11Geometry *pD3D11Geometry = D3D11_RENDERER_CAST<D3D11Geometry*>(pGeometry);
 	m_GeometryList.push_back(pD3D11Geometry);
+}
+
+void D3D11Scene::AddLight(_In_ Light *pLight)
+{
+	D3D11Light *pD3D11Light = D3D11_RENDERER_CAST<D3D11Light*>(pLight);
+	switch (pD3D11Light->GetLightType())
+	{
+	case CreateLightDescriptor::DIRECTIONAL_LIGHT:
+		assert(m_DirectionalLightList.size() == 0); // TODO: Only supporting 1 directional light for now
+		m_DirectionalLightList.push_back(D3D11_RENDERER_CAST<D3D11DirectionalLight*>(pLight));
+		break;
+	default:
+		assert(false);
+		break;
+	}
 }
 
 D3D11Camera::D3D11Camera(ID3D11Device *pDevice, CreateCameraDescriptor *pCreateCameraDescriptor)
@@ -418,7 +462,7 @@ D3D11Camera::D3D11Camera(ID3D11Device *pDevice, CreateCameraDescriptor *pCreateC
 		pCreateCameraDescriptor->m_NearClip,
 	 	pCreateCameraDescriptor->m_FarClip);
 
-    	m_CameraCpuData.m_View = XMMatrixLookAtLH(Eye, At, Up);
+	m_CameraCpuData.m_View = XMMatrixLookAtLH(Eye, At, Up);
 
 	D3D11_BUFFER_DESC CameraBufferDesc;
 	ZeroMemory(&CameraBufferDesc, sizeof(CameraBufferDesc));

@@ -12,6 +12,12 @@ struct CBCamera
 	DirectX::XMVECTOR m_ClipDistance;
 };
 
+struct CBDirectionalLight
+{
+	DirectX::XMVECTOR m_Direction;
+	DirectX::XMVECTOR m_Color;
+};
+
 class D3D11Material : public Material
 {
 public:
@@ -47,8 +53,23 @@ private:
 class D3D11Light : public Light
 {
 public:
-	D3D11Light(_In_ CreateLightDescriptor *);
+	D3D11Light(CreateLightDescriptor::LightType Type) :
+		m_Type(Type) {}
+
+	CreateLightDescriptor::LightType GetLightType() const { return m_Type; }
 private:
+	CreateLightDescriptor::LightType m_Type;
+};
+
+class D3D11DirectionalLight : public D3D11Light
+{
+public:
+	D3D11DirectionalLight(_In_ ID3D11Device *pDevice, _In_ CreateLightDescriptor *pCreateDirectionalLight);
+
+	ID3D11Buffer *GetDirectionalLightConstantBuffer() const { return m_pLightConstantBuffer; }
+
+private:
+	CBDirectionalLight m_CpuLightData;
 	ID3D11Buffer* m_pLightConstantBuffer;
 };
 
@@ -73,13 +94,16 @@ class D3D11Scene : public Scene
 {
 public:
 	void AddGeometry(_In_ Geometry *pGeometry);
+	void AddLight(_In_ Light *pLight);
 
 	friend class D3D11Renderer;
 protected:
 	std::vector<D3D11Geometry *> &GetGeometryList() { return m_GeometryList; }
+	std::vector<D3D11DirectionalLight *> &GetDirectionalLightList() { return m_DirectionalLightList; }
 
 private:
 	std::vector<D3D11Geometry *> m_GeometryList;
+	std::vector<D3D11DirectionalLight *> m_DirectionalLightList;
 	
 };
 

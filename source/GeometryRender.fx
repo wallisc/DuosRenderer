@@ -11,13 +11,19 @@ Texture2D txDiffuse : register( t0 );
 
 SamplerState samLinear : register( s0 );
 
-cbuffer cbNeverChanges : register( b0 )
+cbuffer cbCamera : register( b0 )
 {
     float4x4 View;
 	float4x4 Projection;
     float4 CamPos;
 	float4 Dimensions;
 	float FarClip;
+};
+
+cbuffer cbDirectionalLight : register(b1)
+{
+	float4 LightDirection;
+	float4 LightColor;
 };
 
 //--------------------------------------------------------------------------------------
@@ -64,9 +70,9 @@ PS_OUTPUT PS( PS_INPUT input) : SV_Target
     PS_OUTPUT output;
 
 	// Calculating in pixel shader for precision
-    //float3 n = normalize(mul( input.Norm.xyz, World ));
-    //float3 d = normalize(input.WorldPos.xyz - CamPos.xyz);
+	float3 n = normalize(input.Norm.xyz);
+	float nDotL = dot(n, -LightDirection);
 
-	output.Color = txDiffuse.Sample( samLinear, input.Tex );
-   return output;
+	output.Color = nDotL * LightColor * txDiffuse.Sample(samLinear, input.Tex);
+	return output;
 }

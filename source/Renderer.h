@@ -47,9 +47,9 @@ struct CreateMaterialDescriptor
 	char *m_TextureName;
 };
 
-class CreateDirectionalLight
+struct CreateDirectionalLight
 {
-	float m_Direction[4];
+	Vec3 m_Direction;
 };
 
 class CreateLightDescriptor
@@ -60,9 +60,10 @@ public:
 		POINT_LIGHT,
 		DIRECTIONAL_LIGHT
 	} m_LightType;
+	Vec3 m_Color;
 	union
 	{
-		CreateDirectionalLight m_CreateDirectionalLight;
+		CreateDirectionalLight *m_pCreateDirectionalLight;
 	};
 };
 
@@ -111,6 +112,7 @@ class Scene
 {
 public:
 	virtual void AddGeometry(_In_ Geometry *pGeometry) = 0;
+	virtual void AddLight(_In_ Light *pLight) = 0;
 };
 
 class Renderer
@@ -133,4 +135,17 @@ public:
 	virtual Scene *CreateScene() = 0;
 	virtual void DestroyScene(Scene *pScene) = 0;
 };
+
+class ExtendableClass
+{
+	// *ppInterface != nullptr if the Inteface is supported
+	void GetInterface(char *InterfaceName, void **ppInterface);
+};
+
+class Canvas : ExtendableClass
+{
+	void WritePixel(unsigned int x, unsigned int y, Vec3 Color);
+};
+
+
 

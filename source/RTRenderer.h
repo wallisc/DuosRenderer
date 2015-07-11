@@ -50,8 +50,14 @@ class IntersectionResult;
 class RTIntersectable
 {
 public:
+	struct UVAndNormal
+	{
+		glm::vec2 UV;
+		glm::vec3 Normal;
+	};
+
 	virtual bool Intersects(RTRay *pRay, _Out_ IntersectionResult *pResult = nullptr) = 0;
-	virtual glm::vec2 GetUVAt(const IntersectionResult &Result) const = 0;
+	virtual UVAndNormal GetUVAndNormalAt(const IntersectionResult &Result) const = 0;
 };
 
 class IntersectionResult
@@ -78,15 +84,19 @@ private:
 class RTTriangle : public RTIntersectable, public Geometry
 {
 public:
-	RTTriangle(glm::vec3 Vertices[3], glm::vec2 UVCoordinates[3]);
+
+
+	RTTriangle(glm::vec3 Vertices[3], glm::vec3 Normals[3], glm::vec2 UVCoordinates[3]);
 	bool Intersects(RTRay *pRay, _Out_ IntersectionResult *pResult);
 
 	void Update(_In_ Transform *pTransform);
-	glm::vec2 GetUVAt(const IntersectionResult &Result) const;
+	UVAndNormal GetUVAndNormalAt(const IntersectionResult &Result) const;
+
 private:
 	glm::vec3 m_V0, m_V1, m_V2;
+	glm::vec3 m_N0, m_N1, m_N2;
 	glm::vec2 m_Tex0, m_Tex1, m_Tex2;
-	glm::vec3 m_Normal;
+	glm::vec3 m_PlaneNormal;
 };
 
 class RTGeometry : public Geometry, public RTIntersectable
@@ -97,7 +107,7 @@ public:
 
 	void Update(_In_ Transform *pTransform);
 	bool Intersects(RTRay *pRay, _Out_ IntersectionResult *pResult = nullptr);
-	glm::vec2 GetUVAt(const IntersectionResult &Result) const { assert(false); return glm::vec2(); }
+	UVAndNormal GetUVAndNormalAt(const IntersectionResult &Result) const { assert(false); return UVAndNormal(); }
 	RTMaterial *GetMaterial() { return m_pMaterial; }
 
 private:
@@ -108,7 +118,21 @@ private:
 class RTLight : public Light
 {
 public:
-	RTLight(_In_ CreateLightDescriptor *);
+	virtual glm::vec3 GetLightDirection(glm::vec3 Position) const = 0;
+	virtual glm::vec3 GetLightColor(glm::vec3 Position) const = 0;
+};
+
+class RTDirectionalLight : public RTLight
+{
+public:
+	RTDirectionalLight(_In_ CreateLightDescriptor *pCreateLightDescriptor);
+
+	virtual glm::vec3 GetLightDirection(glm::vec3 Position) const { return m_Direction; }
+	virtual glm::vec3 GetLightColor(glm::vec3 Position) const { return m_Color; };
+
+private:
+	glm::vec3 m_Direction;
+	glm::vec3 m_Color;
 };
 
 class RTCamera : public Camera
@@ -121,10 +145,17 @@ public:
 
 	UINT GetWidth();
 	UINT GetHeight();
+
+	float GetLensWidth();
+	float GetLensHeight();
+
 	glm::vec3 GetFocalPoint();
 	float GetAspectRatio();
 	const glm::vec3 &GetPosition();
 	const glm::vec3 &GetLookAt();
+	const glm::vec3 &GetUp();
+	const glm::vec3 GetRight();
+	const glm::vec3 GetLookDir();
 
 private:
 	UINT m_Width, m_Height;
@@ -141,11 +172,14 @@ class RTScene : public Scene
 {
 public:
 	void AddGeometry(_In_ Geometry *pGeometry);
+	void AddLight(_In_ Light *pLight);
 
 	std::vector<RTGeometry *> &GetGeometryList() { return m_GeometryList; }
+	std::vector<RTLight *> &GetLightList() { return m_LightList; }
 
 private:
 	std::vector<RTGeometry *> m_GeometryList;
+	std::vector<RTLight *> m_LightList;
 
 };
 
