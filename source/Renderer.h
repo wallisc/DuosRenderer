@@ -24,7 +24,7 @@ struct Vec3
 
 struct Vertex
 {
-	Vec3 m_Position;
+	Vec3 m_FocalPoint;
 	Vec3 m_Normal;
 	Vec2 m_Tex;
 };
@@ -70,7 +70,7 @@ public:
 class CreateCameraDescriptor
 {
 public:
-	Vec3 m_Position;
+	Vec3 m_FocalPoint;
 	Vec3 m_LookAt;
 	Vec3 m_Up;
 

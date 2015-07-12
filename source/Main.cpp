@@ -275,8 +275,8 @@ void InitSceneAndCamera(_In_ Renderer *pRenderer, _Out_ Scene **ppScene, _Out_ C
 	CreateCameraDescriptor CameraDescriptor = {};
 	CameraDescriptor.m_Height = HEIGHT;
 	CameraDescriptor.m_Width = WIDTH;
-	CameraDescriptor.m_Position = Vec3(0.0f, 1.0f, -13.0f);
-	CameraDescriptor.m_LookAt = Vec3(0.0f, 1.0f, 0.0f);
+	CameraDescriptor.m_FocalPoint = Vec3(0.0f, 2.0f, -13.0f);
+	CameraDescriptor.m_LookAt = Vec3(0.0f, 2.0f, 0.0f);
 	CameraDescriptor.m_Up = Vec3(0.0f, 1.0f, 0.0f);
 	CameraDescriptor.m_NearClip = 0.01f;
 	CameraDescriptor.m_FarClip = 100.0f;

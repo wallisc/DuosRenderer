@@ -146,20 +146,20 @@ public:
 	UINT GetWidth();
 	UINT GetHeight();
 
-	float GetLensWidth();
-	float GetLensHeight();
-
-	glm::vec3 GetFocalPoint();
 	float GetAspectRatio();
-	const glm::vec3 &GetPosition();
+	const glm::vec3 &GetFocalPoint();
 	const glm::vec3 &GetLookAt();
 	const glm::vec3 &GetUp();
 	const glm::vec3 GetRight();
 	const glm::vec3 GetLookDir();
 
+	const glm::vec3 GetLensPosition();
+	float GetLensWidth();
+	float GetLensHeight();
+
 private:
 	UINT m_Width, m_Height;
-	glm::vec3 m_Position;
+	glm::vec3 m_FocalPoint;
 	glm::vec3 m_LookAt;
 	glm::vec3 m_Up;
 	

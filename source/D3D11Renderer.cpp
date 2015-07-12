@@ -65,7 +65,7 @@ D3D11Renderer::D3D11Renderer(HWND WindowHandle, unsigned int width, unsigned int
 	CeateDeviceFlags |= D3D11_CREATE_DEVICE_DEBUG;
 #endif
 	D3D_FEATURE_LEVEL FeatureLevels = D3D_FEATURE_LEVEL_11_1;
-	HRESULT hr = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, CeateDeviceFlags, &FeatureLevels, 1,
+	HRESULT hr = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_WARP, nullptr, CeateDeviceFlags, &FeatureLevels, 1,
 		D3D11_SDK_VERSION, &m_pDevice, nullptr, &m_pImmediateContext);
 	FAIL_CHK(FAILED(hr), "Failed D3D11CreateDevice");
 
@@ -450,7 +450,7 @@ D3D11Camera::D3D11Camera(ID3D11Device *pDevice, CreateCameraDescriptor *pCreateC
 	m_Width = pCreateCameraDescriptor->m_Width;
 	m_Height = pCreateCameraDescriptor->m_Height;
 
-	XMVECTOR Eye = RealArrayToXMVector(pCreateCameraDescriptor->m_Position, POSITION);
+	XMVECTOR Eye = RealArrayToXMVector(pCreateCameraDescriptor->m_FocalPoint, POSITION);
 	XMVECTOR At = RealArrayToXMVector(pCreateCameraDescriptor->m_LookAt, POSITION);
 	XMVECTOR Up = RealArrayToXMVector(pCreateCameraDescriptor->m_Up, DIRECTION);
 
