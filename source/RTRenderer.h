@@ -56,7 +56,7 @@ public:
 		glm::vec3 Normal;
 	};
 
-	virtual bool Intersects(RTRay *pRay, _Out_ IntersectionResult *pResult = nullptr) = 0;
+	virtual bool Intersects(const RTRay *pRay, _Out_ IntersectionResult *pResult = nullptr) = 0;
 	virtual UVAndNormal GetUVAndNormalAt(const IntersectionResult &Result) const = 0;
 };
 
@@ -87,7 +87,7 @@ public:
 
 
 	RTTriangle(glm::vec3 Vertices[3], glm::vec3 Normals[3], glm::vec2 UVCoordinates[3]);
-	bool Intersects(RTRay *pRay, _Out_ IntersectionResult *pResult);
+	bool Intersects(const RTRay *pRay, _Out_ IntersectionResult *pResult);
 
 	void Update(_In_ Transform *pTransform);
 	UVAndNormal GetUVAndNormalAt(const IntersectionResult &Result) const;
@@ -106,7 +106,7 @@ public:
 	~RTGeometry();
 
 	void Update(_In_ Transform *pTransform);
-	bool Intersects(RTRay *pRay, _Out_ IntersectionResult *pResult = nullptr);
+	bool Intersects(const RTRay *pRay, _Out_ IntersectionResult *pResult = nullptr);
 	UVAndNormal GetUVAndNormalAt(const IntersectionResult &Result) const { assert(false); return UVAndNormal(); }
 	RTMaterial *GetMaterial() { return m_pMaterial; }
 
@@ -127,11 +127,11 @@ class RTDirectionalLight : public RTLight
 public:
 	RTDirectionalLight(_In_ CreateLightDescriptor *pCreateLightDescriptor);
 
-	virtual glm::vec3 GetLightDirection(glm::vec3 Position) const { return m_Direction; }
+	virtual glm::vec3 GetLightDirection(glm::vec3 Position) const { return -m_EmissionDirection; }
 	virtual glm::vec3 GetLightColor(glm::vec3 Position) const { return m_Color; };
 
 private:
-	glm::vec3 m_Direction;
+	glm::vec3 m_EmissionDirection;
 	glm::vec3 m_Color;
 };
 
@@ -238,6 +238,9 @@ class RTracer
 {
 public:
 	static void Trace(RTScene *pScene, RTCamera *pCamera, RTCanvas *pCanvas);
+
+private:
+	static IntersectionResult Intersect(const RTRay &Ray, const std::vector<RTGeometry *> &GeometryList);
 };
 
 #define RT_RENDERER_CAST reinterpret_cast

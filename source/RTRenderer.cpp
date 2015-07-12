@@ -202,9 +202,9 @@ RTGeometry::RTGeometry(_In_ CreateGeometryDescriptor *pCreateGeometryDescriptor)
 			glm::vec2 UVCoordinates[3];
 			glm::vec3 Normals[3];
 
-			Triangle[0] = RealArrayToGlmVec3(pCreateGeometryDescriptor->m_pVertices[Index0].m_FocalPoint);
-			Triangle[1] = RealArrayToGlmVec3(pCreateGeometryDescriptor->m_pVertices[Index1].m_FocalPoint);
-			Triangle[2] = RealArrayToGlmVec3(pCreateGeometryDescriptor->m_pVertices[Index2].m_FocalPoint);
+			Triangle[0] = RealArrayToGlmVec3(pCreateGeometryDescriptor->m_pVertices[Index0].m_Position);
+			Triangle[1] = RealArrayToGlmVec3(pCreateGeometryDescriptor->m_pVertices[Index1].m_Position);
+			Triangle[2] = RealArrayToGlmVec3(pCreateGeometryDescriptor->m_pVertices[Index2].m_Position);
 
 			UVCoordinates[0] = RealArrayToGlmVec2(pCreateGeometryDescriptor->m_pVertices[Index0].m_Tex);
 			UVCoordinates[1] = RealArrayToGlmVec2(pCreateGeometryDescriptor->m_pVertices[Index1].m_Tex);
@@ -221,9 +221,9 @@ RTGeometry::RTGeometry(_In_ CreateGeometryDescriptor *pCreateGeometryDescriptor)
 		for (UINT i = 0; i < pCreateGeometryDescriptor->m_NumVertices; i += 3)
 		{
 			glm::vec3 Triangle[3];
-			Triangle[0] = RealArrayToGlmVec3(pCreateGeometryDescriptor->m_pVertices[i].m_FocalPoint);
-			Triangle[1] = RealArrayToGlmVec3(pCreateGeometryDescriptor->m_pVertices[i + 1].m_FocalPoint);
-			Triangle[2] = RealArrayToGlmVec3(pCreateGeometryDescriptor->m_pVertices[i + 2].m_FocalPoint);
+			Triangle[0] = RealArrayToGlmVec3(pCreateGeometryDescriptor->m_pVertices[i].m_Position);
+			Triangle[1] = RealArrayToGlmVec3(pCreateGeometryDescriptor->m_pVertices[i + 1].m_Position);
+			Triangle[2] = RealArrayToGlmVec3(pCreateGeometryDescriptor->m_pVertices[i + 2].m_Position);
 
 			glm::vec2 UVCoordinates[3];
 			UVCoordinates[0] = RealArrayToGlmVec2(pCreateGeometryDescriptor->m_pVertices[i].m_Tex);
@@ -248,7 +248,7 @@ void RTGeometry::Update(_In_ Transform *pTransform)
 	assert(false); // Implement
 }
 
-bool RTGeometry::Intersects(RTRay *pRay, IntersectionResult *pResult)
+bool RTGeometry::Intersects(const RTRay *pRay, IntersectionResult *pResult)
 {
 	bool bFindExactIntersectingPrimitive = pResult != nullptr;
 
@@ -285,7 +285,7 @@ RTDirectionalLight::RTDirectionalLight(_In_ CreateLightDescriptor *pCreateLightD
 {
 	assert(pCreateLightDescriptor->m_LightType == CreateLightDescriptor::DIRECTIONAL_LIGHT);
 
-	m_Direction = glm::normalize(RealArrayToGlmVec3(pCreateLightDescriptor->m_pCreateDirectionalLight->m_Direction));
+	m_EmissionDirection = glm::normalize(RealArrayToGlmVec3(pCreateLightDescriptor->m_pCreateDirectionalLight->m_EmissionDirection));
 	m_Color = RealArrayToGlmVec3(pCreateLightDescriptor->m_Color);
 }
 
@@ -405,33 +405,33 @@ void RTracer::Trace(RTScene *pScene, RTCamera *pCamera, RTCanvas *pCanvas)
 
 			RTRay Ray(LensPoint, LensPoint - FocalPoint);
 			bool Intersected = false;
-			IntersectionResult ClosestResult(nullptr, FLT_MAX);
-			for (RTGeometry *pGeometry : pScene->GetGeometryList())
+			IntersectionResult DirectTraceResult = Intersect(Ray, pScene->GetGeometryList());
+			if (DirectTraceResult.GetParam() >= 0.0f && DirectTraceResult.GetParam() != FLT_MAX)
 			{
-				IntersectionResult Result;
- 				if (pGeometry->Intersects(&Ray, &Result))
-				{ 
- 					if (Result.GetParam() < ClosestResult.GetParam())
-					{
-						ClosestResult = Result;
-					}
-				}
-			}
-			if (ClosestResult.GetParam() >= 0.0f && ClosestResult.GetParam() != FLT_MAX)
-			{
-				RTIntersectable::UVAndNormal UVAndNormalResult = ClosestResult.GetIntersectedGeometry()->GetUVAndNormalAt(ClosestResult);
+				RTIntersectable::UVAndNormal UVAndNormalResult = DirectTraceResult.GetIntersectedGeometry()->GetUVAndNormalAt(DirectTraceResult);
 				glm::vec2 uv = UVAndNormalResult.UV;
 				glm::vec3 n = UVAndNormalResult.Normal;
-				glm::vec3 Point = ClosestResult.GetRay().GetPoint(ClosestResult.GetParam());
-				glm::vec3 TextureColor = ClosestResult.GetMaterial()->GetColor(uv);
+				glm::vec3 Point = DirectTraceResult.GetRay().GetPoint(DirectTraceResult.GetParam());
+				glm::vec3 TextureColor = DirectTraceResult.GetMaterial()->GetColor(uv);
 				glm::vec3 TotalColor(0.0f);
 
 				for (RTLight *pLight : pScene->GetLightList())
 				{
 					glm::vec3 LightColor = pLight->GetLightColor(Point);
 					glm::vec3 LightDirection = pLight->GetLightDirection(Point);
-					float nDotL = glm::dot(-LightDirection, n);
-					TotalColor += nDotL * LightColor * TextureColor;
+
+					RTRay ShadowRay(Point + .001f * LightDirection, LightDirection);
+					IntersectionResult ShadowResult = Intersect(ShadowRay, pScene->GetGeometryList());
+					
+					// Only shade if the shadow feeler didn't hit anything
+					if (ShadowResult.GetParam() == FLT_MAX)
+					{
+						float nDotL = glm::dot(LightDirection, n);
+						if (nDotL > 0.0f)
+						{
+							TotalColor += nDotL * LightColor * TextureColor;
+						}
+					}
 				}
 
 				pCanvas->WritePixel(x, y, Vec3(TotalColor.r, TotalColor.g, TotalColor.b));
@@ -444,6 +444,25 @@ void RTracer::Trace(RTScene *pScene, RTCamera *pCamera, RTCanvas *pCanvas)
 		}
 	}
 }
+
+IntersectionResult RTracer::Intersect(const RTRay &Ray, const std::vector<RTGeometry *> &GeometryList)
+{
+	IntersectionResult ClosestResult(nullptr, FLT_MAX);
+	for (RTGeometry *pGeometry : GeometryList)
+	{
+		IntersectionResult Result;
+		if (pGeometry->Intersects(&Ray, &Result))
+		{
+			if (Result.GetParam() < ClosestResult.GetParam())
+			{
+				ClosestResult = Result;
+			}
+		}
+	}
+
+	return ClosestResult;
+}
+
 
 RTTriangle::RTTriangle(glm::vec3 Vertices[3], glm::vec3 Normals[3], glm::vec2 UVCoordinates[3])
 {
@@ -462,7 +481,7 @@ RTTriangle::RTTriangle(glm::vec3 Vertices[3], glm::vec3 Normals[3], glm::vec2 UV
 
 }
 
-bool RTTriangle::Intersects(RTRay *pRay, IntersectionResult *pResult)
+bool RTTriangle::Intersects(const RTRay *pRay, IntersectionResult *pResult)
 {
 	float numer = glm::dot(-m_PlaneNormal, pRay->GetOrigin() - m_V0);
 	float denom = glm::dot(m_PlaneNormal, pRay->GetDirection());

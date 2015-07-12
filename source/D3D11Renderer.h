@@ -5,11 +5,15 @@
 
 struct CBCamera
 {
-	DirectX::XMMATRIX m_View;
-	DirectX::XMMATRIX m_Projection;
 	DirectX::XMVECTOR m_CamPos;
 	DirectX::XMVECTOR m_Dimensions;
 	DirectX::XMVECTOR m_ClipDistance;
+};
+
+struct CBViewProjectionTransforms
+{
+	DirectX::XMMATRIX m_View;
+	DirectX::XMMATRIX m_Projection;
 };
 
 struct CBDirectionalLight
@@ -41,6 +45,9 @@ public:
 	unsigned int GetIndexCount() const { return m_IndexCount; }
 	D3D11Material *GetMaterial() const { return m_pMaterial; }
 
+	DirectX::XMVECTOR GetMaxDimensions() const { return m_MaxDimensions; }
+	DirectX::XMVECTOR GetMinDimensions() const { return m_MinDimensions; }
+
 private:
 	bool m_UsesIndexBuffer;
 	unsigned int m_VertexCount;
@@ -48,6 +55,9 @@ private:
 	ID3D11Buffer* m_pVertexBuffer;
 	ID3D11Buffer* m_pIndexBuffer;
 	D3D11Material *m_pMaterial;
+
+	DirectX::XMVECTOR m_MaxDimensions;
+	DirectX::XMVECTOR m_MinDimensions;
 };
 
 class D3D11Light : public Light
@@ -61,16 +71,24 @@ private:
 	CreateLightDescriptor::LightType m_Type;
 };
 
+class D3D11Scene; // Forward Declaration
+class D3D11Camera; // Forward Declaration
+
 class D3D11DirectionalLight : public D3D11Light
 {
 public:
 	D3D11DirectionalLight(_In_ ID3D11Device *pDevice, _In_ CreateLightDescriptor *pCreateDirectionalLight);
 
 	ID3D11Buffer *GetDirectionalLightConstantBuffer() const { return m_pLightConstantBuffer; }
-
+	
+	// The position from where we render the shadow buffer depends on the scene
+	ID3D11Buffer *GetViewProjBuffer(ID3D11DeviceContext *pContext, D3D11Scene *pScene, D3D11Camera *pCamera);
 private:
 	CBDirectionalLight m_CpuLightData;
+	CBViewProjectionTransforms m_ViewProjCpuData;
+
 	ID3D11Buffer* m_pLightConstantBuffer;
+	ID3D11Buffer *m_pViewProjBuffer;
 };
 
 class D3D11Camera : public Camera
@@ -81,20 +99,31 @@ public:
 
 	void Update(_In_ Transform *pTransform);
 	ID3D11Buffer *GetCameraConstantBuffer();
+	ID3D11Buffer *GetViewProjBuffer();
+	float GetAspectRatio() { return m_Width / m_Height; }
 private:
 	CBCamera m_CameraCpuData;
+	CBViewProjectionTransforms m_ViewProjCpuData;
+
 	ID3D11Buffer *m_pCameraBuffer;
+	ID3D11Buffer *m_pViewProjBuffer;
 
 	REAL m_Width;
 	REAL m_Height;
 	DirectX::XMMATRIX m_ViewMatrix;
+
 };
 
 class D3D11Scene : public Scene
 {
 public:
+	D3D11Scene();
+
 	void AddGeometry(_In_ Geometry *pGeometry);
 	void AddLight(_In_ Light *pLight);
+
+	DirectX::XMVECTOR GetMaxDimensions() const { return m_MaxDimensions; }
+	DirectX::XMVECTOR GetMinDimensions() const { return m_MinDimensions; }
 
 	friend class D3D11Renderer;
 protected:
@@ -104,7 +133,9 @@ protected:
 private:
 	std::vector<D3D11Geometry *> m_GeometryList;
 	std::vector<D3D11DirectionalLight *> m_DirectionalLightList;
-	
+
+	DirectX::XMVECTOR m_MaxDimensions;
+	DirectX::XMVECTOR m_MinDimensions;
 };
 
 class D3D11Renderer : public Renderer
@@ -142,6 +173,9 @@ private:
 
 	ID3D11RenderTargetView* m_pSwapchainRenderTargetView;
 	ID3D11DepthStencilView* m_pDepthBuffer;
+
+	ID3D11DepthStencilView* m_pShadowDepthBuffer;
+	ID3D11ShaderResourceView *m_pShadowResourceView;
 
 	ID3D11VertexShader* m_pForwardVertexShader;
 	ID3D11PixelShader* m_pForwardPixelShader;

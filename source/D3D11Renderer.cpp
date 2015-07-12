@@ -1,5 +1,7 @@
 #include "D3D11Renderer.h"
+#include "D3D11Util.h"
 #include "RendererException.h"
+
 #include "dxtk/inc/WICTextureLoader.h"
 
 #include <atlconv.h>
@@ -189,6 +191,41 @@ void D3D11Renderer::InitializeSwapchain(HWND WindowHandle, unsigned int width, u
 	vp.TopLeftX = 0;
 	vp.TopLeftY = 0;
 	m_pImmediateContext->RSSetViewports(1, &vp);
+
+	ID3D11Texture2D *pShadowBuffer;
+	D3D11_TEXTURE2D_DESC ShadowBufferDesc;
+	ZeroMemory(&ShadowBufferDesc, sizeof(ShadowBufferDesc));
+	ShadowBufferDesc.Width = width;
+	ShadowBufferDesc.Height = height;
+	ShadowBufferDesc.MipLevels = 1;
+	ShadowBufferDesc.ArraySize = 1;
+	ShadowBufferDesc.Format = DXGI_FORMAT_R24G8_TYPELESS;
+	ShadowBufferDesc.SampleDesc.Count = 1;
+	ShadowBufferDesc.SampleDesc.Quality = 0;
+	ShadowBufferDesc.Usage = D3D11_USAGE_DEFAULT;
+	ShadowBufferDesc.BindFlags = D3D11_BIND_DEPTH_STENCIL | D3D11_BIND_SHADER_RESOURCE;
+	ShadowBufferDesc.CPUAccessFlags = 0;
+	ShadowBufferDesc.MiscFlags = 0;
+	hr = m_pDevice->CreateTexture2D(&ShadowBufferDesc, nullptr, &pShadowBuffer);
+	FAIL_CHK(FAILED(hr), "Failed creating a shadow depth stencil resource");
+
+	// Create the depth stencil view
+	D3D11_DEPTH_STENCIL_VIEW_DESC ShadowDepthViewDesc;
+	ZeroMemory(&ShadowDepthViewDesc, sizeof(ShadowDepthViewDesc));
+	ShadowDepthViewDesc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+	ShadowDepthViewDesc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
+	ShadowDepthViewDesc.Texture2D.MipSlice = 0;
+	hr = m_pDevice->CreateDepthStencilView(pShadowBuffer, &ShadowDepthViewDesc, &m_pShadowDepthBuffer);
+	FAIL_CHK(FAILED(hr), "Failed creating a shadow depth stencil view");
+
+	D3D11_SHADER_RESOURCE_VIEW_DESC ShadowResourceViewDesc;
+	ZeroMemory(&ShadowResourceViewDesc, sizeof(ShadowResourceViewDesc));
+	ShadowResourceViewDesc.Format = DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
+	ShadowResourceViewDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+	ShadowResourceViewDesc.Texture2D.MipLevels = 1;
+	ShadowResourceViewDesc.Texture2D.MostDetailedMip = 0;
+	hr = m_pDevice->CreateShaderResourceView(pShadowBuffer, &ShadowResourceViewDesc, &m_pShadowResourceView);
+	FAIL_CHK(FAILED(hr), "Failed creating a shadow srv");
 }
 
 void D3D11Renderer::SetDefaultState()
@@ -315,38 +352,68 @@ void D3D11Renderer::DrawScene(Camera *pCamera, Scene *pScene)
 	m_pImmediateContext->ClearDepthStencilView(m_pDepthBuffer, D3D11_CLEAR_DEPTH, 1.0f, 0);
 
 	ID3D11Buffer *pCameraConstantBuffer = pD3D11Camera->GetCameraConstantBuffer();
-	m_pImmediateContext->PSSetConstantBuffers(0, 1, &pCameraConstantBuffer);
 	
 	assert(pD3D11Scene->GetDirectionalLightList().size() == 1); // TODO hard coded for one directional light
 	ID3D11Buffer *pDirectonalLightConstantBuffer = pD3D11Scene->GetDirectionalLightList()[0]->GetDirectionalLightConstantBuffer();
-	m_pImmediateContext->PSSetConstantBuffers(1, 1, &pDirectonalLightConstantBuffer);
-
+	m_pImmediateContext->PSSetConstantBuffers(2, 1, &pDirectonalLightConstantBuffer);
 	m_pImmediateContext->VSSetConstantBuffers(0, 1, &pCameraConstantBuffer);
 
 	m_pImmediateContext->PSSetShader(m_pForwardPixelShader, NULL, 0);
 	m_pImmediateContext->VSSetShader(m_pForwardVertexShader, NULL, 0);
-	m_pImmediateContext->OMSetRenderTargets(1, &m_pSwapchainRenderTargetView, m_pDepthBuffer);
-
 
 	const unsigned int Strides = sizeof(Vertex);
 	const unsigned int Offsets = 0;
-	for (auto pGeometry : pD3D11Scene->m_GeometryList)
+
+	enum Passes {ShadowPass = 0, BasePass, NumPasses};
+	for (int PassIndex = 0; PassIndex < NumPasses; PassIndex++)
 	{
-		ID3D11Buffer *pVertexBuffer = pGeometry->GetVertexBuffer();
-		ID3D11Buffer *pIndexBuffer = pGeometry->GetIndexBuffer();
-		m_pImmediateContext->IASetVertexBuffers(0, 1, &pVertexBuffer, &Strides, &Offsets);
-		m_pImmediateContext->IASetIndexBuffer(pIndexBuffer, DXGI_FORMAT_R32_UINT, 0);
-		ID3D11ShaderResourceView *pDiffuseTexture = pGeometry->GetMaterial()->GetShaderResourceView();
-		m_pImmediateContext->PSSetShaderResources(0, 1, &pDiffuseTexture);
-		if (pIndexBuffer)
+		Passes Pass = (Passes)PassIndex;
+		if (Pass == ShadowPass)
 		{
-			m_pImmediateContext->DrawIndexed(pGeometry->GetIndexCount(), 0, 0);
+			assert(pD3D11Scene->GetDirectionalLightList().size() == 1); // TODO hard coded for one directional light
+
+			ID3D11Buffer *pViewProjBuffer = pD3D11Scene->GetDirectionalLightList()[0]->GetViewProjBuffer(m_pImmediateContext, pD3D11Scene, pD3D11Camera);
+			m_pImmediateContext->VSSetConstantBuffers(1, 1, &pViewProjBuffer);
+
+			m_pImmediateContext->OMSetRenderTargets(0, nullptr, m_pShadowDepthBuffer);
+
+		}
+		else if (Pass == BasePass)
+		{
+			ID3D11Buffer *pViewProjBuffer = pD3D11Camera->GetViewProjBuffer();
+			ID3D11Buffer *pLightViewProjBuffer = pD3D11Scene->GetDirectionalLightList()[0]->GetViewProjBuffer(m_pImmediateContext, pD3D11Scene, pD3D11Camera);
+
+			m_pImmediateContext->OMSetRenderTargets(1, &m_pSwapchainRenderTargetView, m_pDepthBuffer);
+			
+			m_pImmediateContext->VSSetConstantBuffers(1, 1, &pViewProjBuffer);
+			m_pImmediateContext->VSSetConstantBuffers(3, 1, &pLightViewProjBuffer);
+
+			m_pImmediateContext->PSSetShaderResources(1, 1, &m_pShadowResourceView);
 		}
 		else
 		{
-			m_pImmediateContext->Draw(pGeometry->GetVertexCount(), 0);
+			assert(false);
+		}
+
+		for (auto pGeometry : pD3D11Scene->m_GeometryList)
+		{
+			ID3D11Buffer *pVertexBuffer = pGeometry->GetVertexBuffer();
+			ID3D11Buffer *pIndexBuffer = pGeometry->GetIndexBuffer();
+			m_pImmediateContext->IASetVertexBuffers(0, 1, &pVertexBuffer, &Strides, &Offsets);
+			m_pImmediateContext->IASetIndexBuffer(pIndexBuffer, DXGI_FORMAT_R32_UINT, 0);
+			ID3D11ShaderResourceView *pDiffuseTexture = pGeometry->GetMaterial()->GetShaderResourceView();
+			m_pImmediateContext->PSSetShaderResources(0, 1, &pDiffuseTexture);
+			if (pIndexBuffer)
+			{
+				m_pImmediateContext->DrawIndexed(pGeometry->GetIndexCount(), 0, 0);
+			}
+			else
+			{
+				m_pImmediateContext->Draw(pGeometry->GetVertexCount(), 0);
+			}
 		}
 	}
+	
 
 	ID3D11ShaderResourceView *NullViews[4] = {};
 	m_pImmediateContext->PSSetShaderResources(0, ARRAYSIZE(NullViews), NullViews);
@@ -387,6 +454,25 @@ D3D11Geometry::D3D11Geometry(_In_ ID3D11Device *pDevice, _In_ CreateGeometryDesc
 	VertexBufferData.pSysMem = pCreateGeometryDescriptor->m_pVertices;
 	hr = pDevice->CreateBuffer(&VertexBufferDesc, &VertexBufferData, &m_pVertexBuffer);
 	FAIL_CHK(FAILED(hr), "Failed to create Index Buffer");
+
+	float MaxX, MaxY, MaxZ, MinX, MinY, MinZ;
+	MaxX = MaxY = MaxZ = -FLT_MAX;
+	MinX = MinY = MinZ = FLT_MAX;
+	for (int i = 0; i < pCreateGeometryDescriptor->m_NumVertices; i++)
+	{
+		const Vertex *pVertex = &pCreateGeometryDescriptor->m_pVertices[i];
+		
+		MaxX = max(MaxX, pVertex->m_Position.x);
+		MaxY = max(MaxY, pVertex->m_Position.y);
+		MaxZ = max(MaxZ, pVertex->m_Position.z);
+
+		MinX = min(MinX, pVertex->m_Position.x);
+		MinY = min(MinY, pVertex->m_Position.y);
+		MinZ = min(MinZ, pVertex->m_Position.z);
+	}
+
+	m_MaxDimensions = XMVectorSet(MaxX, MaxY, MaxZ, 0.0f);
+	m_MinDimensions = XMVectorSet(MinX, MinY, MinZ, 0.0f);
 }
 
 D3D11Geometry::~D3D11Geometry()
@@ -407,26 +493,86 @@ D3D11DirectionalLight::D3D11DirectionalLight(
 {
 	assert(pCreateLight->m_LightType == CreateLightDescriptor::DIRECTIONAL_LIGHT);
 
-	m_CpuLightData.m_Direction = XMVector3Normalize(RealArrayToXMVector(
-		pCreateLight->m_pCreateDirectionalLight->m_Direction, DIRECTION));
+	// Flip direction since we want light direction, not emission direction
+	m_CpuLightData.m_Direction = 
+		-1.0f * XMVector3Normalize(RealArrayToXMVector(
+		pCreateLight->m_pCreateDirectionalLight->m_EmissionDirection, DIRECTION));
 	m_CpuLightData.m_Color = RealArrayToXMVector(pCreateLight->m_Color, DIRECTION);
 
-	D3D11_BUFFER_DESC LightBufferDesc;
-	ZeroMemory(&LightBufferDesc, sizeof(LightBufferDesc));
-	LightBufferDesc.Usage = D3D11_USAGE_DEFAULT;
-	LightBufferDesc.ByteWidth = sizeof(CBDirectionalLight);
-	LightBufferDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-	LightBufferDesc.CPUAccessFlags = 0;
-	D3D11_SUBRESOURCE_DATA LightBufferData;
-	ZeroMemory(&LightBufferData, sizeof(LightBufferData));
-	LightBufferData.pSysMem = &m_CpuLightData;
-	HRESULT hr = pDevice->CreateBuffer(&LightBufferDesc, &LightBufferData, &m_pLightConstantBuffer);
-	FAIL_CHK(FAILED(hr), "Failed to create Directional Light Constant Buffer");
+	m_pLightConstantBuffer = CreateConstantBuffer(pDevice, &m_CpuLightData, sizeof(CBDirectionalLight));
+	
+	// We need scene information to know where we should render the shadow map but we can at least 
+	// allocate the buffer now
+	m_ViewProjCpuData.m_Projection = XMMatrixIdentity();
+	m_ViewProjCpuData.m_View = XMMatrixIdentity();
+	m_pViewProjBuffer = CreateConstantBuffer(pDevice, m_pLightConstantBuffer, sizeof(CBViewProjectionTransforms));
+}
+
+ID3D11Buffer *D3D11DirectionalLight::GetViewProjBuffer(ID3D11DeviceContext *pContext, D3D11Scene *pScene, D3D11Camera *pCamera)
+{
+	// Calculate what's the biggest the scene can actually be.
+	float MaxSceneLength = XMVectorGetX(XMVector3Length(pScene->GetMaxDimensions() - pScene->GetMinDimensions()));
+	XMVECTOR SceneCenter = pScene->GetMaxDimensions() + pScene->GetMinDimensions();
+	XMVECTOR EyePosition = SceneCenter + m_CpuLightData.m_Direction * MaxSceneLength;
+
+	XMVECTOR LookDir = XMVector3Normalize(SceneCenter - EyePosition);
+	XMVECTOR Up;
+	if (XMVectorGetX(LookDir) > .99f)
+	{
+		Up = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
+	}
+	else if (XMVectorGetY(LookDir) > .99f)
+	{
+		Up = XMVectorSet(1.0f, 0.0f, 0.0f, 0.0f);
+	}
+	else
+	{
+		// Calculate the Up vector by assuming x = 0
+		float LookDirY = XMVectorGetY(LookDir);
+		float LookDirZ = XMVectorGetZ(LookDir);
+		float z = 1.0f / ((LookDirZ * LookDirZ) / (LookDirY * LookDirY) + 1);
+		float y = -z * LookDirZ / LookDirY;
+
+		Up = XMVectorSet(0.0f, y, z, 0.0f);
+	}
+
+	m_ViewProjCpuData.m_View = XMMatrixLookAtLH(EyePosition, SceneCenter, Up);
+	m_ViewProjCpuData.m_Projection = XMMatrixOrthographicLH(
+		MaxSceneLength,
+		MaxSceneLength / pCamera->GetAspectRatio(),
+		0.0001f,
+		MaxSceneLength * 2.0f);
+
+	pContext->UpdateSubresource(m_pViewProjBuffer, 0, nullptr, &m_ViewProjCpuData, 0, 0);
+	return m_pViewProjBuffer;
+}
+
+
+D3D11Scene::D3D11Scene()
+{
+	m_MaxDimensions = XMVectorSet(-FLT_MAX, -FLT_MAX, -FLT_MAX, 0.0f);
+	m_MinDimensions = XMVectorSet(FLT_MAX, FLT_MAX, FLT_MAX, 0.0f);
 }
 
 void D3D11Scene::AddGeometry(_In_ Geometry *pGeometry)
 {
 	D3D11Geometry *pD3D11Geometry = D3D11_RENDERER_CAST<D3D11Geometry*>(pGeometry);
+	
+	XMVECTOR GeometryMaxDimensions = pD3D11Geometry->GetMaxDimensions();
+	XMVECTOR GeometryMinDimensions = pD3D11Geometry->GetMinDimensions();
+	for (int i = 0; i < 3; i++)
+	{
+		m_MaxDimensions = XMVectorSetByIndex(
+			m_MaxDimensions,
+			max(XMVectorGetByIndex(m_MaxDimensions, i), XMVectorGetByIndex(GeometryMaxDimensions, i)),
+			i);
+
+		m_MinDimensions = XMVectorSetByIndex(
+			m_MinDimensions,
+			min(XMVectorGetByIndex(m_MinDimensions, i), XMVectorGetByIndex(GeometryMinDimensions, i)),
+			i);
+	}
+
 	m_GeometryList.push_back(pD3D11Geometry);
 }
 
@@ -457,28 +603,15 @@ D3D11Camera::D3D11Camera(ID3D11Device *pDevice, CreateCameraDescriptor *pCreateC
 	m_CameraCpuData.m_CamPos = Eye;
 	m_CameraCpuData.m_ClipDistance = XMVectorSet(pCreateCameraDescriptor->m_FarClip, 0, 0, 0);
 	m_CameraCpuData.m_Dimensions = XMVectorSet(pCreateCameraDescriptor->m_Width, pCreateCameraDescriptor->m_Height, 0, 0);
-	m_CameraCpuData.m_Projection = XMMatrixPerspectiveFovLH(pCreateCameraDescriptor->m_FieldOfView,
+	
+	m_ViewProjCpuData.m_Projection = XMMatrixPerspectiveFovLH(pCreateCameraDescriptor->m_FieldOfView,
 		pCreateCameraDescriptor->m_Width / pCreateCameraDescriptor->m_Height,
 		pCreateCameraDescriptor->m_NearClip,
 	 	pCreateCameraDescriptor->m_FarClip);
+	m_ViewProjCpuData.m_View = XMMatrixLookAtLH(Eye, At, Up);
 
-	m_CameraCpuData.m_View = XMMatrixLookAtLH(Eye, At, Up);
-
-	D3D11_BUFFER_DESC CameraBufferDesc;
-	ZeroMemory(&CameraBufferDesc, sizeof(CameraBufferDesc));
-	CameraBufferDesc.Usage = D3D11_USAGE_DEFAULT;
-	CameraBufferDesc.ByteWidth = sizeof(CBCamera);
-	CameraBufferDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-	CameraBufferDesc.CPUAccessFlags = 0;
-
-	D3D11_SUBRESOURCE_DATA InitCameraData;
-	ZeroMemory(&InitCameraData, sizeof(InitCameraData));
-	InitCameraData.pSysMem = &m_CameraCpuData;
-
-	HRESULT hr = pDevice->CreateBuffer(&CameraBufferDesc, &InitCameraData, &m_pCameraBuffer);
-	FAIL_CHK(FAILED(hr), "Failed creating the constant buffer for the camera");
-
-
+	m_pCameraBuffer = CreateConstantBuffer(pDevice, &m_CameraCpuData, sizeof(CBCamera));
+	m_pViewProjBuffer = CreateConstantBuffer(pDevice, &m_ViewProjCpuData, sizeof(CBViewProjectionTransforms));
 }
 
 D3D11Camera::~D3D11Camera()
@@ -494,5 +627,10 @@ void D3D11Camera::Update(_In_ Transform *pTransform)
 ID3D11Buffer* D3D11Camera::GetCameraConstantBuffer()
 {
 	return m_pCameraBuffer;
+}
+
+ID3D11Buffer* D3D11Camera::GetViewProjBuffer()
+{
+	return m_pViewProjBuffer;
 }
 
