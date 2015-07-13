@@ -1,12 +1,5 @@
-//--------------------------------------------------------------------------------------
-// File: Tutorial07.fx
-//
-// Copyright (c) Microsoft Corporation. All rights reserved.
-//--------------------------------------------------------------------------------------
+#define EPSILON 0.0001
 
-//--------------------------------------------------------------------------------------
-// Constant Buffer Variables
-//--------------------------------------------------------------------------------------
 Texture2D DiffuseTexture : register(t0);
 Texture2D shadowBuffer : register(t1);
 
@@ -87,11 +80,13 @@ PS_OUTPUT PS( PS_INPUT input) : SV_Target
 	//input.LightPos.xy /= float2(800, 600);
 	input.LightPos /= input.LightPos.w;
 
+	input.LightPos.xy = (input.LightPos.xy + float2(1.0f, 1.0f))/ float2(2.0f, -2.0f);
+
 	output.Color = float4(0.0f, 0.0f, 0.0f, 1.0f);
-	if (input.LightPos.z >= shadowBuffer.Sample(samLinear, input.LightPos.xy).r)
+	float ShadowMapDepth = shadowBuffer.Sample(samLinear, input.LightPos.xy).r;
+	if (input.LightPos.z <= ShadowMapDepth + EPSILON)
 	{
 		output.Color += (nDotL > 0.0f) * (nDotL * LightColor * DiffuseTexture.Sample(samLinear, input.Tex));
 	}
-	//output.Color = float4(input.LightPos.x, input.LightPos.y, 0.0f, 1.0f);
 	return output;
 }
