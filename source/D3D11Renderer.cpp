@@ -344,6 +344,60 @@ void D3D11Renderer::DestroyScene(Scene* pScene)
 	delete pScene;
 }
 
+class D3D11Pass
+{
+public:
+	virtual void SetBindings(ID3D11DeviceContext *pContext) = 0;
+};
+
+class D3D11ShadowPass : public D3D11Pass
+{
+public:
+	D3D11ShadowPass(ID3D11Buffer *pViewProjBuffer, ID3D11DepthStencilView *pDepthBuffer) :
+		m_pDepthBuffer(pDepthBuffer), m_pViewProjBuffer(pViewProjBuffer) {}
+
+	void SetBindings(ID3D11DeviceContext *pContext)
+	{
+		pContext->VSSetConstantBuffers(1, 1, &m_pViewProjBuffer);
+		pContext->OMSetRenderTargets(0, nullptr, m_pDepthBuffer);
+	}
+
+private:
+	ID3D11Buffer *m_pViewProjBuffer;
+	ID3D11DepthStencilView* m_pDepthBuffer;
+};
+
+class D3D11BasePass : public D3D11Pass
+{
+public:
+	D3D11BasePass(
+		ID3D11Buffer *pViewProjBuffer, 
+		ID3D11Buffer *pLightViewProjBuffer, 
+		ID3D11ShaderResourceView *pShadowView, 
+		ID3D11RenderTargetView *pRenderTarget, 
+		ID3D11DepthStencilView *pDepthBuffer) :
+		m_pDepthBuffer(pDepthBuffer), 
+		m_pViewProjBuffer(pViewProjBuffer), 
+		m_pLightViewProjBuffer(pLightViewProjBuffer),
+		m_pRenderTarget(pRenderTarget),
+		m_pShadowView(pShadowView) {}
+
+	void SetBindings(ID3D11DeviceContext *pContext)
+	{
+		pContext->OMSetRenderTargets(1, &m_pRenderTarget, m_pDepthBuffer);
+		pContext->VSSetConstantBuffers(1, 1, &m_pViewProjBuffer);
+		pContext->VSSetConstantBuffers(3, 1, &m_pLightViewProjBuffer);
+		pContext->PSSetShaderResources(1, 1, &m_pShadowView);
+	}
+
+private:
+	ID3D11Buffer *m_pViewProjBuffer;
+	ID3D11Buffer *m_pLightViewProjBuffer;
+	ID3D11RenderTargetView* m_pRenderTarget;
+	ID3D11DepthStencilView* m_pDepthBuffer;
+	ID3D11ShaderResourceView *m_pShadowView;
+};
+
 void D3D11Renderer::DrawScene(Camera *pCamera, Scene *pScene)
 {
 	D3D11Scene *pD3D11Scene = D3D11_RENDERER_CAST<D3D11Scene*>(pScene);
@@ -365,36 +419,17 @@ void D3D11Renderer::DrawScene(Camera *pCamera, Scene *pScene)
 	const unsigned int Strides = sizeof(Vertex);
 	const unsigned int Offsets = 0;
 
-	enum Passes {ShadowPass = 0, BasePass, NumPasses};
-	for (int PassIndex = 0; PassIndex < NumPasses; PassIndex++)
+	ID3D11Buffer *pCameraViewProjBuffer = pD3D11Camera->GetViewProjBuffer();
+	ID3D11Buffer *pLightViewProjBuffer = pD3D11Scene->GetDirectionalLightList()[0]->GetViewProjBuffer(m_pImmediateContext, pD3D11Scene, pD3D11Camera);
+
+	std::vector<D3D11Pass *> Passes;
+	D3D11ShadowPass ShadowPass(pLightViewProjBuffer, m_pShadowDepthBuffer);
+	Passes.push_back(&ShadowPass);
+	D3D11BasePass BasePass(pCameraViewProjBuffer, pLightViewProjBuffer, m_pShadowResourceView, m_pSwapchainRenderTargetView, m_pDepthBuffer);
+	Passes.push_back(&BasePass);
+	for (D3D11Pass *pPass : Passes)
 	{
-		Passes Pass = (Passes)PassIndex;
-		if (Pass == ShadowPass)
-		{
-			assert(pD3D11Scene->GetDirectionalLightList().size() == 1); // TODO hard coded for one directional light
-
-			ID3D11Buffer *pViewProjBuffer = pD3D11Scene->GetDirectionalLightList()[0]->GetViewProjBuffer(m_pImmediateContext, pD3D11Scene, pD3D11Camera);
-			m_pImmediateContext->VSSetConstantBuffers(1, 1, &pViewProjBuffer);
-
-			m_pImmediateContext->OMSetRenderTargets(0, nullptr, m_pShadowDepthBuffer);
-
-		}
-		else if (Pass == BasePass)
-		{
-			ID3D11Buffer *pViewProjBuffer = pD3D11Camera->GetViewProjBuffer();
-			ID3D11Buffer *pLightViewProjBuffer = pD3D11Scene->GetDirectionalLightList()[0]->GetViewProjBuffer(m_pImmediateContext, pD3D11Scene, pD3D11Camera);
-
-			m_pImmediateContext->OMSetRenderTargets(1, &m_pSwapchainRenderTargetView, m_pDepthBuffer);
-			
-			m_pImmediateContext->VSSetConstantBuffers(1, 1, &pViewProjBuffer);
-			m_pImmediateContext->VSSetConstantBuffers(3, 1, &pLightViewProjBuffer);
-
-			m_pImmediateContext->PSSetShaderResources(1, 1, &m_pShadowResourceView);
-		}
-		else
-		{
-			assert(false);
-		}
+		pPass->SetBindings(m_pImmediateContext);
 
 		for (auto pGeometry : pD3D11Scene->m_GeometryList)
 		{
