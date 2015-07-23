@@ -121,6 +121,7 @@
       <Filter>stb_image</Filter>
     </ClInclude>
     <ClInclude Include="D3D11Util.h" />
+    <ClInclude Include="D3D11Canvas.h" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="Geometry_PS.hlsl">

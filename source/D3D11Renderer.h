@@ -2,6 +2,7 @@
 
 #include <d3d11_1.h>
 #include <directxmath.h>
+#include "D3D11Canvas.h"
 
 struct CBCamera
 {
@@ -142,6 +143,9 @@ class D3D11Renderer : public Renderer
 {
 public:
 	D3D11Renderer(HWND WindowHandle, unsigned int width, unsigned int height);
+	
+	void SetCanvas(Canvas* pCanvas);
+
 	Geometry *CreateGeometry(_In_ CreateGeometryDescriptor *pCreateGeometryDescriptor);
 	void DestroyGeometry(_In_ Geometry *pGeometry);
 	
@@ -168,8 +172,7 @@ private:
 	ID3D11Device *m_pDevice;
 	ID3D11DeviceContext *m_pImmediateContext;
 
-	IDXGISwapChain1* m_pSwapChain1;
-	IDXGISwapChain* m_pSwapChain;
+	D3D11Canvas *m_pCanvas;
 
 	ID3D11RenderTargetView* m_pSwapchainRenderTargetView;
 	ID3D11DepthStencilView* m_pDepthBuffer;

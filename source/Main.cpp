@@ -3,10 +3,15 @@
 #include <d3dcompiler.h>
 #include <directxmath.h>
 #include <directxcolors.h>
+#include <atlconv.h>
+#include <atlbase.h>
 #include "resource.h"
 #include "Renderer.h"
 #include "D3D11Renderer.h"
 #include "RTRenderer.h"
+#include "RendererException.h"
+#include "D3D11Canvas.h"
+
 
 using namespace DirectX;
 
@@ -30,6 +35,13 @@ Renderer *g_pRenderer[NUM_RENDERER_TYPES];
 Scene *g_pScene[NUM_RENDERER_TYPES];
 Camera *g_pCamera[NUM_RENDERER_TYPES];
 RENDERER_TYPE g_ActiveRenderer = D3D11;
+D3D11Canvas *g_pCanvas;
+
+ID3D11Device *g_pDevice;
+ID3D11DeviceContext *g_pImmediateContext;
+
+IDXGISwapChain1* g_pSwapChain1;
+IDXGISwapChain* g_pSwapChain;
 
 
 //--------------------------------------------------------------------------------------
@@ -52,6 +64,53 @@ int WINAPI wWinMain( _In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
     if( FAILED( InitWindow( hInstance, nCmdShow ) ) )
         return 0;
 
+	UINT CeateDeviceFlags = 0;
+#ifdef DEBUG
+	CeateDeviceFlags |= D3D11_CREATE_DEVICE_DEBUG;
+#endif
+
+	D3D_FEATURE_LEVEL FeatureLevels = D3D_FEATURE_LEVEL_11_1;
+	HRESULT hr = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_WARP, nullptr, CeateDeviceFlags, &FeatureLevels, 1,
+		D3D11_SDK_VERSION, &g_pDevice, nullptr, &g_pImmediateContext);
+	FAIL_CHK(FAILED(hr), "Failed D3D11CreateDevice");
+
+	IDXGIFactory1* dxgiFactory = nullptr;
+	{
+		IDXGIDevice* dxgiDevice = nullptr;
+		FAIL_CHK(FAILED(hr), "Failed to query interface for DXGIDevice");
+		hr = g_pDevice->QueryInterface(__uuidof(IDXGIDevice), reinterpret_cast<void**>(&dxgiDevice));
+		IDXGIAdapter* adapter = nullptr;
+		hr = dxgiDevice->GetAdapter(&adapter);
+		if (SUCCEEDED(hr))
+		{
+			hr = adapter->GetParent(__uuidof(IDXGIFactory1), reinterpret_cast<void**>(&dxgiFactory));
+			adapter->Release();
+		}
+		dxgiDevice->Release();
+	}
+
+	g_pCanvas = new D3D11Canvas(g_pDevice, g_pImmediateContext, WIDTH, HEIGHT);
+
+	// Create swap chain
+	CComPtr<IDXGIFactory2> dxgiFactory2 = nullptr;
+	hr = dxgiFactory->QueryInterface(__uuidof(IDXGIFactory2), reinterpret_cast<void**>(&dxgiFactory2));
+	FAIL_CHK(!dxgiFactory2, "DXGIFactory2 is null");
+	DXGI_SWAP_CHAIN_DESC1 sd;
+	ZeroMemory(&sd, sizeof(sd));
+	sd.Width = WIDTH;
+	sd.Height = HEIGHT;
+	sd.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	sd.SampleDesc.Count = 1;
+	sd.SampleDesc.Quality = 0;
+	sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+	sd.BufferCount = 1;
+
+	hr = dxgiFactory2->CreateSwapChainForHwnd(g_pDevice, g_hWnd, &sd, nullptr, nullptr, &g_pSwapChain1);
+	if (SUCCEEDED(hr))
+	{
+		hr = g_pSwapChain1->QueryInterface(__uuidof(IDXGISwapChain), reinterpret_cast<void**>(&g_pSwapChain));
+	}
+
 	for (UINT i = 0; i < NUM_RENDERER_TYPES; i++)
 	{
 		switch (i)
@@ -60,12 +119,13 @@ int WINAPI wWinMain( _In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 			g_pRenderer[i] = new D3D11Renderer(g_hWnd, WIDTH, HEIGHT);
 			break;
 		case RENDERER_TYPE::RAYTRACER:
-			g_pRenderer[i] = new RTRenderer(g_hWnd, WIDTH, HEIGHT);
+			g_pRenderer[i] = new RTRenderer(WIDTH, HEIGHT);
 			break;
 		default:
 			break;
 		}
 
+		g_pRenderer[i]->SetCanvas(g_pCanvas);
 		InitSceneAndCamera(g_pRenderer[i], &g_pScene[i], &g_pCamera[i]);
 	}
 
@@ -291,4 +351,14 @@ void InitSceneAndCamera(_In_ Renderer *pRenderer, _Out_ Scene **ppScene, _Out_ C
 void Render()
 {
 	g_pRenderer[g_ActiveRenderer]->DrawScene(g_pCamera[g_ActiveRenderer], g_pScene[g_ActiveRenderer]);
+
+
+	ID3D11Texture2D* pBackBuffer = nullptr;
+	HRESULT hr = g_pSwapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), reinterpret_cast<void**>(&pBackBuffer));
+	
+	FAIL_CHK(FAILED(hr), "Failed to get the back buffer");
+
+	g_pImmediateContext->CopyResource(pBackBuffer, g_pCanvas->GetCanvasResource());
+	hr = g_pSwapChain->Present(0, 0);
+	FAIL_CHK(FAILED(hr), "Failed to present");
 }

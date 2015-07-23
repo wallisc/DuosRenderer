@@ -22,6 +22,19 @@ struct Vec3
 	REAL z;
 };
 
+class ExtendableClass
+{
+public:
+	// *ppInterface != nullptr if the Inteface is supported
+	virtual void GetInterface(const char *InterfaceName, void **ppInterface) = 0;
+};
+
+class Canvas : public ExtendableClass
+{
+public:
+	virtual void WritePixel(unsigned int x, unsigned int y, Vec3 Color) = 0;
+};
+
 struct Vertex
 {
 	Vec3 m_Position;
@@ -118,6 +131,8 @@ public:
 class Renderer
 {
 public:
+	virtual void SetCanvas(Canvas *pCanvas) = 0;
+
 	virtual void DrawScene(Camera *pCamera, Scene *pScene) = 0;
 
 	virtual Geometry *CreateGeometry(_In_ CreateGeometryDescriptor *pCreateGeometryDescriptor) = 0;
@@ -134,17 +149,6 @@ public:
 
 	virtual Scene *CreateScene() = 0;
 	virtual void DestroyScene(Scene *pScene) = 0;
-};
-
-class ExtendableClass
-{
-	// *ppInterface != nullptr if the Inteface is supported
-	void GetInterface(char *InterfaceName, void **ppInterface);
-};
-
-class Canvas : ExtendableClass
-{
-	void WritePixel(unsigned int x, unsigned int y, Vec3 Color);
 };
 
 

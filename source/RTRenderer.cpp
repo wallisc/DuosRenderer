@@ -39,75 +39,8 @@ void RTRenderer::DestroyMaterial(Material* pMaterial)
 	delete pMaterial;
 }
 
-RTRenderer::RTRenderer(HWND WindowHandle, unsigned int width, unsigned int height)
+RTRenderer::RTRenderer(unsigned int width, unsigned int height)
 {
-	UINT CeateDeviceFlags = 0;
-#ifdef DEBUG
-	CeateDeviceFlags |= D3D11_CREATE_DEVICE_DEBUG;
-#endif
-	D3D_FEATURE_LEVEL FeatureLevels = D3D_FEATURE_LEVEL_11_0;
-	HRESULT hr = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, CeateDeviceFlags, &FeatureLevels, 1,
-		D3D11_SDK_VERSION, &m_pDevice, nullptr, &m_pImmediateContext);
-	FAIL_CHK(FAILED(hr), "Failed D3D11CreateDevice");
-
-	InitializeSwapchain(WindowHandle, width, height);
-}
-
-void RTRenderer::InitializeSwapchain(HWND WindowHandle, unsigned int width, unsigned int height)
-{
-	assert(m_pDevice);
-	HRESULT hr = S_OK;
-	// Obtain DXGI factory from device (since we used nullptr for pAdapter above)
-	IDXGIFactory1* dxgiFactory = nullptr;
-	{
-		IDXGIDevice* dxgiDevice = nullptr;
-		FAIL_CHK(FAILED(hr), "Failed to query interface for DXGIDevice");
-		hr = m_pDevice->QueryInterface(__uuidof(IDXGIDevice), reinterpret_cast<void**>(&dxgiDevice));
-		IDXGIAdapter* adapter = nullptr;
-		hr = dxgiDevice->GetAdapter(&adapter);
-		if (SUCCEEDED(hr))
-		{
-			hr = adapter->GetParent(__uuidof(IDXGIFactory1), reinterpret_cast<void**>(&dxgiFactory));
-			adapter->Release();
-		}
-		dxgiDevice->Release();
-	}
-
-	// Create swap chain
-	CComPtr<IDXGIFactory2> dxgiFactory2 = nullptr;
-	hr = dxgiFactory->QueryInterface(__uuidof(IDXGIFactory2), reinterpret_cast<void**>(&dxgiFactory2));
-	FAIL_CHK(!dxgiFactory2, "DXGIFactory2 is null");
-	DXGI_SWAP_CHAIN_DESC1 sd;
-	ZeroMemory(&sd, sizeof(sd));
-	sd.Width = width;
-	sd.Height = height;
-	sd.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-	sd.SampleDesc.Count = 1;
-	sd.SampleDesc.Quality = 0;
-	sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-	sd.BufferCount = 1;
-
-	hr = dxgiFactory2->CreateSwapChainForHwnd(m_pDevice, WindowHandle, &sd, nullptr, nullptr, &m_pSwapChain1);
-	if (SUCCEEDED(hr))
-	{
-		hr = m_pSwapChain1->QueryInterface(__uuidof(IDXGISwapChain), reinterpret_cast<void**>(&m_pSwapChain));
-	}
-	hr = m_pSwapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), reinterpret_cast<void**>(&m_pBackBuffer));
-
-	FAIL_CHK(FAILED(hr), "Failed to create render target view for back buffer");
-
-	D3D11_TEXTURE2D_DESC MappableTextureDesc = {};
-	MappableTextureDesc.ArraySize = 1;
-	MappableTextureDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-	MappableTextureDesc.Height = height;
-	MappableTextureDesc.Width = width;
-	MappableTextureDesc.MipLevels = 1;
-	MappableTextureDesc.Usage = D3D11_USAGE_DYNAMIC;
-	MappableTextureDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-	MappableTextureDesc.SampleDesc.Count = 1;
-	MappableTextureDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
-	hr = m_pDevice->CreateTexture2D(&MappableTextureDesc, NULL, &m_pMappableTexture);
-	FAIL_CHK(FAILED(hr), "Failed to create mappable resource");
 }
 
 Geometry* RTRenderer::CreateGeometry(_In_ CreateGeometryDescriptor *pCreateGeometryDescriptor)
@@ -145,7 +78,7 @@ void RTRenderer::DestroyLight(Light *pLight)
 
 Camera *RTRenderer::CreateCamera(_In_ CreateCameraDescriptor *pCreateCameraDescriptor)
 {
-	Camera *pCamera = new RTCamera(m_pDevice, pCreateCameraDescriptor);
+	Camera *pCamera = new RTCamera(pCreateCameraDescriptor);
 	MEM_CHK(pCamera);
 	return pCamera;
 }
@@ -172,19 +105,10 @@ void RTRenderer::DrawScene(Camera *pCamera, Scene *pScene)
 	RTScene *pRTScene = RT_RENDERER_CAST<RTScene*>(pScene);
 	RTCamera *pRTCamera = RT_RENDERER_CAST<RTCamera*>(pCamera);
 
-	D3D11_MAPPED_SUBRESOURCE MappedResource;
-	m_pImmediateContext->Map(m_pMappableTexture, 0, D3D11_MAP_WRITE_DISCARD, 0, &MappedResource);
-
 	UINT m_Width = 800;
 	UINT m_Height = 600;
-	void *pRow = MappedResource.pData;
 
-	RTD3DMappedCanvas Canvas(MappedResource.pData, MappedResource.RowPitch, DXGI_FORMAT_R8G8B8A8_UNORM);
-	RTracer::Trace(pRTScene, pRTCamera, &Canvas);
- 	m_pImmediateContext->Unmap(m_pMappableTexture, 0);
-
-	m_pImmediateContext->CopyResource(m_pBackBuffer, m_pMappableTexture);
-	m_pSwapChain->Present(0, 0);
+	RTracer::Trace(pRTScene, pRTCamera, m_pCanvas);
 }
 
 RTGeometry::RTGeometry(_In_ CreateGeometryDescriptor *pCreateGeometryDescriptor)
@@ -301,7 +225,7 @@ void RTScene::AddLight(_In_ Light *pLight)
 	m_LightList.push_back(pRTLight);
 }
 
-RTCamera::RTCamera(ID3D11Device *pDevice, CreateCameraDescriptor *pCreateCameraDescriptor) :
+RTCamera::RTCamera(CreateCameraDescriptor *pCreateCameraDescriptor) :
 	m_Width(pCreateCameraDescriptor->m_Width), m_Height(pCreateCameraDescriptor->m_Height),
 	m_NearClip(pCreateCameraDescriptor->m_NearClip), m_FarClip(pCreateCameraDescriptor->m_FarClip),
 	m_FieldOfView(pCreateCameraDescriptor->m_FieldOfView)
@@ -366,23 +290,7 @@ void RTCamera::Update(_In_ Transform *pTransform)
 	assert(false);
 }
 
-RTD3DMappedCanvas::RTD3DMappedCanvas(void *pMappedSurface, UINT RowPitch, DXGI_FORMAT Format) :
-	m_pMappedSurface(pMappedSurface), m_RowPitch(RowPitch) 
-{
-	// Supports any format as long as the formats name is DXGI_FORMAT_R8G8B8A8_UNORM
-	assert(Format == DXGI_FORMAT_R8G8B8A8_UNORM);
-}
-
-void RTD3DMappedCanvas::WritePixel(UINT x, UINT y, Vec3 Color)
-{
-	byte *pPixel = ((byte *)m_pMappedSurface) + m_RowPitch * y + x * sizeof(byte)* 4;
-	pPixel[0] = Color.x * 255.0f;
-	pPixel[1] = Color.y * 255.0f;
-	pPixel[2] = Color.z * 255.0f;
-	pPixel[3] = 0;
-}
-
-void RTracer::Trace(RTScene *pScene, RTCamera *pCamera, RTCanvas *pCanvas)
+void RTracer::Trace(RTScene *pScene, RTCamera *pCamera, Canvas *pCanvas)
 {
 	UINT Width = pCamera->GetWidth();
 	UINT Height = pCamera->GetHeight();

@@ -1,6 +1,7 @@
 #include "D3D11Renderer.h"
 #include "D3D11Util.h"
 #include "RendererException.h"
+#include "D3D11Canvas.h"
 
 #include "dxtk/inc/WICTextureLoader.h"
 
@@ -77,6 +78,20 @@ D3D11Renderer::D3D11Renderer(HWND WindowHandle, unsigned int width, unsigned int
 	SetDefaultState();
 }
 
+void D3D11Renderer::SetCanvas(Canvas* pCanvas)
+{
+	m_pCanvas = nullptr;
+	pCanvas->GetInterface(D3D11CanvasKey, (void **)&m_pCanvas);
+
+	FAIL_CHK(m_pCanvas == nullptr, "Non-D3D11 canvas passed in"); // TODO: Need to add support for generic canvas
+	ID3D11Resource *pCanvasResource;
+	HRESULT hr = m_pDevice->OpenSharedResource(m_pCanvas->GetCanvasResourceHandle(), __uuidof(ID3D11Resource), (void**)&pCanvasResource);
+	FAIL_CHK(FAILED(hr), "Failed to open shared resource.");
+
+	hr = m_pDevice->CreateRenderTargetView(pCanvasResource, nullptr, &m_pSwapchainRenderTargetView);
+	FAIL_CHK(FAILED(hr), "Failed to create RTV for shared resource");
+}
+
 void D3D11Renderer::CompileShaders()
 {
 	// Compile the forward rendering shaders
@@ -112,42 +127,6 @@ void D3D11Renderer::CompileShaders()
 void D3D11Renderer::InitializeSwapchain(HWND WindowHandle, unsigned int width, unsigned int height)
 {
 	assert(m_pDevice);
-	HRESULT hr = S_OK;
-	// Obtain DXGI factory from device (since we used nullptr for pAdapter above)
-	IDXGIFactory1* dxgiFactory = nullptr;
-	{
-		IDXGIDevice* dxgiDevice = nullptr;
-		FAIL_CHK(FAILED(hr), "Failed to query interface for DXGIDevice");
-		hr = m_pDevice->QueryInterface(__uuidof(IDXGIDevice), reinterpret_cast<void**>(&dxgiDevice));
-		IDXGIAdapter* adapter = nullptr;
-		hr = dxgiDevice->GetAdapter(&adapter);
-		if (SUCCEEDED(hr))
-		{
-			hr = adapter->GetParent(__uuidof(IDXGIFactory1), reinterpret_cast<void**>(&dxgiFactory));
-			adapter->Release();
-		}
-		dxgiDevice->Release();
-	}
-
-	// Create swap chain
-	CComPtr<IDXGIFactory2> dxgiFactory2 = nullptr;
-	hr = dxgiFactory->QueryInterface(__uuidof(IDXGIFactory2), reinterpret_cast<void**>(&dxgiFactory2));
-	FAIL_CHK(!dxgiFactory2, "DXGIFactory2 is null");
-	DXGI_SWAP_CHAIN_DESC1 sd;
-	ZeroMemory(&sd, sizeof(sd));
-	sd.Width = width;
-	sd.Height = height;
-	sd.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-	sd.SampleDesc.Count = 1;
-	sd.SampleDesc.Quality = 0;
-	sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-	sd.BufferCount = 1;
-	
-	hr = dxgiFactory2->CreateSwapChainForHwnd(m_pDevice, WindowHandle, &sd, nullptr, nullptr, &m_pSwapChain1);
-	if (SUCCEEDED(hr))
-	{
-		hr = m_pSwapChain1->QueryInterface(__uuidof(IDXGISwapChain), reinterpret_cast<void**>(&m_pSwapChain));
-	}
 
 	ID3D11Texture2D *pDepthStencil;
 	D3D11_TEXTURE2D_DESC descDepth;
@@ -163,7 +142,7 @@ void D3D11Renderer::InitializeSwapchain(HWND WindowHandle, unsigned int width, u
 	descDepth.BindFlags = D3D11_BIND_DEPTH_STENCIL;
 	descDepth.CPUAccessFlags = 0;
 	descDepth.MiscFlags = 0;
-	hr = m_pDevice->CreateTexture2D(&descDepth, nullptr, &pDepthStencil);
+	HRESULT hr = m_pDevice->CreateTexture2D(&descDepth, nullptr, &pDepthStencil);
 	FAIL_CHK(FAILED(hr), "Failed creating a depth stencil resource");
 
 	// Create the depth stencil view
@@ -174,13 +153,6 @@ void D3D11Renderer::InitializeSwapchain(HWND WindowHandle, unsigned int width, u
 	descDSV.Texture2D.MipSlice = 0;
 	hr = m_pDevice->CreateDepthStencilView(pDepthStencil, &descDSV, &m_pDepthBuffer);
 	FAIL_CHK(FAILED(hr), "Failed creating a depth stencil view");
-
-	ID3D11Texture2D* pBackBuffer = nullptr;
-	hr = m_pSwapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), reinterpret_cast<void**>(&pBackBuffer));
-
-	hr = m_pDevice->CreateRenderTargetView(pBackBuffer, nullptr, &m_pSwapchainRenderTargetView);
-	pBackBuffer->Release();
-	FAIL_CHK(FAILED(hr), "Failed to create render target view for back buffer");
 
 	// Setup the viewport
 	D3D11_VIEWPORT vp;
@@ -453,7 +425,7 @@ void D3D11Renderer::DrawScene(Camera *pCamera, Scene *pScene)
 
 	ID3D11ShaderResourceView *NullViews[4] = {};
 	m_pImmediateContext->PSSetShaderResources(0, ARRAYSIZE(NullViews), NullViews);
-	m_pSwapChain->Present(0, 0);
+	m_pImmediateContext->Flush();
 }
 
 D3D11Geometry::D3D11Geometry(_In_ ID3D11Device *pDevice, _In_ CreateGeometryDescriptor *pCreateGeometryDescriptor) :

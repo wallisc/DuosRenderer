@@ -1,6 +1,5 @@
 #include "Renderer.h"
 
-#include <d3d11_1.h>
 #include "glm/vec3.hpp"
 #include "glm/vec2.hpp"
 
@@ -138,13 +137,13 @@ private:
 class RTCamera : public Camera
 {
 public:
-	RTCamera(ID3D11Device *pDevice, CreateCameraDescriptor *pCreateCameraDescriptor);
+	RTCamera(CreateCameraDescriptor *pCreateCameraDescriptor);
 	~RTCamera();
 
 	void Update(_In_ Transform *pTransform);
 
-	UINT GetWidth();
-	UINT GetHeight();
+	unsigned int GetWidth();
+	unsigned int GetHeight();
 
 	float GetAspectRatio();
 	const glm::vec3 &GetFocalPoint();
@@ -158,7 +157,7 @@ public:
 	float GetLensHeight();
 
 private:
-	UINT m_Width, m_Height;
+	unsigned int m_Width, m_Height;
 	glm::vec3 m_FocalPoint;
 	glm::vec3 m_LookAt;
 	glm::vec3 m_Up;
@@ -186,7 +185,9 @@ private:
 class RTRenderer : public Renderer
 {
 public:
-	RTRenderer(HWND WindowHandle, unsigned int width, unsigned int height);
+	RTRenderer(unsigned int width, unsigned int height);
+	
+	void SetCanvas(Canvas *pCanvas) { m_pCanvas = pCanvas; }
 	Geometry *CreateGeometry(_In_ CreateGeometryDescriptor *pCreateGeometryDescriptor);
 	void DestroyGeometry(_In_ Geometry *pGeometry);
 
@@ -205,39 +206,13 @@ public:
 	void DrawScene(Camera *pCamera, Scene *pScene);
 
 private:
-	void InitializeSwapchain(HWND WindowHandle, unsigned int width, unsigned int height);
-
-	ID3D11Device *m_pDevice;
-	ID3D11DeviceContext *m_pImmediateContext;
-
-	IDXGISwapChain1* m_pSwapChain1;
-	IDXGISwapChain* m_pSwapChain;
-
-	ID3D11Texture2D* m_pBackBuffer;
-	ID3D11Texture2D *m_pMappableTexture;
-};
-
-class RTCanvas
-{ 
-public:
-	virtual void WritePixel(UINT x, UINT y, Vec3 Color) = 0;
-};
-
-class RTD3DMappedCanvas : public RTCanvas
-{
-public:
-	RTD3DMappedCanvas(void *pMappedSurface, UINT RowPitch, DXGI_FORMAT Format);
-	void WritePixel(UINT x, UINT y, Vec3 Color);
-
-private:
-	UINT m_RowPitch;
-	void *m_pMappedSurface;
+	Canvas *m_pCanvas;
 };
 
 class RTracer
 {
 public:
-	static void Trace(RTScene *pScene, RTCamera *pCamera, RTCanvas *pCanvas);
+	static void Trace(RTScene *pScene, RTCamera *pCamera, Canvas *pCanvas);
 
 private:
 	static IntersectionResult Intersect(const RTRay &Ray, const std::vector<RTGeometry *> &GeometryList);
