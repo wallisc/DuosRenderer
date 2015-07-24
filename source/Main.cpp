@@ -11,12 +11,19 @@
 #include "RTRenderer.h"
 #include "RendererException.h"
 #include "D3D11Canvas.h"
-
+#include "DXUT/Core/DXUT.h"
+#include "DXUT/Optional/DXUTgui.h"
+#include "DXUT/Optional/SDKMisc.h"
 
 using namespace DirectX;
 
 #define WIDTH 800
 #define HEIGHT 600
+
+enum
+{
+	CMD_CHANGE_RENDERER
+};
 
 //--------------------------------------------------------------------------------------
 // Global Variables
@@ -37,6 +44,11 @@ Camera *g_pCamera[NUM_RENDERER_TYPES];
 RENDERER_TYPE g_ActiveRenderer = D3D11;
 D3D11Canvas *g_pCanvas;
 
+CDXUTDialogResourceManager  g_DialogResourceManager; // manager for shared resources of dialogs
+CDXUTDialog  g_GUI;
+CDXUTTextHelper* g_pTextWriter = nullptr;
+
+
 ID3D11Device *g_pDevice;
 ID3D11DeviceContext *g_pImmediateContext;
 
@@ -52,64 +64,68 @@ HRESULT InitWindow( HINSTANCE hInstance, int nCmdShow );
 LRESULT CALLBACK    WndProc( HWND, UINT, WPARAM, LPARAM );
 void Render();
 
+HRESULT CALLBACK OnDeviceCreated(_In_ ID3D11Device* pd3dDevice, _In_ const DXGI_SURFACE_DESC* pBackBufferSurfaceDesc, _In_opt_ void* pUserContext);
+void    CALLBACK OnFrameRender(_In_ ID3D11Device* pd3dDevice, _In_ ID3D11DeviceContext* pd3dImmediateContext, _In_ double fTime, _In_ float fElapsedTime, _In_opt_ void* pUserContext);
+HRESULT CALLBACK OnResizedSwapChain(ID3D11Device* pd3dDevice, IDXGISwapChain* pSwapChain, const DXGI_SURFACE_DESC* pBackBufferSurfaceDesc, void* pUserContext);
+LRESULT CALLBACK MsgProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, bool* pbNoFurtherProcessing, void* pUserContext);
+void CALLBACK OnGUIEvent(UINT nEvent, int nControlID, CDXUTControl* pControl, void* pUserContext);
+void CALLBACK OnD3D11DestroyDevice(void* pUserContext);
+void CALLBACK OnD3D11ReleasingSwapChain(void* pUserContext);
+
 //--------------------------------------------------------------------------------------
 // Entry point to the program. Initializes everything and goes into a message processing 
 // loop. Idle time is used to render the scene.
 //--------------------------------------------------------------------------------------
 int WINAPI wWinMain( _In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPWSTR lpCmdLine, _In_ int nCmdShow )
 {
-    UNREFERENCED_PARAMETER( hPrevInstance );
-    UNREFERENCED_PARAMETER( lpCmdLine );
-
-    if( FAILED( InitWindow( hInstance, nCmdShow ) ) )
-        return 0;
-
-	UINT CeateDeviceFlags = 0;
-#ifdef DEBUG
-	CeateDeviceFlags |= D3D11_CREATE_DEVICE_DEBUG;
+	// Enable run-time memory check for debug builds.
+#ifdef _DEBUG
+	_CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
 #endif
 
-	D3D_FEATURE_LEVEL FeatureLevels = D3D_FEATURE_LEVEL_11_1;
-	HRESULT hr = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_WARP, nullptr, CeateDeviceFlags, &FeatureLevels, 1,
-		D3D11_SDK_VERSION, &g_pDevice, nullptr, &g_pImmediateContext);
-	FAIL_CHK(FAILED(hr), "Failed D3D11CreateDevice");
+	// DXUT will create and use the best device
+	// that is available on the system depending on which D3D callbacks are set below
 
-	IDXGIFactory1* dxgiFactory = nullptr;
-	{
-		IDXGIDevice* dxgiDevice = nullptr;
-		FAIL_CHK(FAILED(hr), "Failed to query interface for DXGIDevice");
-		hr = g_pDevice->QueryInterface(__uuidof(IDXGIDevice), reinterpret_cast<void**>(&dxgiDevice));
-		IDXGIAdapter* adapter = nullptr;
-		hr = dxgiDevice->GetAdapter(&adapter);
-		if (SUCCEEDED(hr))
-		{
-			hr = adapter->GetParent(__uuidof(IDXGIFactory1), reinterpret_cast<void**>(&dxgiFactory));
-			adapter->Release();
-		}
-		dxgiDevice->Release();
-	}
+	// Set general DXUT callbacks
 
+	DXUTSetCallbackMsgProc(MsgProc);
+	//UTSetCallbackDeviceChanging(ModifyDeviceSettings);
+	//UTSetCallbackDeviceRemoved(OnDeviceRemoved);
+
+	// Set the D3D11 DXUT callbacks. Remove these sets if the app doesn't need to support D3D11
+
+	DXUTSetCallbackD3D11DeviceCreated(OnDeviceCreated);
+	DXUTSetCallbackD3D11SwapChainResized(OnResizedSwapChain);
+	DXUTSetCallbackD3D11FrameRender(OnFrameRender);
+	DXUTSetCallbackD3D11SwapChainReleasing(OnD3D11ReleasingSwapChain);
+	DXUTSetCallbackD3D11DeviceDestroyed(OnD3D11DestroyDevice);
+
+	DXUTInit(true, true, nullptr); // Parse the command line, show msgboxes on error, no extra command line params
+	DXUTSetCursorSettings(true, true); // Show the cursor and clip it when in full screen
+
+	DXUTCreateWindow(L"Duos Renderer");
+
+	DXUTCreateDevice(D3D_FEATURE_LEVEL_11_1, true, WIDTH, HEIGHT);
+	DXUTMainLoop();
+
+	return DXUTGetExitCode();
+}
+
+HRESULT CALLBACK OnDeviceCreated(_In_ ID3D11Device* pd3dDevice, _In_ const DXGI_SURFACE_DESC* pBackBufferSurfaceDesc, _In_opt_ void* pUserContext)
+{
+	g_pDevice = pd3dDevice;
+	g_pImmediateContext = DXUTGetD3D11DeviceContext();
 	g_pCanvas = new D3D11Canvas(g_pDevice, g_pImmediateContext, WIDTH, HEIGHT);
+	g_pSwapChain = DXUTGetDXGISwapChain();
 
-	// Create swap chain
-	CComPtr<IDXGIFactory2> dxgiFactory2 = nullptr;
-	hr = dxgiFactory->QueryInterface(__uuidof(IDXGIFactory2), reinterpret_cast<void**>(&dxgiFactory2));
-	FAIL_CHK(!dxgiFactory2, "DXGIFactory2 is null");
-	DXGI_SWAP_CHAIN_DESC1 sd;
-	ZeroMemory(&sd, sizeof(sd));
-	sd.Width = WIDTH;
-	sd.Height = HEIGHT;
-	sd.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-	sd.SampleDesc.Count = 1;
-	sd.SampleDesc.Quality = 0;
-	sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-	sd.BufferCount = 1;
+	HRESULT hr = g_DialogResourceManager.OnD3D11CreateDevice(pd3dDevice, g_pImmediateContext);
+	g_pTextWriter = new CDXUTTextHelper(pd3dDevice, g_pImmediateContext, &g_DialogResourceManager, 15);
+	g_GUI.Init(&g_DialogResourceManager);
 
-	hr = dxgiFactory2->CreateSwapChainForHwnd(g_pDevice, g_hWnd, &sd, nullptr, nullptr, &g_pSwapChain1);
-	if (SUCCEEDED(hr))
-	{
-		hr = g_pSwapChain1->QueryInterface(__uuidof(IDXGISwapChain), reinterpret_cast<void**>(&g_pSwapChain));
-	}
+	g_GUI.SetCallback(OnGUIEvent); int iY = 10;
+	g_GUI.AddButton(CMD_CHANGE_RENDERER, L"Change renderer (space)", 0, iY, 170, 22, VK_SPACE);
+
+	FAIL_CHK(FAILED(hr), "Failed to create DXUT dialog manager");
 
 	for (UINT i = 0; i < NUM_RENDERER_TYPES; i++)
 	{
@@ -128,100 +144,9 @@ int WINAPI wWinMain( _In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 		g_pRenderer[i]->SetCanvas(g_pCanvas);
 		InitSceneAndCamera(g_pRenderer[i], &g_pScene[i], &g_pCamera[i]);
 	}
-
-
-    // Main message loop
-    MSG msg = {0};
-    while( WM_QUIT != msg.message )
-    {
-        if( PeekMessage( &msg, nullptr, 0, 0, PM_REMOVE ) )
-        {
-            TranslateMessage( &msg );
-            DispatchMessage( &msg );
-        }
-		else
-        {
-            Render();
-        }
-    }
-
-	// TODO: Memory leak
-	//g_pRenderer->DestroyGeometry(pBox);
-	//g_pRenderer->DestroyGeometry(pPlane);
-	//g_pRenderer->DestroyScene(g_pScene);
-
-    return ( int )msg.wParam;
+	return	S_OK;
 }
 
-
-//--------------------------------------------------------------------------------------
-// Register class and create window
-//--------------------------------------------------------------------------------------
-HRESULT InitWindow( HINSTANCE hInstance, int nCmdShow )
-{
-    // Register class
-    WNDCLASSEX wcex;
-    wcex.cbSize = sizeof( WNDCLASSEX );
-    wcex.style = CS_HREDRAW | CS_VREDRAW;
-    wcex.lpfnWndProc = WndProc;
-    wcex.cbClsExtra = 0;
-    wcex.cbWndExtra = 0;
-    wcex.hInstance = hInstance;
-    wcex.hIcon = LoadIcon( hInstance, ( LPCTSTR )IDI_TUTORIAL1 );
-    wcex.hCursor = LoadCursor( nullptr, IDC_ARROW );
-    wcex.hbrBackground = ( HBRUSH )( COLOR_WINDOW + 1 );
-    wcex.lpszMenuName = nullptr;
-    wcex.lpszClassName = L"TutorialWindowClass";
-    wcex.hIconSm = LoadIcon( wcex.hInstance, ( LPCTSTR )IDI_TUTORIAL1 );
-    if( !RegisterClassEx( &wcex ) )
-        return E_FAIL;
-
-    // Create window
-    g_hInst = hInstance;
-    RECT rc = { 0, 0, WIDTH, HEIGHT};
-    AdjustWindowRect( &rc, WS_OVERLAPPEDWINDOW, FALSE );
-    g_hWnd = CreateWindow( L"TutorialWindowClass", L"Duos Renderer",
-                           WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
-                           CW_USEDEFAULT, CW_USEDEFAULT, rc.right - rc.left, rc.bottom - rc.top, nullptr, nullptr, hInstance,
-                           nullptr );
-    if( !g_hWnd )
-        return E_FAIL;
-
-    ShowWindow( g_hWnd, nCmdShow );
-
-    return S_OK;
-}
-
-//--------------------------------------------------------------------------------------
-// Called every time the application receives a message
-//--------------------------------------------------------------------------------------
-LRESULT CALLBACK WndProc( HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam )
-{
-    PAINTSTRUCT ps;
-    HDC hdc;
-
-    switch( message )
-    {
-    case WM_PAINT:
-        hdc = BeginPaint( hWnd, &ps );
-        EndPaint( hWnd, &ps );
-        break;
-	case WM_KEYDOWN:
-		g_ActiveRenderer = (RENDERER_TYPE)((g_ActiveRenderer + 1) % NUM_RENDERER_TYPES);
-		break;
-    case WM_DESTROY:
-        PostQuitMessage( 0 );
-        break;
-
-        // Note that this tutorial does not handle resizing (WM_SIZE) requests,
-        // so we created the window without the resize border.
-
-    default:
-        return DefWindowProc( hWnd, message, wParam, lParam );
-    }
-
-    return 0;
-}
 
 void InitSceneAndCamera(_In_ Renderer *pRenderer, _Out_ Scene **ppScene, _Out_ Camera **ppCamera)
 {
@@ -345,10 +270,17 @@ void InitSceneAndCamera(_In_ Renderer *pRenderer, _Out_ Scene **ppScene, _Out_ C
 	*ppCamera = pRenderer->CreateCamera(&CameraDescriptor);
 }
 
-//--------------------------------------------------------------------------------------
-// Render a frame
-//--------------------------------------------------------------------------------------g_ActiveRenderer
-void Render()
+void RenderText(float fps)
+{
+	g_pTextWriter->Begin();
+	g_pTextWriter->SetInsertionPos(5, 5);
+	g_pTextWriter->SetForegroundColor(Colors::Yellow);
+	g_pTextWriter->DrawTextLine(g_ActiveRenderer == D3D11 ? L"Rasterizer" : L"Raytracer");
+	g_pTextWriter->DrawFormattedTextLine(L"%f", fps);
+	g_pTextWriter->End();
+}
+
+void CALLBACK OnFrameRender(_In_ ID3D11Device* pd3dDevice, _In_ ID3D11DeviceContext* pd3dImmediateContext, _In_ double fTime, _In_ float fElapsedTime, _In_opt_ void* pUserContext)
 {
 	g_pRenderer[g_ActiveRenderer]->DrawScene(g_pCamera[g_ActiveRenderer], g_pScene[g_ActiveRenderer]);
 
@@ -359,6 +291,61 @@ void Render()
 	FAIL_CHK(FAILED(hr), "Failed to get the back buffer");
 
 	g_pImmediateContext->CopyResource(pBackBuffer, g_pCanvas->GetCanvasResource());
+
+	g_GUI.OnRender(fElapsedTime);
+
+	float fps = 1.0f / fElapsedTime;
+	RenderText(fps);
+
 	hr = g_pSwapChain->Present(0, 0);
 	FAIL_CHK(FAILED(hr), "Failed to present");
+}
+
+HRESULT CALLBACK OnResizedSwapChain(ID3D11Device* pd3dDevice, IDXGISwapChain* pSwapChain, const DXGI_SURFACE_DESC* pBackBufferSurfaceDesc, void* pUserContext)
+{
+	HRESULT hr = g_DialogResourceManager.OnD3D11ResizedSwapChain(pd3dDevice, pBackBufferSurfaceDesc);
+	FAIL_CHK(FAILED(hr), "Failed Resize of dialog manager");
+
+	g_GUI.SetLocation(pBackBufferSurfaceDesc->Width - 170, 0);
+	g_GUI.SetSize(170, 170);
+
+	return S_OK;
+}
+
+LRESULT CALLBACK MsgProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam,
+	bool* pbNoFurtherProcessing, void* pUserContext)
+{
+	// Pass messages to dialog resource manager calls so GUI state is updated correctly
+	*pbNoFurtherProcessing = g_DialogResourceManager.MsgProc(hWnd, uMsg, wParam, lParam);
+	if (*pbNoFurtherProcessing)
+		return 0;
+
+	// Give the dialogs a chance to handle the message first
+	*pbNoFurtherProcessing = g_GUI.MsgProc(hWnd, uMsg, wParam, lParam);
+	if (*pbNoFurtherProcessing)
+		return 0;
+
+	return 0;
+}
+
+void CALLBACK OnGUIEvent(UINT nEvent, int nControlID, CDXUTControl* pControl, void* pUserContext)
+{
+	switch (nControlID)
+	{
+	case CMD_CHANGE_RENDERER:
+		g_ActiveRenderer = (RENDERER_TYPE)((g_ActiveRenderer + 1) % NUM_RENDERER_TYPES);
+		break;
+	}
+}
+
+void CALLBACK OnD3D11ReleasingSwapChain(void* pUserContext)
+{
+	g_DialogResourceManager.OnD3D11ReleasingSwapChain();
+}
+
+void CALLBACK OnD3D11DestroyDevice(void* pUserContext)
+{
+	g_DialogResourceManager.OnD3D11DestroyDevice();
+	DXUTGetGlobalResourceCache().OnDestroyDevice();
+	SAFE_DELETE(g_pTextWriter);
 }

@@ -49,3 +49,12 @@ Temporary Items
 # Build directories
 x64
 x86
+
+#compiled crap
+*.obj
+*.log
+*.lib
+*.pch
+*.tlog
+*.idb
+*.pdb
