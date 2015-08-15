@@ -14,7 +14,10 @@
 #include "DXUT/Core/DXUT.h"
 #include "DXUT/Optional/DXUTgui.h"
 #include "DXUT/Optional/SDKMisc.h"
-
+#if 0
+#include "assimp/include/Importer.hpp"      // C++ importer interface
+#include "assimp/include/postprocess.h"     // Post processing flags
+#endif
 using namespace DirectX;
 
 #define WIDTH 800

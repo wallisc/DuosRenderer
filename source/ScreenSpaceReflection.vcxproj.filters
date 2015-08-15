@@ -21,6 +21,12 @@
     <Filter Include="DXUT">
       <UniqueIdentifier>{452b3e5f-ea4a-41f5-bed1-fab7cdd5d50d}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Assimp">
+      <UniqueIdentifier>{ce6485a6-9561-40cc-90ee-6c0e0987aade}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Assimp\inc">
+      <UniqueIdentifier>{8235d8b2-3c87-4f7e-b6ad-2a5e8a106769}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="D3D11Renderer.cpp" />
@@ -218,6 +224,105 @@
     <ClInclude Include="DXUT\Optional\SDKmisc.h">
       <Filter>DXUT</Filter>
     </ClInclude>
+    <ClInclude Include="assimp\inc\ai_assert.h">
+      <Filter>Assimp\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="assimp\inc\anim.h">
+      <Filter>Assimp\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="assimp\inc\camera.h">
+      <Filter>Assimp\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="assimp\inc\cexport.h">
+      <Filter>Assimp\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="assimp\inc\cfileio.h">
+      <Filter>Assimp\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="assimp\inc\cimport.h">
+      <Filter>Assimp\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="assimp\inc\color4.h">
+      <Filter>Assimp\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="assimp\inc\DefaultLogger.hpp">
+      <Filter>Assimp\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="assimp\inc\config.h">
+      <Filter>Assimp\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="assimp\inc\defs.h">
+      <Filter>Assimp\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="assimp\inc\Exporter.hpp">
+      <Filter>Assimp\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="assimp\inc\Importer.hpp">
+      <Filter>Assimp\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="assimp\inc\importerdesc.h">
+      <Filter>Assimp\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="assimp\inc\IOStream.hpp">
+      <Filter>Assimp\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="assimp\inc\IOSystem.hpp">
+      <Filter>Assimp\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="assimp\inc\light.h">
+      <Filter>Assimp\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="assimp\inc\Logger.hpp">
+      <Filter>Assimp\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="assimp\inc\LogStream.hpp">
+      <Filter>Assimp\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="assimp\inc\version.h">
+      <Filter>Assimp\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="assimp\inc\scene.h">
+      <Filter>Assimp\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="assimp\inc\texture.h">
+      <Filter>Assimp\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="assimp\inc\types.h">
+      <Filter>Assimp\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="assimp\inc\vector2.h">
+      <Filter>Assimp\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="assimp\inc\vector3.h">
+      <Filter>Assimp\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="assimp\inc\material.h">
+      <Filter>Assimp\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="assimp\inc\matrix3x3.h">
+      <Filter>Assimp\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="assimp\inc\matrix4x4.h">
+      <Filter>Assimp\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="assimp\inc\mesh.h">
+      <Filter>Assimp\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="assimp\inc\metadata.h">
+      <Filter>Assimp\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="assimp\inc\NullLogger.hpp">
+      <Filter>Assimp\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="assimp\inc\postprocess.h">
+      <Filter>Assimp\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="assimp\inc\ProgressHandler.hpp">
+      <Filter>Assimp\inc</Filter>
+    </ClInclude>
+    <ClInclude Include="assimp\inc\quaternion.h">
+      <Filter>Assimp\inc</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="Geometry_PS.hlsl">
@@ -249,6 +354,27 @@
     </None>
     <None Include="DXUT\Optional\DXUTOpt_2012.vcxproj.filters">
       <Filter>DXUT</Filter>
+    </None>
+    <None Include="assimp\inc\color4.inl">
+      <Filter>Assimp\inc</Filter>
+    </None>
+    <None Include="assimp\inc\vector2.inl">
+      <Filter>Assimp\inc</Filter>
+    </None>
+    <None Include="assimp\inc\vector3.inl">
+      <Filter>Assimp\inc</Filter>
+    </None>
+    <None Include="assimp\inc\material.inl">
+      <Filter>Assimp\inc</Filter>
+    </None>
+    <None Include="assimp\inc\matrix3x3.inl">
+      <Filter>Assimp\inc</Filter>
+    </None>
+    <None Include="assimp\inc\matrix4x4.inl">
+      <Filter>Assimp\inc</Filter>
+    </None>
+    <None Include="assimp\inc\quaternion.inl">
+      <Filter>Assimp\inc</Filter>
     </None>
   </ItemGroup>
 </Project>

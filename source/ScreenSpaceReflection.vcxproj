@@ -431,6 +431,39 @@
     <ClCompile Include="RTRenderer.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="assimp\inc\ai_assert.h" />
+    <ClInclude Include="assimp\inc\anim.h" />
+    <ClInclude Include="assimp\inc\camera.h" />
+    <ClInclude Include="assimp\inc\cexport.h" />
+    <ClInclude Include="assimp\inc\cfileio.h" />
+    <ClInclude Include="assimp\inc\cimport.h" />
+    <ClInclude Include="assimp\inc\color4.h" />
+    <ClInclude Include="assimp\inc\config.h" />
+    <ClInclude Include="assimp\inc\DefaultLogger.hpp" />
+    <ClInclude Include="assimp\inc\defs.h" />
+    <ClInclude Include="assimp\inc\Exporter.hpp" />
+    <ClInclude Include="assimp\inc\Importer.hpp" />
+    <ClInclude Include="assimp\inc\importerdesc.h" />
+    <ClInclude Include="assimp\inc\IOStream.hpp" />
+    <ClInclude Include="assimp\inc\IOSystem.hpp" />
+    <ClInclude Include="assimp\inc\light.h" />
+    <ClInclude Include="assimp\inc\Logger.hpp" />
+    <ClInclude Include="assimp\inc\LogStream.hpp" />
+    <ClInclude Include="assimp\inc\material.h" />
+    <ClInclude Include="assimp\inc\matrix3x3.h" />
+    <ClInclude Include="assimp\inc\matrix4x4.h" />
+    <ClInclude Include="assimp\inc\mesh.h" />
+    <ClInclude Include="assimp\inc\metadata.h" />
+    <ClInclude Include="assimp\inc\NullLogger.hpp" />
+    <ClInclude Include="assimp\inc\postprocess.h" />
+    <ClInclude Include="assimp\inc\ProgressHandler.hpp" />
+    <ClInclude Include="assimp\inc\quaternion.h" />
+    <ClInclude Include="assimp\inc\scene.h" />
+    <ClInclude Include="assimp\inc\texture.h" />
+    <ClInclude Include="assimp\inc\types.h" />
+    <ClInclude Include="assimp\inc\vector2.h" />
+    <ClInclude Include="assimp\inc\vector3.h" />
+    <ClInclude Include="assimp\inc\version.h" />
     <ClInclude Include="D3D11Canvas.h" />
     <ClInclude Include="D3D11Renderer.h" />
     <ClInclude Include="D3D11Util.h" />
@@ -491,6 +524,13 @@
     <Text Include="glm\CMakeLists.txt" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="assimp\inc\color4.inl" />
+    <None Include="assimp\inc\material.inl" />
+    <None Include="assimp\inc\matrix3x3.inl" />
+    <None Include="assimp\inc\matrix4x4.inl" />
+    <None Include="assimp\inc\quaternion.inl" />
+    <None Include="assimp\inc\vector2.inl" />
+    <None Include="assimp\inc\vector3.inl" />
     <None Include="DXUT\Optional\DXUTOpt_2012.vcxproj" />
     <None Include="DXUT\Optional\DXUTOpt_2012.vcxproj.filters" />
   </ItemGroup>
