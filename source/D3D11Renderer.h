@@ -32,13 +32,29 @@ private:
 	ID3D11ShaderResourceView *pTextureResourceView;
 };
 
-class D3D11Geometry : public Geometry
+class D3D11Transformable : public Transformable
 {
 public:
-	D3D11Geometry(_In_ ID3D11Device *pDevice, _In_ CreateGeometryDescriptor *pCreateGeometryDescriptor);
-	~D3D11Geometry();
+	D3D11Transformable(_In_ ID3D11Device *pDevice, _In_ ID3D11DeviceContext *pImmediateContext);
+	virtual void Translate(_In_ const Vec3 &translationVector);
+	virtual void Rotate(float row, float yaw, float pitch) { assert(false); }
 
-	void Update(_In_ Transform *pTransform);
+
+protected:
+	ID3D11Buffer *GetWorldTransformBuffer();
+	const DirectX::XMMATRIX &GetWorldTransform() { return m_WorldMatrix; }
+
+private:
+	ID3D11DeviceContext *m_pImmediateContext;
+	ID3D11Buffer *m_pWorldTransform;
+	DirectX::XMMATRIX m_WorldMatrix;
+};
+
+class D3D11Geometry : public D3D11Transformable, public Geometry
+{
+public:
+	D3D11Geometry(_In_ ID3D11Device *pDevice, _In_ ID3D11DeviceContext *pImmediateContext, _In_ CreateGeometryDescriptor *pCreateGeometryDescriptor);
+	~D3D11Geometry();
 
 	ID3D11Buffer *GetVertexBuffer() const { return m_pVertexBuffer; }
 	ID3D11Buffer *GetIndexBuffer() const { return m_pIndexBuffer; }
@@ -48,6 +64,10 @@ public:
 
 	DirectX::XMVECTOR GetMaxDimensions() const { return m_MaxDimensions; }
 	DirectX::XMVECTOR GetMinDimensions() const { return m_MinDimensions; }
+
+	virtual void Translate(_In_ const Vec3 &translationVector) { D3D11Transformable::Translate(translationVector); }
+	virtual void Rotate(float row, float yaw, float pitch) { D3D11Transformable::Rotate(row, yaw, pitch); }
+
 
 private:
 	bool m_UsesIndexBuffer;
@@ -95,10 +115,12 @@ private:
 class D3D11Camera : public Camera
 {
 public:
-	D3D11Camera(ID3D11Device *pDevice, CreateCameraDescriptor *pCreateCameraDescriptor);
+	D3D11Camera(ID3D11Device *pDevice, ID3D11DeviceContext *pContext, CreateCameraDescriptor *pCreateCameraDescriptor);
 	~D3D11Camera();
 
-	void Update(_In_ Transform *pTransform);
+	virtual void Translate(_In_ const Vec3 &translationVector);
+	virtual void Rotate(float row, float yaw, float pitch);
+
 	ID3D11Buffer *GetCameraConstantBuffer();
 	ID3D11Buffer *GetViewProjBuffer();
 	float GetAspectRatio() { return m_Width / m_Height; }
@@ -106,13 +128,20 @@ private:
 	CBCamera m_CameraCpuData;
 	CBViewProjectionTransforms m_ViewProjCpuData;
 
+	ID3D11DeviceContext *m_pContext;
+
 	ID3D11Buffer *m_pCameraBuffer;
 	ID3D11Buffer *m_pViewProjBuffer;
 
 	REAL m_Width;
 	REAL m_Height;
-	DirectX::XMMATRIX m_ViewMatrix;
 
+	bool m_ViewMatrixNeedsUpdate;
+
+	DirectX::XMMATRIX m_ViewMatrix;
+	DirectX::XMVECTOR m_Position;
+	DirectX::XMVECTOR m_LookAt;
+	DirectX::XMVECTOR m_Up;
 };
 
 class D3D11Scene : public Scene

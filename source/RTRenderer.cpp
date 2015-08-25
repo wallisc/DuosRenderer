@@ -5,6 +5,7 @@
 #include <algorithm>
 #include "glm/glm.hpp"
 #include "glm/vec3.hpp"
+#include "glm/gtx/transform.hpp"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image/stb_image.h"
@@ -167,11 +168,6 @@ RTGeometry::~RTGeometry()
 {
 }
 
-void RTGeometry::Update(_In_ Transform *pTransform)
-{
-	assert(false); // Implement
-}
-
 bool RTGeometry::Intersects(const RTRay *pRay, IntersectionResult *pResult)
 {
 	bool bFindExactIntersectingPrimitive = pResult != nullptr;
@@ -285,10 +281,38 @@ UINT RTCamera::GetHeight() { return m_Height; }
 float RTCamera::GetLensWidth() { return 2.0f * GetAspectRatio(); }
 float RTCamera::GetLensHeight() { return 2.0f; }
 
-void RTCamera::Update(_In_ Transform *pTransform)
+void RTCamera::Translate(_In_ const Vec3 &translationVector)
 {
-	assert(false);
+	glm::vec3 lookDir = glm::normalize(m_LookAt - m_FocalPoint);
+	glm::vec3 right = glm::cross(glm::vec3(lookDir), m_Up);
+
+	glm::vec3 delta = translationVector.x * right + translationVector.y * m_Up + translationVector.z * lookDir;
+
+	m_FocalPoint += delta;
+	m_LookAt += delta;
 }
+
+void RTCamera::Rotate(float row, float yaw, float pitch)
+{
+	glm::vec4 lookDir = glm::vec4(glm::normalize(m_LookAt - m_FocalPoint), 0.0f);
+
+	if (pitch)
+	{
+		glm::vec3 right = glm::cross(glm::vec3(lookDir), m_Up);
+		glm::mat4 pitchRotation = glm::rotate(pitch, right);
+		lookDir = pitchRotation * lookDir;
+		m_Up = glm::vec3(pitchRotation * glm::vec4(m_Up, 0.0f));
+	}
+
+	if (yaw)
+	{
+		glm::mat4 yawRotation = glm::rotate(yaw, m_Up);
+		lookDir = yawRotation * lookDir;
+	}
+
+	m_LookAt = m_FocalPoint + glm::vec3(lookDir) * glm::length(m_LookAt - m_FocalPoint);
+}
+
 
 void RTracer::Trace(RTScene *pScene, RTCamera *pCamera, Canvas *pCanvas)
 {
@@ -435,11 +459,6 @@ bool RTTriangle::Intersects(const RTRay *pRay, IntersectionResult *pResult)
 	pResult->SetParam(t);
 	pResult->SetRay(*pRay);
 	return t > 0.0f;
-}
-
-void RTTriangle::Update(_In_ Transform *pTransform)
-{
-	assert(false); // TODO:Implement
 }
 
 RTTriangle::UVAndNormal RTTriangle::GetUVAndNormalAt(const IntersectionResult &IntersectResult) const

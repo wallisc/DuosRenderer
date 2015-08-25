@@ -47,6 +47,10 @@ Camera *g_pCamera[NUM_RENDERER_TYPES];
 RENDERER_TYPE g_ActiveRenderer = D3D11;
 D3D11Canvas *g_pCanvas;
 
+bool g_MouseInitialized = false;
+int g_MouseX;
+int g_MouseY;
+
 CDXUTDialogResourceManager  g_DialogResourceManager; // manager for shared resources of dialogs
 CDXUTDialog  g_GUI;
 CDXUTTextHelper* g_pTextWriter = nullptr;
@@ -74,6 +78,11 @@ LRESULT CALLBACK MsgProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, boo
 void CALLBACK OnGUIEvent(UINT nEvent, int nControlID, CDXUTControl* pControl, void* pUserContext);
 void CALLBACK OnD3D11DestroyDevice(void* pUserContext);
 void CALLBACK OnD3D11ReleasingSwapChain(void* pUserContext);
+void CALLBACK OnKeyPress(_In_ UINT nChar, _In_ bool bKeyDown, _In_ bool bAltDown, _In_opt_ void* pUserContext);
+void CALLBACK OnMouseMove(_In_ bool bLeftButtonDown, _In_ bool bRightButtonDown, _In_ bool bMiddleButtonDown,
+	_In_ bool bSideButton1Down, _In_ bool bSideButton2Down, _In_ int nMouseWheelDelta,
+	_In_ int xPos, _In_ int yPos, _In_opt_ void* pUserContext);
+
 
 //--------------------------------------------------------------------------------------
 // Entry point to the program. Initializes everything and goes into a message processing 
@@ -102,6 +111,10 @@ int WINAPI wWinMain( _In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 	DXUTSetCallbackD3D11FrameRender(OnFrameRender);
 	DXUTSetCallbackD3D11SwapChainReleasing(OnD3D11ReleasingSwapChain);
 	DXUTSetCallbackD3D11DeviceDestroyed(OnD3D11DestroyDevice);
+	DXUTSetCallbackKeyboard(OnKeyPress);
+	DXUTSetCallbackMouse(OnMouseMove, true, nullptr);
+
+
 
 	DXUTInit(true, true, nullptr); // Parse the command line, show msgboxes on error, no extra command line params
 	DXUTSetCursorSettings(true, true); // Show the cursor and clip it when in full screen
@@ -344,6 +357,59 @@ void CALLBACK OnGUIEvent(UINT nEvent, int nControlID, CDXUTControl* pControl, vo
 void CALLBACK OnD3D11ReleasingSwapChain(void* pUserContext)
 {
 	g_DialogResourceManager.OnD3D11ReleasingSwapChain();
+}
+
+void CALLBACK OnKeyPress(_In_ UINT nChar, _In_ bool bKeyDown, _In_ bool bAltDown, _In_opt_ void* pUserContext)
+{
+	const float CAMERA_SPEED = 0.3f;
+	for (UINT i = 0; i < RENDERER_TYPE::NUM_RENDERER_TYPES; i++)
+	{
+		switch (nChar)
+		{
+		case VK_UP:
+		case 'W':
+			g_pCamera[i]->Translate(Vec3(0.0f, 0.0f, CAMERA_SPEED));
+			break;
+		case VK_DOWN:
+		case 'S':
+			g_pCamera[i]->Translate(Vec3(0.0f, 0.0f, -CAMERA_SPEED));
+			break;
+		case VK_RIGHT:
+		case 'D':
+			g_pCamera[i]->Translate(Vec3(-CAMERA_SPEED, 0.0f, 0.0f));
+			break;
+		case VK_LEFT:
+		case 'A':
+			g_pCamera[i]->Translate(Vec3(CAMERA_SPEED, 0.0f, 0.0f));
+			break;
+		}
+	}
+}
+
+void CALLBACK OnMouseMove(_In_ bool bLeftButtonDown, _In_ bool bRightButtonDown, _In_ bool bMiddleButtonDown,
+	_In_ bool bSideButton1Down, _In_ bool bSideButton2Down, _In_ int nMouseWheelDelta,
+	_In_ int xPos, _In_ int yPos, _In_opt_ void* pUserContext)
+{
+	if (!g_MouseInitialized)
+	{
+		g_MouseX = xPos;
+		g_MouseY = yPos;
+		g_MouseInitialized = true;
+	}
+	else
+	{
+		const float CAMERA_ROTATION_SPEED = 3.14 / (WIDTH / 2.0);
+
+		int deltaX = g_MouseX - xPos;
+		int deltaY = g_MouseY - yPos;
+		g_MouseX = xPos;
+		g_MouseY = yPos;
+		
+		for (UINT i = 0; i < RENDERER_TYPE::NUM_RENDERER_TYPES; i++)
+		{
+			g_pCamera[i]->Rotate(0.0f, -CAMERA_ROTATION_SPEED * deltaX, CAMERA_ROTATION_SPEED * deltaY);
+		}
+	}
 }
 
 void CALLBACK OnD3D11DestroyDevice(void* pUserContext)

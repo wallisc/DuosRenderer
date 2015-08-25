@@ -235,7 +235,7 @@ void D3D11Renderer::SetDefaultState()
 
 Geometry* D3D11Renderer::CreateGeometry(_In_ CreateGeometryDescriptor *pCreateGeometryDescriptor)
 {
-	D3D11Geometry* pGeometry = new D3D11Geometry(m_pDevice, pCreateGeometryDescriptor);
+	D3D11Geometry* pGeometry = new D3D11Geometry(m_pDevice, m_pImmediateContext, pCreateGeometryDescriptor);
 	MEM_CHK(pGeometry);
 	return pGeometry;
 }
@@ -269,7 +269,7 @@ void D3D11Renderer::DestroyLight(Light *pLight)
 
 Camera *D3D11Renderer::CreateCamera(_In_ CreateCameraDescriptor *pCreateCameraDescriptor)
 {
-	Camera *pCamera = new D3D11Camera(m_pDevice, pCreateCameraDescriptor);
+	Camera *pCamera = new D3D11Camera(m_pDevice, m_pImmediateContext, pCreateCameraDescriptor);
 	MEM_CHK(pCamera);
 	return pCamera;
 }
@@ -428,8 +428,37 @@ void D3D11Renderer::DrawScene(Camera *pCamera, Scene *pScene)
 	m_pImmediateContext->Flush();
 }
 
-D3D11Geometry::D3D11Geometry(_In_ ID3D11Device *pDevice, _In_ CreateGeometryDescriptor *pCreateGeometryDescriptor) :
-	m_pIndexBuffer(0), m_pVertexBuffer(0)
+D3D11Transformable::D3D11Transformable(_In_ ID3D11Device *pDevice, ID3D11DeviceContext *pImmediateContext) :
+	m_pImmediateContext(pImmediateContext)
+{
+	m_WorldMatrix = XMMatrixIdentity();
+
+	D3D11_BUFFER_DESC WorldMatrixDesc;
+	ZeroMemory(&WorldMatrixDesc, sizeof(WorldMatrixDesc));
+	WorldMatrixDesc.Usage = D3D11_USAGE_DEFAULT;
+	WorldMatrixDesc.ByteWidth = sizeof(DirectX::XMMATRIX);
+	WorldMatrixDesc.BindFlags = D3D11_BIND_INDEX_BUFFER;
+	WorldMatrixDesc.CPUAccessFlags = 0;
+	D3D11_SUBRESOURCE_DATA WorldMatrixData;
+	ZeroMemory(&WorldMatrixData, sizeof(WorldMatrixData));
+	WorldMatrixData.pSysMem = &m_WorldMatrix;
+	HRESULT hr = pDevice->CreateBuffer(&WorldMatrixDesc, &WorldMatrixData, &m_pWorldTransform);
+	FAIL_CHK(FAILED(hr), "Failed to create Index Buffer");
+}
+
+ID3D11Buffer *D3D11Transformable::GetWorldTransformBuffer()
+{
+	m_pImmediateContext->UpdateSubresource(m_pWorldTransform, 0, nullptr, &m_WorldMatrix, 0, 0);
+	return m_pWorldTransform;
+}
+
+void D3D11Transformable::Translate(_In_ const Vec3 &TranslationVector)
+{
+	m_WorldMatrix *= XMMatrixTranslation(TranslationVector.x, TranslationVector.y, TranslationVector.z);
+}
+
+D3D11Geometry::D3D11Geometry(_In_ ID3D11Device *pDevice, _In_ ID3D11DeviceContext *pImmediateContext, _In_ CreateGeometryDescriptor *pCreateGeometryDescriptor) :
+	D3D11Transformable(pDevice, pImmediateContext), m_pIndexBuffer(0), m_pVertexBuffer(0)
 {
 	HRESULT hr = S_OK;
 	m_UsesIndexBuffer = pCreateGeometryDescriptor->m_NumIndices != 0;
@@ -487,11 +516,6 @@ D3D11Geometry::~D3D11Geometry()
 {
 	m_pVertexBuffer->Release();
 	if (m_pIndexBuffer) { m_pIndexBuffer->Release(); };
-}
-
-void D3D11Geometry::Update(_In_ Transform *pTransform) 
-{
-	assert(false); // Implement
 }
 
 D3D11DirectionalLight::D3D11DirectionalLight(
@@ -564,7 +588,7 @@ D3D11Scene::D3D11Scene()
 
 void D3D11Scene::AddGeometry(_In_ Geometry *pGeometry)
 {
-	D3D11Geometry *pD3D11Geometry = D3D11_RENDERER_CAST<D3D11Geometry*>(pGeometry);
+	D3D11Geometry *pD3D11Geometry = (D3D11Geometry*)(pGeometry);
 	
 	XMVECTOR GeometryMaxDimensions = pD3D11Geometry->GetMaxDimensions();
 	XMVECTOR GeometryMinDimensions = pD3D11Geometry->GetMinDimensions();
@@ -599,16 +623,18 @@ void D3D11Scene::AddLight(_In_ Light *pLight)
 	}
 }
 
-D3D11Camera::D3D11Camera(ID3D11Device *pDevice, CreateCameraDescriptor *pCreateCameraDescriptor)
+D3D11Camera::D3D11Camera(ID3D11Device *pDevice, ID3D11DeviceContext *pContext, CreateCameraDescriptor *pCreateCameraDescriptor) :
+	m_pContext(pContext)
 {
+
 	m_Width = pCreateCameraDescriptor->m_Width;
 	m_Height = pCreateCameraDescriptor->m_Height;
 
-	XMVECTOR Eye = RealArrayToXMVector(pCreateCameraDescriptor->m_FocalPoint, POSITION);
-	XMVECTOR At = RealArrayToXMVector(pCreateCameraDescriptor->m_LookAt, POSITION);
-	XMVECTOR Up = RealArrayToXMVector(pCreateCameraDescriptor->m_Up, DIRECTION);
+	m_Position = RealArrayToXMVector(pCreateCameraDescriptor->m_FocalPoint, POSITION);
+	m_LookAt = RealArrayToXMVector(pCreateCameraDescriptor->m_LookAt, POSITION);
+	m_Up = RealArrayToXMVector(pCreateCameraDescriptor->m_Up, DIRECTION);
 
-	m_CameraCpuData.m_CamPos = Eye;
+	m_CameraCpuData.m_CamPos = m_Position;
 	m_CameraCpuData.m_ClipDistance = XMVectorSet(pCreateCameraDescriptor->m_FarClip, 0, 0, 0);
 	m_CameraCpuData.m_Dimensions = XMVectorSet(pCreateCameraDescriptor->m_Width, pCreateCameraDescriptor->m_Height, 0, 0);
 	
@@ -616,7 +642,7 @@ D3D11Camera::D3D11Camera(ID3D11Device *pDevice, CreateCameraDescriptor *pCreateC
 		pCreateCameraDescriptor->m_Width / pCreateCameraDescriptor->m_Height,
 		pCreateCameraDescriptor->m_NearClip,
 	 	pCreateCameraDescriptor->m_FarClip);
-	m_ViewProjCpuData.m_View = XMMatrixLookAtLH(Eye, At, Up);
+	m_ViewProjCpuData.m_View = XMMatrixLookAtLH(m_Position, m_LookAt, m_Up);
 
 	m_pCameraBuffer = CreateConstantBuffer(pDevice, &m_CameraCpuData, sizeof(CBCamera));
 	m_pViewProjBuffer = CreateConstantBuffer(pDevice, &m_ViewProjCpuData, sizeof(CBViewProjectionTransforms));
@@ -627,9 +653,37 @@ D3D11Camera::~D3D11Camera()
 
 }
 
-void D3D11Camera::Update(_In_ Transform *pTransform)
+void D3D11Camera::Translate(_In_ const Vec3 &translationVector)
 {
-	assert(false);
+	XMVECTOR lookDir = XMVector3Normalize(m_LookAt - m_Position);
+	XMVECTOR right = XMVector3Cross(lookDir, m_Up);
+	XMVECTOR delta = translationVector.x * right + translationVector.y * m_Up + translationVector.z * lookDir;
+	m_Position += delta;
+	m_LookAt += delta;
+	m_ViewMatrixNeedsUpdate = true;
+}
+
+void D3D11Camera::Rotate(float row, float yaw, float pitch)
+{
+	XMVECTOR lookDir = XMVector3Normalize(m_LookAt - m_Position);
+
+	if (pitch)
+	{
+		XMVECTOR right = XMVector3Cross(lookDir, m_Up);
+		XMMATRIX pitchRotation = XMMatrixRotationNormal(right, pitch);
+		lookDir = XMVector3Transform(lookDir, pitchRotation);
+		m_Up = XMVector3Transform(m_Up, pitchRotation);
+	}
+
+	if (yaw)
+	{
+		XMMATRIX yawRotation = XMMatrixRotationNormal(m_Up, yaw);
+		lookDir = XMVector3Transform(lookDir, yawRotation);
+	}
+
+	m_LookAt = m_Position + XMVector3Length(m_LookAt - m_Position) * lookDir;
+
+	m_ViewMatrixNeedsUpdate = true;
 }
 
 ID3D11Buffer* D3D11Camera::GetCameraConstantBuffer()
@@ -639,6 +693,12 @@ ID3D11Buffer* D3D11Camera::GetCameraConstantBuffer()
 
 ID3D11Buffer* D3D11Camera::GetViewProjBuffer()
 {
+	if (m_ViewMatrixNeedsUpdate)
+	{
+		m_ViewProjCpuData.m_View = XMMatrixLookAtLH(m_Position, m_LookAt, m_Up);
+		m_pContext->UpdateSubresource(m_pViewProjBuffer, 0, nullptr, &m_ViewProjCpuData, 0, 0);
+		m_ViewMatrixNeedsUpdate = false;
+	}
 	return m_pViewProjBuffer;
 }
 

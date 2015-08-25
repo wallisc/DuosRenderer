@@ -110,7 +110,8 @@ class Material
 class Transformable
 {
 public:
-	virtual void Update(_In_ Transform *pTransform) = 0;
+	virtual void Translate(_In_ const Vec3 &translationVector) = 0;
+	virtual void Rotate(float row, float yaw, float pitch) = 0;
 };
 
 class Camera : public Transformable

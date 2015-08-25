@@ -88,7 +88,9 @@ public:
 	RTTriangle(glm::vec3 Vertices[3], glm::vec3 Normals[3], glm::vec2 UVCoordinates[3]);
 	bool Intersects(const RTRay *pRay, _Out_ IntersectionResult *pResult);
 
-	void Update(_In_ Transform *pTransform);
+	void Translate(_In_ const Vec3 &translationVector) { assert(false); }	
+	void Rotate(float row, float yaw, float pitch) { assert(false); }
+
 	UVAndNormal GetUVAndNormalAt(const IntersectionResult &Result) const;
 
 private:
@@ -104,7 +106,9 @@ public:
 	RTGeometry(_In_ CreateGeometryDescriptor *pCreateGeometryDescriptor);
 	~RTGeometry();
 
-	void Update(_In_ Transform *pTransform);
+	void Rotate(float row, float yaw, float pitch) { assert(false); }
+	void Translate(_In_ const Vec3 &translationVector) { assert(false); }
+
 	bool Intersects(const RTRay *pRay, _Out_ IntersectionResult *pResult = nullptr);
 	UVAndNormal GetUVAndNormalAt(const IntersectionResult &Result) const { assert(false); return UVAndNormal(); }
 	RTMaterial *GetMaterial() { return m_pMaterial; }
@@ -140,7 +144,8 @@ public:
 	RTCamera(CreateCameraDescriptor *pCreateCameraDescriptor);
 	~RTCamera();
 
-	void Update(_In_ Transform *pTransform);
+	void Translate(_In_ const Vec3 &translationVector);
+	void Rotate(float row, float yaw, float pitch);
 
 	unsigned int GetWidth();
 	unsigned int GetHeight();
