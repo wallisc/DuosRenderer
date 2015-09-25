@@ -199,6 +199,7 @@ private:
 
 
 	ID3D11Device *m_pDevice;
+	ID3D11Device1 *m_pDevice1;
 	ID3D11DeviceContext *m_pImmediateContext;
 
 	D3D11Canvas *m_pCanvas;

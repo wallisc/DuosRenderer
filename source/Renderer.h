@@ -57,7 +57,7 @@ struct CreateGeometryDescriptor
 
 struct CreateMaterialDescriptor
 {
-	char *m_TextureName;
+	const char *m_TextureName;
 };
 
 struct CreateDirectionalLight

@@ -4349,7 +4349,7 @@ void DXUTApplyDefaultDeviceSettings(DXUTDeviceSettings *modifySettings)
     modifySettings->d3d11.AutoCreateDepthStencil = true;
     modifySettings->d3d11.AutoDepthStencilFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
 #if defined(DEBUG) || defined(_DEBUG)
-    modifySettings->d3d11.CreateFlags |= D3D11_CREATE_DEVICE_DEBUG;
+	modifySettings->d3d11.CreateFlags |= D3D11_CREATE_DEVICE_DEBUG | D3D11_CREATE_DEVICE_BGRA_SUPPORT;
 #else
     modifySettings->d3d11.CreateFlags = 0;
 #endif

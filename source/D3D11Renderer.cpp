@@ -63,7 +63,7 @@ HRESULT CompileShaderHelper(WCHAR* szFileName, LPCSTR szEntryPoint, LPCSTR szSha
 
 D3D11Renderer::D3D11Renderer(HWND WindowHandle, unsigned int width, unsigned int height)
 {
-	UINT CeateDeviceFlags = 0;
+	UINT CeateDeviceFlags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
 #ifdef DEBUG
 	CeateDeviceFlags |= D3D11_CREATE_DEVICE_DEBUG;
 #endif
@@ -71,6 +71,9 @@ D3D11Renderer::D3D11Renderer(HWND WindowHandle, unsigned int width, unsigned int
 	HRESULT hr = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_WARP, nullptr, CeateDeviceFlags, &FeatureLevels, 1,
 		D3D11_SDK_VERSION, &m_pDevice, nullptr, &m_pImmediateContext);
 	FAIL_CHK(FAILED(hr), "Failed D3D11CreateDevice");
+
+	hr = m_pDevice->QueryInterface(__uuidof(ID3D11Device1), (void**)&m_pDevice1);
+	FAIL_CHK(FAILED(hr), "Failed query for ID3D11Device1");
 
 	InitializeSwapchain(WindowHandle, width, height);
 
@@ -84,8 +87,8 @@ void D3D11Renderer::SetCanvas(Canvas* pCanvas)
 	pCanvas->GetInterface(D3D11CanvasKey, (void **)&m_pCanvas);
 
 	FAIL_CHK(m_pCanvas == nullptr, "Non-D3D11 canvas passed in"); // TODO: Need to add support for generic canvas
-	ID3D11Resource *pCanvasResource;
-	HRESULT hr = m_pDevice->OpenSharedResource(m_pCanvas->GetCanvasResourceHandle(), __uuidof(ID3D11Resource), (void**)&pCanvasResource);
+	ID3D11Resource *pCanvasResource;  
+	HRESULT hr = m_pDevice1->OpenSharedResource1(m_pCanvas->GetCanvasResourceHandle(), __uuidof(ID3D11Resource), (void**)&pCanvasResource);
 	FAIL_CHK(FAILED(hr), "Failed to open shared resource.");
 
 	hr = m_pDevice->CreateRenderTargetView(pCanvasResource, nullptr, &m_pSwapchainRenderTargetView);
@@ -99,7 +102,7 @@ void D3D11Renderer::CompileShaders()
 		CComPtr<ID3DBlob> pVSBlob = nullptr;
 		HRESULT hr = CompileShaderHelper(L"GeometryRender.fx", "VS", "vs_4_0", &pVSBlob);
 		FAIL_CHK(FAILED(hr), "The FX file cannot be compiled.  Please run this executable from the directory that contains the FX file.");
-
+			
 		hr = m_pDevice->CreateVertexShader(pVSBlob->GetBufferPointer(), pVSBlob->GetBufferSize(), nullptr, &m_pForwardVertexShader);
 		FAIL_CHK(FAILED(hr), "Failed to CreateVertexShader");
 

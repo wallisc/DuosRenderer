@@ -23,9 +23,9 @@ public:
 		CanvasDesc.SampleDesc.Count = 1;
 		CanvasDesc.SampleDesc.Quality = 0;
 		CanvasDesc.Usage = D3D11_USAGE_DEFAULT;
-		CanvasDesc.BindFlags = D3D11_BIND_RENDER_TARGET;
-		CanvasDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-		CanvasDesc.MiscFlags = D3D11_RESOURCE_MISC_SHARED;
+		CanvasDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET;
+		CanvasDesc.CPUAccessFlags = 0;
+		CanvasDesc.MiscFlags = D3D11_RESOURCE_MISC_SHARED_NTHANDLE | D3D11_RESOURCE_MISC_SHARED;
 		HRESULT hr = pDevice->CreateTexture2D(&CanvasDesc, nullptr, &m_pResource);
 		FAIL_CHK(FAILED(hr), "Failed creating a canvas resource");
 
@@ -45,11 +45,12 @@ public:
 		hr = pDevice->CreateTexture2D(&StagingDesc, nullptr, &m_pStagingResource);
 		FAIL_CHK(FAILED(hr), "Failed creating a canvas resource");
 
-		IDXGIResource* pDXGIResource(NULL);
-		hr = m_pResource->QueryInterface(__uuidof(IDXGIResource), (void**)&pDXGIResource);
+		IDXGIResource1* pDXGIResource(NULL);
+		hr = m_pResource->QueryInterface(__uuidof(IDXGIResource1), (void**)&pDXGIResource);
 		FAIL_CHK(FAILED(hr), "Failed querying for IDXGIResource interface");
-		HANDLE sharedHandle;
-		pDXGIResource->GetSharedHandle(&m_ResourceHandle);
+		
+		hr = pDXGIResource->CreateSharedHandle(nullptr, DXGI_SHARED_RESOURCE_READ, L"", &m_ResourceHandle);
+		FAIL_CHK(FAILED(hr), "Failed getting a shared handle");
 	}
 
 	HANDLE GetCanvasResourceHandle() const { return m_ResourceHandle; }

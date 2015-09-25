@@ -14,11 +14,16 @@
 #include "DXUT/Core/DXUT.h"
 #include "DXUT/Optional/DXUTgui.h"
 #include "DXUT/Optional/SDKMisc.h"
-#if 0
-#include "assimp/include/Importer.hpp"      // C++ importer interface
-#include "assimp/include/postprocess.h"     // Post processing flags
-#endif
+
+#include "assimp/inc/Importer.hpp"      // C++ importer interface
+#include "assimp/inc/scene.h"      
+#include "assimp/inc/postprocess.h"     // Post processing flags
+
+#include <list>
+
+
 using namespace DirectX;
+using namespace Assimp;
 
 #define WIDTH 800
 #define HEIGHT 600
@@ -66,7 +71,7 @@ IDXGISwapChain* g_pSwapChain;
 //--------------------------------------------------------------------------------------
 // Forward declarations
 //--------------------------------------------------------------------------------------
-void InitSceneAndCamera(_In_ Renderer *, _Out_ Scene **, _Out_ Camera **);
+void InitSceneAndCamera(_In_ Renderer *, _In_ const aiScene &assimpScene, _Out_ Scene **, _Out_ Camera **);
 HRESULT InitWindow( HINSTANCE hInstance, int nCmdShow );
 LRESULT CALLBACK    WndProc( HWND, UINT, WPARAM, LPARAM );
 void Render();
@@ -127,6 +132,8 @@ int WINAPI wWinMain( _In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 	return DXUTGetExitCode();
 }
 
+const aiScene* InitAssimpScene(_In_ char *pSceneFile);
+
 HRESULT CALLBACK OnDeviceCreated(_In_ ID3D11Device* pd3dDevice, _In_ const DXGI_SURFACE_DESC* pBackBufferSurfaceDesc, _In_opt_ void* pUserContext)
 {
 	g_pDevice = pd3dDevice;
@@ -143,6 +150,7 @@ HRESULT CALLBACK OnDeviceCreated(_In_ ID3D11Device* pd3dDevice, _In_ const DXGI_
 
 	FAIL_CHK(FAILED(hr), "Failed to create DXUT dialog manager");
 
+	const aiScene* pAssimpScene = InitAssimpScene("");
 	for (UINT i = 0; i < NUM_RENDERER_TYPES; i++)
 	{
 		switch (i)
@@ -158,109 +166,101 @@ HRESULT CALLBACK OnDeviceCreated(_In_ ID3D11Device* pd3dDevice, _In_ const DXGI_
 		}
 
 		g_pRenderer[i]->SetCanvas(g_pCanvas);
-		InitSceneAndCamera(g_pRenderer[i], &g_pScene[i], &g_pCamera[i]);
+		InitSceneAndCamera(g_pRenderer[i], *pAssimpScene, &g_pScene[i], &g_pCamera[i]);
 	}
 	return	S_OK;
 }
 
+const aiScene* InitAssimpScene(_In_ char *pSceneFile)
+{
+	// Create an instance of the Importer class
+	Assimp::Importer importer;
+	// And have it read the given file with some example postprocessing
+	// Usually - if speed is not the most important aspect for you - you'll 
+	// propably to request more postprocessing than we do in this example.
+	const aiScene* AssimpScene = importer.ReadFile(pSceneFile,
+		aiProcess_Triangulate |
+		aiProcess_MakeLeftHanded |
+		aiProcess_FlipUVs |
+		aiProcess_FlipWindingOrder |
+		aiProcess_GenSmoothNormals |
+		aiProcess_CalcTangentSpace |
+		aiProcess_PreTransformVertices);
 
-void InitSceneAndCamera(_In_ Renderer *pRenderer, _Out_ Scene **ppScene, _Out_ Camera **ppCamera)
+	return AssimpScene;
+}
+
+Vec3 ConvertVec3(const aiVector3D &vec)
+{
+	return Vec3(vec.x, vec.y, vec.z);
+}
+
+Vec2 ConvertVec2(const aiVector3D &vec)
+{
+	return Vec2(vec.x, vec.y);
+}
+
+void InitSceneAndCamera(_In_ Renderer *pRenderer, _In_ const aiScene &assimpScene, _Out_ Scene **ppScene, _Out_ Camera **ppCamera)
 {
 	*ppScene = pRenderer->CreateScene();
 	Scene *pScene = *ppScene;
 
+	std::vector<Material *> materialList(assimpScene.mNumMaterials);
+	for (UINT i = 0; i < assimpScene.mNumMaterials; i++)
 	{
-		CreateGeometryDescriptor CreateBoxDescriptor = {};
-		Vertex BoxVertices[] =
-		{
-			{ Vec3(-1.0f, 1.0f, -1.0f), Vec3(0.0f, 1.0f, 0.0f), Vec2(1.0f, 0.0f), },
-			{ Vec3(1.0f, 1.0f, -1.0f), Vec3(0.0f, 1.0f, 0.0f), Vec2(0.0f, 0.0f), },
-			{ Vec3(1.0f, 1.0f, 1.0f), Vec3(0.0f, 1.0f, 0.0f), Vec2(0.0f, 1.0f), },
-			{ Vec3(-1.0f, 1.0f, 1.0f), Vec3(0.0f, 1.0f, 0.0f), Vec2(1.0f, 1.0f), },
+		aiMaterial *pMat = assimpScene.mMaterials[i];
+		assert(pMat);
 
-			{ Vec3(-1.0f, -1.0f, -1.0f), Vec3(0.0f, -1.0f, 0.0f), Vec2(0.0f, 0.0f), },
-			{ Vec3(1.0f, -1.0f, -1.0f), Vec3(0.0f, -1.0f, 0.0f), Vec2(1.0f, 0.0f), },
-			{ Vec3(1.0f, -1.0f, 1.0f), Vec3(0.0f, -1.0f, 0.0f), Vec2(1.0f, 1.0f), },
-			{ Vec3(-1.0f, -1.0f, 1.0f), Vec3(0.0f, -1.0f, 0.0f), Vec2(0.0f, 1.0f), },
+		aiString path;
+		pMat->GetTexture(aiTextureType_DIFFUSE, 0, &path);
 
-			{ Vec3(-1.0f, -1.0f, 1.0f), Vec3(-1.0f, 0.0f, 0.0f), Vec2(0.0f, 1.0f), },
-			{ Vec3(-1.0f, -1.0f, -1.0f), Vec3(-1.0f, 0.0f, 0.0f), Vec2(1.0f, 1.0f), },
-			{ Vec3(-1.0f, 1.0f, -1.0f), Vec3(-1.0f, 0.0f, 0.0f), Vec2(1.0f, 0.0f), },
-			{ Vec3(-1.0f, 1.0f, 1.0f), Vec3(-1.0f, 0.0f, 0.0f), Vec2(0.0f, 0.0f), },
-
-			{ Vec3(1.0f, -1.0f, 1.0f), Vec3(1.0f, 0.0f, 0.0f), Vec2(1.0f, 1.0f), },
-			{ Vec3(1.0f, -1.0f, -1.0f), Vec3(1.0f, 0.0f, 0.0f), Vec2(0.0f, 1.0f), },
-			{ Vec3(1.0f, 1.0f, -1.0f), Vec3(1.0f, 0.0f, 0.0f), Vec2(0.0f, 0.0f), },
-			{ Vec3(1.0f, 1.0f, 1.0f), Vec3(1.0f, 0.0f, 0.0f), Vec2(1.0f, 0.0f), },
-
-			{ Vec3(-1.0f, -1.0f, -1.0f), Vec3(0.0f, 0.0f, -1.0f), Vec2(0.0f, 1.0f), },
-			{ Vec3(1.0f, -1.0f, -1.0f), Vec3(0.0f, 0.0f, -1.0f), Vec2(1.0f, 1.0f), },
-			{ Vec3(1.0f, 1.0f, -1.0f), Vec3(0.0f, 0.0f, -1.0f), Vec2(1.0f, 0.0f), },
-			{ Vec3(-1.0f, 1.0f, -1.0f), Vec3(0.0f, 0.0f, -1.0f), Vec2(0.0f, 0.0f), },
-
-			{ Vec3(-1.0f, -1.0f, 1.0f), Vec3(0.0f, 0.0f, 1.0f), Vec2(1.0f, 1.0f), },
-			{ Vec3(1.0f, -1.0f, 1.0f), Vec3(0.0f, 0.0f, 1.0f), Vec2(0.0f, 1.0f), },
-			{ Vec3(1.0f, 1.0f, 1.0f), Vec3(0.0f, 0.0f, 1.0f), Vec2(0.0f, 0.0f), },
-			{ Vec3(-1.0f, 1.0f, 1.0f), Vec3(0.0f, 0.0f, 1.0f), Vec2(1.0f, 0.0f), },
-		};
-
-		unsigned int BoxIndices[] =
-		{
-			3, 1, 0,
-			2, 1, 3,
-
-			6, 4, 5,
-			7, 4, 6,
-
-			11, 9, 8,
-			10, 9, 11,
-
-			14, 12, 13,
-			15, 12, 14,
-
-			19, 17, 16,
-			18, 17, 19,
-
-			22, 20, 21,
-			23, 20, 22
-		};
-
-		CreateMaterialDescriptor CreateBoxMaterialDescriptor;
-		CreateBoxMaterialDescriptor.m_TextureName = "crate.png";
-		Material *pBoxMaterial = pRenderer->CreateMaterial(&CreateBoxMaterialDescriptor);
-		CreateBoxDescriptor.m_pVertices = BoxVertices;
-		CreateBoxDescriptor.m_NumVertices = ARRAYSIZE(BoxVertices);
-		CreateBoxDescriptor.m_pIndices = BoxIndices;
-		CreateBoxDescriptor.m_NumIndices = ARRAYSIZE(BoxIndices);
-		CreateBoxDescriptor.m_pMaterial = pBoxMaterial;
-
-		Geometry *pBox = pRenderer->CreateGeometry(&CreateBoxDescriptor);
-		pScene->AddGeometry(pBox);
+		CreateMaterialDescriptor CreateMaterialDescriptor;
+		CreateMaterialDescriptor.m_TextureName = path.C_Str();
+		materialList[i] = pRenderer->CreateMaterial(&CreateMaterialDescriptor);
 	}
 
 	{
-		CreateGeometryDescriptor CreatePlaneDescriptor = {};
-		Vertex PlaneVertices[] =
+		std::vector<Vertex> vertexList;
+		std::vector<unsigned int> indexList;
+		for (UINT i = 0; i < assimpScene.mNumMeshes; i++)
 		{
-			{ Vec3(-5.0f, -1.0f, 5.0f), Vec3(0.0f, 1.0f, 0.0f), Vec2(1.0f, 1.0f), },
-			{ Vec3(5.0f, -1.0f, -5.0f), Vec3(0.0f, 1.0f, 0.0f), Vec2(0.0f, 0.0f), },
-			{ Vec3(-5.0f, -1.0f, -5.0f), Vec3(0.0f, 1.0f, 0.0f), Vec2(1.0f, 0.0f), },
+			const aiMesh *pMesh = assimpScene.mMeshes[i];
+			assert(*pMesh->mNumUVComponents == 2 || *pMesh->mNumUVComponents == 0);
+			assert(pMesh->HasTangentsAndBitangents());
 
-			{ Vec3(5.0f, -1.0f, 5.0f), Vec3(0.0f, 1.0f, 0.0f), Vec2(0.0f, 1.0f), },
-			{ Vec3(5.0f, -1.0f, -5.0f), Vec3(0.0f, 1.0f, 0.0f), Vec2(0.0f, 0.0f), },
-			{ Vec3(-5.0f, -1.0f, 5.0f), Vec3(0.0f, 1.0f, 0.0f), Vec2(1.0f, 1.0f), },
-		};
-		CreateMaterialDescriptor CreatePlaneMaterialDescriptor;
-		CreatePlaneMaterialDescriptor.m_TextureName = "tile.png";
-		Material *pPlaneMaterial = pRenderer->CreateMaterial(&CreatePlaneMaterialDescriptor);
+			UINT numVerts = pMesh->mNumVertices;
+			UINT numFaces = pMesh->mNumFaces;
+			UINT numIndices = numFaces * 3;
 
-		CreatePlaneDescriptor.m_pMaterial = pPlaneMaterial;
-		CreatePlaneDescriptor.m_NumVertices = ARRAYSIZE(PlaneVertices);
-		CreatePlaneDescriptor.m_pVertices = PlaneVertices;
-		Geometry *pPlane = pRenderer->CreateGeometry(&CreatePlaneDescriptor);
-		pScene->AddGeometry(pPlane);
+			vertexList.resize(numVerts);
+			for (UINT vertIdx = 0; vertIdx < numVerts; vertIdx++)
+			{
+				Vertex &vertex = vertexList[vertIdx];
+				vertex.m_Position = ConvertVec3(pMesh->mVertices[i]);
+				vertex.m_Normal = ConvertVec3(pMesh->mNormals[vertIdx]);
+				vertex.m_Tex = ConvertVec2(pMesh->mTextureCoords[0][vertIdx]);
+			}
+
+			for (UINT i = 0; i < numFaces; i++)
+			{
+				auto pFace = &pMesh->mFaces[i];
+				assert(pFace->mNumIndices == 3);
+				indexList[i * 3] = pFace->mIndices[0];
+				indexList[i * 3 + 1] = pFace->mIndices[1];
+				indexList[i * 3 + 2] = pFace->mIndices[2];
+			}
+
+			CreateGeometryDescriptor geometryDescriptor;
+			geometryDescriptor.m_pVertices = &vertexList[0];
+			geometryDescriptor.m_NumVertices = numVerts;
+			geometryDescriptor.m_pIndices = &indexList[0];
+			geometryDescriptor.m_NumIndices = numIndices;
+			geometryDescriptor.m_pMaterial = materialList[pMesh->mMaterialIndex];
+			Geometry *pGeometry = pRenderer->CreateGeometry(&geometryDescriptor);
+			pScene->AddGeometry(pGeometry);
+		}
 	}
-
+	
 	{
 		CreateLightDescriptor CreateLight;
 		CreateDirectionalLight CreateDirectional;
@@ -273,17 +273,27 @@ void InitSceneAndCamera(_In_ Renderer *pRenderer, _Out_ Scene **ppScene, _Out_ C
 		pScene->AddLight(pLight);
 	}
 
-	CreateCameraDescriptor CameraDescriptor = {};
-	CameraDescriptor.m_Height = HEIGHT;
-	CameraDescriptor.m_Width = WIDTH;
-	CameraDescriptor.m_FocalPoint = Vec3(0.0f, 2.0f, -13.0f);
-	CameraDescriptor.m_LookAt = Vec3(0.0f, 2.0f, 0.0f);
-	CameraDescriptor.m_Up = Vec3(0.0f, 1.0f, 0.0f);
-	CameraDescriptor.m_NearClip = 0.01f;
-	CameraDescriptor.m_FarClip = 100.0f;
-	CameraDescriptor.m_FieldOfView = .78f;
+	if (assimpScene.HasCameras())
+	{
+		assert(assimpScene.mNumCameras == 1);
+		auto pCam = assimpScene.mCameras[0];
 
-	*ppCamera = pRenderer->CreateCamera(&CameraDescriptor);
+		CreateCameraDescriptor CameraDescriptor = {};
+		CameraDescriptor.m_Height = HEIGHT;
+		CameraDescriptor.m_Width = WIDTH;
+		CameraDescriptor.m_FocalPoint = ConvertVec3(pCam->mPosition);
+		CameraDescriptor.m_LookAt = ConvertVec3(pCam->mLookAt);
+		CameraDescriptor.m_Up = ConvertVec3(pCam->mUp);
+		CameraDescriptor.m_NearClip = pCam->mClipPlaneNear;
+		CameraDescriptor.m_FarClip = pCam->mClipPlaneFar;
+		CameraDescriptor.m_FieldOfView = pCam->mHorizontalFOV * 2.0f / pCam->mAspect;
+
+		*ppCamera = pRenderer->CreateCamera(&CameraDescriptor);
+	}
+	else
+	{
+		assert(false);
+	}
 }
 
 void RenderText(float fps)
