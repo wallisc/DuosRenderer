@@ -15,9 +15,9 @@
 #include "DXUT/Optional/DXUTgui.h"
 #include "DXUT/Optional/SDKMisc.h"
 
-#include "assimp/inc/Importer.hpp"      // C++ importer interface
-#include "assimp/inc/scene.h"      
-#include "assimp/inc/postprocess.h"     // Post processing flags
+#include "assimp/Importer.hpp"      // C++ importer interface
+#include "assimp/scene.h"      
+#include "assimp/postprocess.h"     // Post processing flags
 
 #include <list>
 
@@ -51,6 +51,7 @@ Scene *g_pScene[NUM_RENDERER_TYPES];
 Camera *g_pCamera[NUM_RENDERER_TYPES];
 RENDERER_TYPE g_ActiveRenderer = D3D11;
 D3D11Canvas *g_pCanvas;
+Assimp::Importer g_importer;
 
 bool g_MouseInitialized = false;
 int g_MouseX;
@@ -150,7 +151,10 @@ HRESULT CALLBACK OnDeviceCreated(_In_ ID3D11Device* pd3dDevice, _In_ const DXGI_
 
 	FAIL_CHK(FAILED(hr), "Failed to create DXUT dialog manager");
 
-	const aiScene* pAssimpScene = InitAssimpScene("");
+	const aiScene* pAssimpScene = InitAssimpScene("Assets/blockScene/blockScene.dae");
+
+	FAIL_CHK(!pAssimpScene, "Failed to open scene file");
+
 	for (UINT i = 0; i < NUM_RENDERER_TYPES; i++)
 	{
 		switch (i)
@@ -174,11 +178,10 @@ HRESULT CALLBACK OnDeviceCreated(_In_ ID3D11Device* pd3dDevice, _In_ const DXGI_
 const aiScene* InitAssimpScene(_In_ char *pSceneFile)
 {
 	// Create an instance of the Importer class
-	Assimp::Importer importer;
 	// And have it read the given file with some example postprocessing
 	// Usually - if speed is not the most important aspect for you - you'll 
 	// propably to request more postprocessing than we do in this example.
-	const aiScene* AssimpScene = importer.ReadFile(pSceneFile,
+	const aiScene* AssimpScene = g_importer.ReadFile(pSceneFile,
 		aiProcess_Triangulate |
 		aiProcess_MakeLeftHanded |
 		aiProcess_FlipUVs |
@@ -233,10 +236,11 @@ void InitSceneAndCamera(_In_ Renderer *pRenderer, _In_ const aiScene &assimpScen
 			UINT numIndices = numFaces * 3;
 
 			vertexList.resize(numVerts);
+			indexList.resize(numIndices);
 			for (UINT vertIdx = 0; vertIdx < numVerts; vertIdx++)
 			{
 				Vertex &vertex = vertexList[vertIdx];
-				vertex.m_Position = ConvertVec3(pMesh->mVertices[i]);
+				vertex.m_Position = ConvertVec3(pMesh->mVertices[vertIdx]);
 				vertex.m_Normal = ConvertVec3(pMesh->mNormals[vertIdx]);
 				vertex.m_Tex = ConvertVec2(pMesh->mTextureCoords[0][vertIdx]);
 			}
@@ -273,27 +277,36 @@ void InitSceneAndCamera(_In_ Renderer *pRenderer, _In_ const aiScene &assimpScen
 		pScene->AddLight(pLight);
 	}
 
-	if (assimpScene.HasCameras())
-	{
-		assert(assimpScene.mNumCameras == 1);
-		auto pCam = assimpScene.mCameras[0];
+	assert(assimpScene.HasCameras() && assimpScene.mNumCameras == 1);
+	auto pCam = assimpScene.mCameras[0];
 
-		CreateCameraDescriptor CameraDescriptor = {};
-		CameraDescriptor.m_Height = HEIGHT;
-		CameraDescriptor.m_Width = WIDTH;
-		CameraDescriptor.m_FocalPoint = ConvertVec3(pCam->mPosition);
-		CameraDescriptor.m_LookAt = ConvertVec3(pCam->mLookAt);
-		CameraDescriptor.m_Up = ConvertVec3(pCam->mUp);
-		CameraDescriptor.m_NearClip = pCam->mClipPlaneNear;
-		CameraDescriptor.m_FarClip = pCam->mClipPlaneFar;
-		CameraDescriptor.m_FieldOfView = pCam->mHorizontalFOV * 2.0f / pCam->mAspect;
+	aiVector3D lookAt;
+		
+	aiNode* rootNode = assimpScene.mRootNode;
+	aiNode* camNode = assimpScene.mRootNode->FindNode(pCam->mName);
+		
+	aiMatrix4x4 camMat;
+	pCam->GetCameraMatrix(camMat);
 
-		*ppCamera = pRenderer->CreateCamera(&CameraDescriptor);
-	}
-	else
-	{
-		assert(false);
-	}
+	XMVECTOR position = XMVectorSet(pCam->mPosition.x, pCam->mPosition.y, pCam->mPosition.z, 1.0);
+	XMMATRIX camMatrix = XMMatrixSet(
+		camMat.a1, camMat.a2, camMat.a3, camMat.a4,
+		camMat.b1, camMat.b2, camMat.b3, camMat.b4,
+		camMat.c1, camMat.c2, camMat.c3, camMat.c4,
+		camMat.d1, camMat.d2, camMat.d3, camMat.d4);
+	position = XMVector4Transform(position, camMatrix);
+
+	CreateCameraDescriptor CameraDescriptor = {};
+	CameraDescriptor.m_Height = HEIGHT;
+	CameraDescriptor.m_Width = WIDTH;
+	CameraDescriptor.m_FocalPoint = ConvertVec3(pCam->mPosition);
+	CameraDescriptor.m_LookAt = ConvertVec3(pCam->mLookAt);
+	CameraDescriptor.m_Up = ConvertVec3(pCam->mUp);
+	CameraDescriptor.m_NearClip = pCam->mClipPlaneNear;
+	CameraDescriptor.m_FarClip = pCam->mClipPlaneFar;
+	CameraDescriptor.m_FieldOfView = pCam->mHorizontalFOV * 2.0f / pCam->mAspect;
+
+	*ppCamera = pRenderer->CreateCamera(&CameraDescriptor);
 }
 
 void RenderText(float fps)

@@ -285,7 +285,6 @@ void D3D11Renderer::DestroyCamera(Camera *pCamera)
 D3D11Material::D3D11Material(_In_ ID3D11Device *pDevice, CreateMaterialDescriptor *pCreateMaterialDescriptor)
 {
 	CA2WEX<MAX_ALLOWED_STR_LENGTH> WideTextureName(pCreateMaterialDescriptor->m_TextureName);
-	std::wstring wTextureName();
 	HRESULT result = CreateWICTextureFromFile(pDevice,
 		WideTextureName,
 		nullptr,
