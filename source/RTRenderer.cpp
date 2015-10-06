@@ -55,6 +55,11 @@ FORCEINLINE RTVertexData RendererVertexToRTVertex(Vertex &Vertex)
 	return RTVertexData(RealArrayToGlmVec2(Vertex.m_Tex), RealArrayToGlmVec3(Vertex.m_Normal));
 }
 
+FORCEINLINE glm::vec3 RTCVertexToRendererVertex(RTCVertex Vertex)
+{
+	return glm::vec3(Vertex.m_x, Vertex.m_y, Vertex.m_z);
+}
+
 RTMaterial::RTMaterial(CreateMaterialDescriptor *pCreateMaterialDescriptor)
 {
 	int ComponentCount;
@@ -192,72 +197,38 @@ void RTRenderer::DrawScene(Camera *pCamera, Scene *pScene)
 				float b = ray.v;
 				float c = 1.0 - a - b;
 
-				glm::vec3 color = pGeometry->GetColor(ray.primID, a, b);
-#if 0
+				glm::vec3 TotalColor = glm::vec3(0.0f);
+				glm::vec3 matColor = pGeometry->GetColor(ray.primID, a, b);
+				glm::vec3 intersectPos = pGeometry->GetPosition(ray.primID, a, b);
 				for (RTLight *pLight : pRTScene->GetLightList())
 				{
-					glm::vec3 LightColor = pLight->GetLightColor(Point);
-					glm::vec3 LightDirection = pLight->GetLightDirection(Point);
+					glm::vec3 LightColor = pLight->GetLightColor(intersectPos);
+					glm::vec3 LightDirection = pLight->GetLightDirection(intersectPos);
 
-					RTRay ShadowRay(Point + .001f * LightDirection, LightDirection);
-					IntersectionResult ShadowResult = Intersect(ShadowRay, pScene->GetGeometryList());
+					glm::vec3 ShadowRayOrigin = intersectPos + LightDirection * .001f;
+					RTCRay ShadowRay{};
+					memcpy(ShadowRay.org, &ShadowRayOrigin, sizeof(ShadowRay.org));
+					memcpy(ShadowRay.dir, &LightDirection, sizeof(ShadowRay.dir));
+					ShadowRay.tnear = 0.0f;
+					ShadowRay.tfar = FLT_MAX;
+					ShadowRay.geomID = RTC_INVALID_GEOMETRY_ID;
+					ShadowRay.primID = RTC_INVALID_GEOMETRY_ID;
+					ShadowRay.mask = -1;
+					ShadowRay.time = 0;
 
-					// Only shade if the shadow feeler didn't hit anything
-					if (ShadowResult.GetParam() == FLT_MAX)
+					rtcOccluded(pRTScene->GetRTCScene(), ShadowRay);
+					if (ShadowRay.geomID == RTC_INVALID_GEOMETRY_ID)
 					{
-						float nDotL = glm::dot(LightDirection, n);
-						if (nDotL > 0.0f)
-						{
-							TotalColor += nDotL * LightColor * TextureColor;
-						}
+						TotalColor += matColor * LightColor;
 					}
 				}
-#endif
 
-				m_pCanvas->WritePixel(x, y, Vec3(color.r, color.g, color.b));
+				m_pCanvas->WritePixel(x, y, Vec3(TotalColor.r, TotalColor.g, TotalColor.b));
 			}
 			else
 			{
 				m_pCanvas->WritePixel(x, y, Vec3(1.0f, 0.0f, 1.0f));
 			}
-
-#if 0
-			RTRay Ray(LensPoint, LensPoint - FocalPoint);
-			bool Intersected = false;
-
-
-			if (DirectTraceResult.GetParam() >= 0.0f && DirectTraceResult.GetParam() != FLT_MAX)
-			{
-				RTIntersectable::UVAndNormal UVAndNormalResult = DirectTraceResult.GetIntersectedGeometry()->GetUVAndNormalAt(DirectTraceResult);
-				glm::vec2 uv = UVAndNormalResult.UV;
-				glm::vec3 n = UVAndNormalResult.Normal;
-				glm::vec3 Point = DirectTraceResult.GetRay().GetPoint(DirectTraceResult.GetParam());
-				glm::vec3 TextureColor = DirectTraceResult.GetMaterial()->GetColor(uv);
-				glm::vec3 TotalColor(0.0f);
-
-				for (RTLight *pLight : pScene->GetLightList())
-				{
-					glm::vec3 LightColor = pLight->GetLightColor(Point);
-					glm::vec3 LightDirection = pLight->GetLightDirection(Point);
-
-					RTRay ShadowRay(Point + .001f * LightDirection, LightDirection);
-					IntersectionResult ShadowResult = Intersect(ShadowRay, pScene->GetGeometryList());
-
-					// Only shade if the shadow feeler didn't hit anything
-					if (ShadowResult.GetParam() == FLT_MAX)
-					{
-						float nDotL = glm::dot(LightDirection, n);
-						if (nDotL > 0.0f)
-						{
-							TotalColor += nDotL * LightColor * TextureColor;
-						}
-					}
-				}
-
-				pCanvas->WritePixel(x, y, Vec3(TotalColor.r, TotalColor.g, TotalColor.b));
-			}
-			else
-#endif
 		}
 	}
 }
@@ -373,6 +344,21 @@ glm::vec2 RTGeometry::GetUV(unsigned int primID, float alpha, float beta)
 
 	assert(uv.x <= 1.0 && uv.y <= 1.0);
 	return uv;
+}
+
+glm::vec3 RTGeometry::GetPosition(unsigned int primID, float alpha, float beta)
+{
+	assert(m_indexData.size() > primID * 3 + 2);
+	unsigned int i0 = m_indexData[primID * 3];
+	unsigned int i1 = m_indexData[primID * 3 + 1];
+	unsigned int i2 = m_indexData[primID * 3 + 2];
+
+	assert(alpha + beta <= 1.0f);
+	float gamma = 1.0f - alpha - beta;
+	return RTCVertexToRendererVertex(m_rtcVertexData[i0]) * gamma + 
+		RTCVertexToRendererVertex(m_rtcVertexData[i1]) * alpha + 
+		RTCVertexToRendererVertex(m_rtcVertexData[i2]) * beta;
+
 }
 
 RTCamera::RTCamera(CreateCameraDescriptor *pCreateCameraDescriptor) :

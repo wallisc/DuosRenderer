@@ -268,7 +268,7 @@ void InitSceneAndCamera(_In_ Renderer *pRenderer, _In_ const aiScene &assimpScen
 	{
 		CreateLightDescriptor CreateLight;
 		CreateDirectionalLight CreateDirectional;
-		CreateDirectional.m_EmissionDirection = Vec3(-1.0f, -1.0, -1.0);
+		CreateDirectional.m_EmissionDirection = Vec3(1.0f, -1.0, 1.0);
 		CreateLight.m_Color = Vec3(1.0f, 1.0f, 1.0f);
 		CreateLight.m_LightType = CreateLightDescriptor::DIRECTIONAL_LIGHT;
 		CreateLight.m_pCreateDirectionalLight = &CreateDirectional;
