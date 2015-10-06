@@ -192,8 +192,29 @@ void RTRenderer::DrawScene(Camera *pCamera, Scene *pScene)
 				float b = ray.v;
 				float c = 1.0 - a - b;
 
+				glm::vec3 color = pGeometry->GetColor(ray.primID, a, b);
+#if 0
+				for (RTLight *pLight : pRTScene->GetLightList())
+				{
+					glm::vec3 LightColor = pLight->GetLightColor(Point);
+					glm::vec3 LightDirection = pLight->GetLightDirection(Point);
 
-				m_pCanvas->WritePixel(x, y, Vec3(0.0f, 0.0f, 1.0f));
+					RTRay ShadowRay(Point + .001f * LightDirection, LightDirection);
+					IntersectionResult ShadowResult = Intersect(ShadowRay, pScene->GetGeometryList());
+
+					// Only shade if the shadow feeler didn't hit anything
+					if (ShadowResult.GetParam() == FLT_MAX)
+					{
+						float nDotL = glm::dot(LightDirection, n);
+						if (nDotL > 0.0f)
+						{
+							TotalColor += nDotL * LightColor * TextureColor;
+						}
+					}
+				}
+#endif
+
+				m_pCanvas->WritePixel(x, y, Vec3(color.r, color.g, color.b));
 			}
 			else
 			{
@@ -237,10 +258,6 @@ void RTRenderer::DrawScene(Camera *pCamera, Scene *pScene)
 			}
 			else
 #endif
-			{
-				m_pCanvas->WritePixel(x, y, Vec3(0.0f, 0.0f, 1.0f));
-			}
-
 		}
 	}
 }
@@ -270,29 +287,15 @@ RTGeometry::RTGeometry(_In_ CreateGeometryDescriptor *pCreateGeometryDescriptor)
 	}
 	else
 	{
-		assert(false);
-#if 0
-		for (UINT i = 0; i < pCreateGeometryDescriptor->m_NumVertices; i += 3)
+		for (UINT i = 0; i < pCreateGeometryDescriptor->m_NumVertices; i++)
 		{
-			auto &v0 = pCreateGeometryDescriptor->m_pVertices[i];
-			auto &v1 = pCreateGeometryDescriptor->m_pVertices[i + 1];
-			auto &v2 = pCreateGeometryDescriptor->m_pVertices[i + 2];
+			auto &vertex = pCreateGeometryDescriptor->m_pVertices[i];
 
-			m_vertexData.push_back(RTTriangleData(
-				RendererVertexToRTVertex(v0),
-				RendererVertexToRTVertex(v1),
-				RendererVertexToRTVertex(v2)));
+			m_vertexData.push_back(RendererVertexToRTVertex(vertex));
+			m_rtcVertexData.push_back(RendererVertexToRTCVertex(vertex));
 
-			glm::vec3 Triangle[3];
-			Triangle[0] = RealArrayToGlmVec3(pCreateGeometryDescriptor->m_pVertices[i].m_Position);
-			Triangle[1] = RealArrayToGlmVec3(pCreateGeometryDescriptor->m_pVertices[i + 1].m_Position);
-			Triangle[2] = RealArrayToGlmVec3(pCreateGeometryDescriptor->m_pVertices[i + 2].m_Position);
-
-			m_rtcVertexData.push_back(RendererVertexToRTCVertex(v0));
-			m_rtcVertexData.push_back(RendererVertexToRTCVertex(v1));
-			m_rtcVertexData.push_back(RendererVertexToRTCVertex(v2));
+			m_indexData.push_back(i);
 		}
-#endif
 	}
 }
 
@@ -349,6 +352,27 @@ void RTScene::AddLight(_In_ Light *pLight)
 {
 	RTLight *pRTLight = static_cast<RTLight*>(pLight);
 	m_LightList.push_back(pRTLight);
+}
+
+glm::vec3 RTGeometry::GetColor(unsigned int primID, float alpha, float beta)
+{
+	glm::vec2 uv = GetUV(primID, alpha, beta);
+	return m_pMaterial->GetColor(uv);
+}
+
+glm::vec2 RTGeometry::GetUV(unsigned int primID, float alpha, float beta)
+{
+	assert(m_indexData.size() > primID * 3 + 2);
+	unsigned int i0 = m_indexData[primID * 3];
+	unsigned int i1 = m_indexData[primID * 3 + 1];
+	unsigned int i2 = m_indexData[primID * 3 + 2];
+
+	assert(alpha + beta <= 1.0f);
+	float gamma = 1.0f - alpha - beta;
+	glm::vec2 uv = m_vertexData[i0].m_tex * gamma + m_vertexData[i1].m_tex * alpha + m_vertexData[i2].m_tex * beta;
+
+	assert(uv.x <= 1.0 && uv.y <= 1.0);
+	return uv;
 }
 
 RTCamera::RTCamera(CreateCameraDescriptor *pCreateCameraDescriptor) :

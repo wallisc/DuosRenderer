@@ -113,6 +113,9 @@ public:
 	unsigned int *GetIndexBufferData() { return &m_indexData[0]; }
 	size_t GetIndexBufferDataSize() { return sizeof(unsigned int)* m_indexData.size(); }
 
+	glm::vec3 GetColor(unsigned int primID, float alpha, float beta);
+	glm::vec2 GetUV(unsigned int primID, float alpha, float beta);
+
 private:
 	std::vector<RTVertexData> m_vertexData;
 	std::vector<unsigned int> m_indexData;
