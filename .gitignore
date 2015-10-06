@@ -58,3 +58,6 @@ x86
 *.tlog
 *.idb
 *.pdb
+
+#exceptions
+!embree.lib
