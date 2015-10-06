@@ -30,6 +30,9 @@
     <Filter Include="glm\gtx">
       <UniqueIdentifier>{b865c380-4129-45a2-8da5-baa745afda44}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Embree">
+      <UniqueIdentifier>{414b7961-a621-4567-83d5-5c0684ff581d}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="D3D11Renderer.cpp" />
@@ -500,6 +503,21 @@
     <ClInclude Include="glm\gtx\wrap.hpp">
       <Filter>glm\gtx</Filter>
     </ClInclude>
+    <ClInclude Include="embree\inc\rtcore.h">
+      <Filter>Embree</Filter>
+    </ClInclude>
+    <ClInclude Include="embree\inc\rtcore_geometry.h">
+      <Filter>Embree</Filter>
+    </ClInclude>
+    <ClInclude Include="embree\inc\rtcore_geometry_user.h">
+      <Filter>Embree</Filter>
+    </ClInclude>
+    <ClInclude Include="embree\inc\rtcore_ray.h">
+      <Filter>Embree</Filter>
+    </ClInclude>
+    <ClInclude Include="embree\inc\rtcore_scene.h">
+      <Filter>Embree</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="Geometry_PS.hlsl">
@@ -720,6 +738,21 @@
     </None>
     <None Include="glm\gtx\wrap.inl">
       <Filter>glm\gtx</Filter>
+    </None>
+    <None Include="embree\inc\rtcore.isph">
+      <Filter>Embree</Filter>
+    </None>
+    <None Include="embree\inc\rtcore_geometry.isph">
+      <Filter>Embree</Filter>
+    </None>
+    <None Include="embree\inc\rtcore_geometry_user.isph">
+      <Filter>Embree</Filter>
+    </None>
+    <None Include="embree\inc\rtcore_ray.isph">
+      <Filter>Embree</Filter>
+    </None>
+    <None Include="embree\inc\rtcore_scene.isph">
+      <Filter>Embree</Filter>
     </None>
   </ItemGroup>
 </Project>

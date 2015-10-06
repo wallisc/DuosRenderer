@@ -10,15 +10,49 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image/stb_image.h"
 
+const RTCGeometryFlags cGeometryFlag = RTC_GEOMETRY_STATIC;
+const RTCSceneFlags cSceneFlags = RTC_SCENE_STATIC;
 
-glm::vec3 RealArrayToGlmVec3(_In_ Vec3 Vector)
+void error_handler(const RTCError code, const char* str)
+{
+	printf("Embree: ");
+	switch (code) {
+	case RTC_UNKNOWN_ERROR: printf("RTC_UNKNOWN_ERROR"); break;
+	case RTC_INVALID_ARGUMENT: printf("RTC_INVALID_ARGUMENT"); break;
+	case RTC_INVALID_OPERATION: printf("RTC_INVALID_OPERATION"); break;
+	case RTC_OUT_OF_MEMORY: printf("RTC_OUT_OF_MEMORY"); break;
+	case RTC_UNSUPPORTED_CPU: printf("RTC_UNSUPPORTED_CPU"); break;
+	case RTC_CANCELLED: printf("RTC_CANCELLED"); break;
+	default: printf("invalid error code"); break;
+	}
+	if (str) {
+		printf(" (");
+		while (*str) putchar(*str++);
+		printf(")\n");
+	}
+	assert(false);
+	exit(1);
+}
+
+FORCEINLINE glm::vec3 RealArrayToGlmVec3(_In_ Vec3 Vector)
 {
 	return glm::vec3(Vector.x, Vector.y, Vector.z);
 }
 
-glm::vec2 RealArrayToGlmVec2(_In_ Vec2 Vector)
+FORCEINLINE RTCVertex RendererVertexToRTCVertex(Vertex &Vertex)
+{
+	Vec3 &Pos = Vertex.m_Position;
+	return RTCVertex(Pos.x, Pos.y, Pos.z);
+}
+
+FORCEINLINE glm::vec2 RealArrayToGlmVec2(_In_ Vec2 Vector)
 {
 	return glm::vec2(Vector.x, Vector.y);
+}
+
+FORCEINLINE RTVertexData RendererVertexToRTVertex(Vertex &Vertex)
+{
+	return RTVertexData(RealArrayToGlmVec2(Vertex.m_Tex), RealArrayToGlmVec3(Vertex.m_Normal));
 }
 
 RTMaterial::RTMaterial(CreateMaterialDescriptor *pCreateMaterialDescriptor)
@@ -42,7 +76,16 @@ void RTRenderer::DestroyMaterial(Material* pMaterial)
 
 RTRenderer::RTRenderer(unsigned int width, unsigned int height)
 {
+	m_device = rtcNewDevice();
+	rtcDeviceSetErrorFunction(m_device, error_handler);
+
 }
+
+RTRenderer::~RTRenderer()
+{
+	rtcDeleteDevice(m_device);
+}
+
 
 Geometry* RTRenderer::CreateGeometry(_In_ CreateGeometryDescriptor *pCreateGeometryDescriptor)
 {
@@ -91,7 +134,7 @@ void RTRenderer::DestroyCamera(Camera *pCamera)
 
 Scene *RTRenderer::CreateScene()
 {
-	Scene *pScene = new RTScene();
+	Scene *pScene = new RTScene(m_device);
 	MEM_CHK(pScene);
 	return pScene;
 }
@@ -106,99 +149,155 @@ void RTRenderer::DrawScene(Camera *pCamera, Scene *pScene)
 	RTScene *pRTScene = RT_RENDERER_CAST<RTScene*>(pScene);
 	RTCamera *pRTCamera = RT_RENDERER_CAST<RTCamera*>(pCamera);
 
-	UINT m_Width = 800;
-	UINT m_Height = 600;
+	pRTScene->PreDraw();
 
-	RTracer::Trace(pRTScene, pRTCamera, m_pCanvas);
+	UINT Width = pRTCamera->GetWidth();
+	UINT Height = pRTCamera->GetHeight();
+
+	glm::vec3 FocalPoint = pRTCamera->GetFocalPoint();
+	float PixelWidth = pRTCamera->GetLensWidth() / Width;
+	float PixelHeight = pRTCamera->GetLensHeight() / Height;
+
+	for (UINT y = 0; y < Height; y++)
+	{
+		for (UINT x = 0; x < Width; x++)
+		{
+			glm::vec3 coord(pRTCamera->GetLensWidth() * (float)x / (float)Width, pRTCamera->GetLensHeight() * (float)(Height - y) / (float)Height, 0.0f);
+			coord -= glm::vec3(pRTCamera->GetLensWidth() / 2.0f, pRTCamera->GetLensHeight() / 2.0f, 0.0f);
+			coord += glm::vec3(PixelWidth / 2.0f, -PixelHeight / 2.0f, 0.0f); // Make sure the ray is centered in the pixel
+
+			glm::vec3 right = pRTCamera->GetRight();
+			glm::vec3 LensPoint = pRTCamera->GetLensPosition() + coord.y * pRTCamera->GetUp() + coord.x * right;
+			glm::vec3 RayDirection = glm::normalize(LensPoint - FocalPoint);
+
+			RTCRay ray {};
+			memcpy(ray.org, &LensPoint, sizeof(ray.org));
+			memcpy(ray.dir, &RayDirection, sizeof(ray.dir));
+			ray.tnear = 0.0f;
+			ray.tfar = FLT_MAX;
+			ray.geomID = RTC_INVALID_GEOMETRY_ID;
+			ray.primID = RTC_INVALID_GEOMETRY_ID;
+			ray.mask = -1;
+			ray.time = 0;
+
+			rtcIntersect(pRTScene->GetRTCScene(), ray);
+			unsigned int meshID = ray.geomID;
+
+			if(meshID != RTC_INVALID_GEOMETRY_ID)
+			{
+				RTGeometry *pGeometry = pRTScene->GetRTGeometry(meshID);
+				assert(pGeometry != nullptr);
+
+				float a = ray.u;
+				float b = ray.v;
+				float c = 1.0 - a - b;
+
+
+				m_pCanvas->WritePixel(x, y, Vec3(0.0f, 0.0f, 1.0f));
+			}
+			else
+			{
+				m_pCanvas->WritePixel(x, y, Vec3(1.0f, 0.0f, 1.0f));
+			}
+
+#if 0
+			RTRay Ray(LensPoint, LensPoint - FocalPoint);
+			bool Intersected = false;
+
+
+			if (DirectTraceResult.GetParam() >= 0.0f && DirectTraceResult.GetParam() != FLT_MAX)
+			{
+				RTIntersectable::UVAndNormal UVAndNormalResult = DirectTraceResult.GetIntersectedGeometry()->GetUVAndNormalAt(DirectTraceResult);
+				glm::vec2 uv = UVAndNormalResult.UV;
+				glm::vec3 n = UVAndNormalResult.Normal;
+				glm::vec3 Point = DirectTraceResult.GetRay().GetPoint(DirectTraceResult.GetParam());
+				glm::vec3 TextureColor = DirectTraceResult.GetMaterial()->GetColor(uv);
+				glm::vec3 TotalColor(0.0f);
+
+				for (RTLight *pLight : pScene->GetLightList())
+				{
+					glm::vec3 LightColor = pLight->GetLightColor(Point);
+					glm::vec3 LightDirection = pLight->GetLightDirection(Point);
+
+					RTRay ShadowRay(Point + .001f * LightDirection, LightDirection);
+					IntersectionResult ShadowResult = Intersect(ShadowRay, pScene->GetGeometryList());
+
+					// Only shade if the shadow feeler didn't hit anything
+					if (ShadowResult.GetParam() == FLT_MAX)
+					{
+						float nDotL = glm::dot(LightDirection, n);
+						if (nDotL > 0.0f)
+						{
+							TotalColor += nDotL * LightColor * TextureColor;
+						}
+					}
+				}
+
+				pCanvas->WritePixel(x, y, Vec3(TotalColor.r, TotalColor.g, TotalColor.b));
+			}
+			else
+#endif
+			{
+				m_pCanvas->WritePixel(x, y, Vec3(0.0f, 0.0f, 1.0f));
+			}
+
+		}
+	}
 }
 
 RTGeometry::RTGeometry(_In_ CreateGeometryDescriptor *pCreateGeometryDescriptor)
 {
 	m_pMaterial = RT_RENDERER_CAST<RTMaterial *>(pCreateGeometryDescriptor->m_pMaterial);
+
+	m_vertexData.reserve(pCreateGeometryDescriptor->m_NumVertices);
+	m_rtcVertexData.reserve(pCreateGeometryDescriptor->m_NumVertices);
+	m_indexData.reserve(pCreateGeometryDescriptor->m_NumIndices);
+
 	if (pCreateGeometryDescriptor->m_NumIndices)
 	{
-		for (UINT i = 0; i < pCreateGeometryDescriptor->m_NumIndices; i += 3)
+		for (UINT i = 0; i < pCreateGeometryDescriptor->m_NumIndices; i ++)
 		{
-			UINT Index0 = pCreateGeometryDescriptor->m_pIndices[i];
-			UINT Index1 = pCreateGeometryDescriptor->m_pIndices[i + 1];
-			UINT Index2 = pCreateGeometryDescriptor->m_pIndices[i + 2];
+			m_indexData.push_back(pCreateGeometryDescriptor->m_pIndices[i]);
+		}
 
-			glm::vec3 Triangle[3];
-			glm::vec2 UVCoordinates[3];
-			glm::vec3 Normals[3];
+		for (UINT i = 0; i < pCreateGeometryDescriptor->m_NumVertices; i++)
+		{
+			auto &vertex = pCreateGeometryDescriptor->m_pVertices[i];
 
-			Triangle[0] = RealArrayToGlmVec3(pCreateGeometryDescriptor->m_pVertices[Index0].m_Position);
-			Triangle[1] = RealArrayToGlmVec3(pCreateGeometryDescriptor->m_pVertices[Index1].m_Position);
-			Triangle[2] = RealArrayToGlmVec3(pCreateGeometryDescriptor->m_pVertices[Index2].m_Position);
-
-			UVCoordinates[0] = RealArrayToGlmVec2(pCreateGeometryDescriptor->m_pVertices[Index0].m_Tex);
-			UVCoordinates[1] = RealArrayToGlmVec2(pCreateGeometryDescriptor->m_pVertices[Index1].m_Tex);
-			UVCoordinates[2] = RealArrayToGlmVec2(pCreateGeometryDescriptor->m_pVertices[Index2].m_Tex);
-
-			Normals[0] = RealArrayToGlmVec3(pCreateGeometryDescriptor->m_pVertices[Index0].m_Normal);
-			Normals[1] = RealArrayToGlmVec3(pCreateGeometryDescriptor->m_pVertices[Index1].m_Normal);
-			Normals[2] = RealArrayToGlmVec3(pCreateGeometryDescriptor->m_pVertices[Index2].m_Normal);
-			m_Mesh.push_back(RTTriangle(Triangle, Normals, UVCoordinates));
+			m_vertexData.push_back(RendererVertexToRTVertex(vertex));
+			m_rtcVertexData.push_back(RendererVertexToRTCVertex(vertex));
 		}
 	}
 	else
 	{
+		assert(false);
+#if 0
 		for (UINT i = 0; i < pCreateGeometryDescriptor->m_NumVertices; i += 3)
 		{
+			auto &v0 = pCreateGeometryDescriptor->m_pVertices[i];
+			auto &v1 = pCreateGeometryDescriptor->m_pVertices[i + 1];
+			auto &v2 = pCreateGeometryDescriptor->m_pVertices[i + 2];
+
+			m_vertexData.push_back(RTTriangleData(
+				RendererVertexToRTVertex(v0),
+				RendererVertexToRTVertex(v1),
+				RendererVertexToRTVertex(v2)));
+
 			glm::vec3 Triangle[3];
 			Triangle[0] = RealArrayToGlmVec3(pCreateGeometryDescriptor->m_pVertices[i].m_Position);
 			Triangle[1] = RealArrayToGlmVec3(pCreateGeometryDescriptor->m_pVertices[i + 1].m_Position);
 			Triangle[2] = RealArrayToGlmVec3(pCreateGeometryDescriptor->m_pVertices[i + 2].m_Position);
 
-			glm::vec2 UVCoordinates[3];
-			UVCoordinates[0] = RealArrayToGlmVec2(pCreateGeometryDescriptor->m_pVertices[i].m_Tex);
-			UVCoordinates[1] = RealArrayToGlmVec2(pCreateGeometryDescriptor->m_pVertices[i + 1].m_Tex);
-			UVCoordinates[2] = RealArrayToGlmVec2(pCreateGeometryDescriptor->m_pVertices[i + 2].m_Tex);
-
-			glm::vec3 Normals[3];
-			Normals[0] = RealArrayToGlmVec3(pCreateGeometryDescriptor->m_pVertices[i].m_Normal);
-			Normals[1] = RealArrayToGlmVec3(pCreateGeometryDescriptor->m_pVertices[i + 1].m_Normal);
-			Normals[2] = RealArrayToGlmVec3(pCreateGeometryDescriptor->m_pVertices[i + 2].m_Normal);
-			m_Mesh.push_back(RTTriangle(Triangle, Normals, UVCoordinates));
+			m_rtcVertexData.push_back(RendererVertexToRTCVertex(v0));
+			m_rtcVertexData.push_back(RendererVertexToRTCVertex(v1));
+			m_rtcVertexData.push_back(RendererVertexToRTCVertex(v2));
 		}
+#endif
 	}
 }
 
 RTGeometry::~RTGeometry()
 {
-}
-
-bool RTGeometry::Intersects(const RTRay *pRay, IntersectionResult *pResult)
-{
-	bool bFindExactIntersectingPrimitive = pResult != nullptr;
-
-	IntersectionResult ClosestResult(nullptr, FLT_MAX);
-	for (RTTriangle &Triangle : m_Mesh)
-	{
-		IntersectionResult Result;
-		if (Triangle.Intersects(pRay, &Result))
-		{
-			if (bFindExactIntersectingPrimitive)
-			{
-				if (Result.GetParam() < ClosestResult.GetParam())
-				{
-					ClosestResult = Result;
-				}
-			}
-			else
-			{
-				// We can exit early since we don't need to find the closest intersection
-				return true;
-			}
-		}
-	}
-
-	if (bFindExactIntersectingPrimitive)
-	{
-		*pResult = ClosestResult;
-		pResult->SetMaterial(GetMaterial());
-	}
-	return ClosestResult.GetParam() >= 0.0f && ClosestResult.GetParam() != FLT_MAX;
 }
 
 RTDirectionalLight::RTDirectionalLight(_In_ CreateLightDescriptor *pCreateLightDescriptor)
@@ -209,10 +308,41 @@ RTDirectionalLight::RTDirectionalLight(_In_ CreateLightDescriptor *pCreateLightD
 	m_Color = RealArrayToGlmVec3(pCreateLightDescriptor->m_Color);
 }
 
+RTScene::RTScene(RTCDevice device) :
+	m_bSceneCommitted(false)
+{
+	m_scene = rtcDeviceNewScene(device, cSceneFlags, RTC_INTERSECT1);
+}
+
+RTScene::~RTScene()
+{
+	rtcDeleteScene(m_scene);
+}
+
+void RTScene::PreDraw()
+{
+	if (!m_bSceneCommitted)
+	{
+		rtcCommit(m_scene);
+		m_bSceneCommitted = true;
+	}
+}
+
 void RTScene::AddGeometry(_In_ Geometry *pGeometry)
 {
 	RTGeometry *pRTGeometry = RT_RENDERER_CAST<RTGeometry*>(pGeometry);
-	m_GeometryList.push_back(pRTGeometry);
+
+	UINT triangleMesh = rtcNewTriangleMesh(m_scene, cGeometryFlag, pRTGeometry->GetNumTriangles(), pRTGeometry->GetNumVertices());
+
+	RTCVertex*pVertexBuffer = (RTCVertex*)rtcMapBuffer(m_scene, triangleMesh, RTC_VERTEX_BUFFER);
+	memcpy(pVertexBuffer, pRTGeometry->GetVertexData(), pRTGeometry->GetVertexDataSize());
+	rtcUnmapBuffer(m_scene, triangleMesh, RTC_VERTEX_BUFFER);
+
+	unsigned int*pIndexBuffer = (unsigned int*)rtcMapBuffer(m_scene, triangleMesh, RTC_INDEX_BUFFER);
+	memcpy(pIndexBuffer, pRTGeometry->GetIndexBufferData(), pRTGeometry->GetIndexBufferDataSize());
+	rtcUnmapBuffer(m_scene, triangleMesh, RTC_INDEX_BUFFER);
+	
+	m_meshIDToRTGeometry[triangleMesh] = pRTGeometry;
 }
 
 void RTScene::AddLight(_In_ Light *pLight)
@@ -311,168 +441,5 @@ void RTCamera::Rotate(float row, float yaw, float pitch)
 	}
 
 	m_LookAt = m_FocalPoint + glm::vec3(lookDir) * glm::length(m_LookAt - m_FocalPoint);
-}
-
-
-void RTracer::Trace(RTScene *pScene, RTCamera *pCamera, Canvas *pCanvas)
-{
-	UINT Width = pCamera->GetWidth();
-	UINT Height = pCamera->GetHeight();
-
-	glm::vec3 FocalPoint = pCamera->GetFocalPoint();
-	float PixelWidth = pCamera->GetLensWidth() / Width;
-	float PixelHeight = pCamera->GetLensHeight() / Height;
-
-	for (UINT y = 0; y < Height; y++)
-	{
-		for (UINT x = 0; x < Width; x++)
-		{
- 			glm::vec3 coord(pCamera->GetLensWidth() * (float)x / (float)Width, pCamera->GetLensHeight() * (float)(Height - y) / (float)Height, 0.0f);
-			coord -= glm::vec3(pCamera->GetLensWidth() / 2.0f, pCamera->GetLensHeight() / 2.0f, 0.0f);
-			coord += glm::vec3(PixelWidth / 2.0f, -PixelHeight / 2.0f, 0.0f); // Make sure the ray is centered in the pixel
-
-			glm::vec3 right = pCamera->GetRight();
-			glm::vec3 LensPoint = pCamera->GetLensPosition() + coord.y * pCamera->GetUp() + coord.x * right;
-			glm::vec3 RayDirection = glm::normalize(LensPoint - FocalPoint);
-
-			RTRay Ray(LensPoint, LensPoint - FocalPoint);
-			bool Intersected = false;
-			IntersectionResult DirectTraceResult = Intersect(Ray, pScene->GetGeometryList());
-			if (DirectTraceResult.GetParam() >= 0.0f && DirectTraceResult.GetParam() != FLT_MAX)
-			{
-				RTIntersectable::UVAndNormal UVAndNormalResult = DirectTraceResult.GetIntersectedGeometry()->GetUVAndNormalAt(DirectTraceResult);
-				glm::vec2 uv = UVAndNormalResult.UV;
-				glm::vec3 n = UVAndNormalResult.Normal;
-				glm::vec3 Point = DirectTraceResult.GetRay().GetPoint(DirectTraceResult.GetParam());
-				glm::vec3 TextureColor = DirectTraceResult.GetMaterial()->GetColor(uv);
-				glm::vec3 TotalColor(0.0f);
-
-				for (RTLight *pLight : pScene->GetLightList())
-				{
-					glm::vec3 LightColor = pLight->GetLightColor(Point);
-					glm::vec3 LightDirection = pLight->GetLightDirection(Point);
-
-					RTRay ShadowRay(Point + .001f * LightDirection, LightDirection);
-					IntersectionResult ShadowResult = Intersect(ShadowRay, pScene->GetGeometryList());
-					
-					// Only shade if the shadow feeler didn't hit anything
-					if (ShadowResult.GetParam() == FLT_MAX)
-					{
-						float nDotL = glm::dot(LightDirection, n);
-						if (nDotL > 0.0f)
-						{
-							TotalColor += nDotL * LightColor * TextureColor;
-						}
-					}
-				}
-
-				pCanvas->WritePixel(x, y, Vec3(TotalColor.r, TotalColor.g, TotalColor.b));
-			}
-			else
-			{
-				pCanvas->WritePixel(x, y, Vec3(0.0f, 0.0f, 1.0f));
-			}
-
-		}
-	}
-}
-
-IntersectionResult RTracer::Intersect(const RTRay &Ray, const std::vector<RTGeometry *> &GeometryList)
-{
-	IntersectionResult ClosestResult(nullptr, FLT_MAX);
-	for (RTGeometry *pGeometry : GeometryList)
-	{
-		IntersectionResult Result;
-		if (pGeometry->Intersects(&Ray, &Result))
-		{
-			if (Result.GetParam() < ClosestResult.GetParam())
-			{
-				ClosestResult = Result;
-			}
-		}
-	}
-
-	return ClosestResult;
-}
-
-
-RTTriangle::RTTriangle(glm::vec3 Vertices[3], glm::vec3 Normals[3], glm::vec2 UVCoordinates[3])
-{
-	m_V0 = Vertices[0];
-	m_V1 = Vertices[1];
-	m_V2 = Vertices[2];
-
-	m_Tex0 = UVCoordinates[0];
-	m_Tex1 = UVCoordinates[1];
-	m_Tex2 = UVCoordinates[2];
-	
-	m_N0 = Normals[0];
-	m_N1 = Normals[1];
-	m_N2 = Normals[2];
-	m_PlaneNormal = glm::normalize(glm::cross(m_V1 - m_V0, m_V2 - m_V0));
-
-}
-
-bool RTTriangle::Intersects(const RTRay *pRay, IntersectionResult *pResult)
-{
-	float numer = glm::dot(-m_PlaneNormal, pRay->GetOrigin() - m_V0);
-	float denom = glm::dot(m_PlaneNormal, pRay->GetDirection());
-
-	if (denom == 0.0f || numer == 0.0f)
-		return false;
-
-	float t = numer / denom;
-
-	if (t < 0.0f) return false;
-
-	// intersection point
-	glm::vec3 Intersection = pRay->GetPoint(t);
-
-	glm::vec3 A = m_V0, B = m_V1, C = m_V2;
-	glm::vec3 AB = B - A;
-	glm::vec3 AC = C - A;
-
-	glm::vec3 AP = Intersection - A;
-	glm::vec3 ABxAP = glm::cross(AB, AP);
-	float v_num = glm::dot(m_PlaneNormal, ABxAP);
-	if (v_num < 0.0f) return false;
-
-	// edge 2
-	glm::vec3 BP = Intersection - B;
-	glm::vec3 BC = C - B;
-	glm::vec3 BCxBP = glm::cross(BC, BP);
-	if (glm::dot(m_PlaneNormal, BCxBP) < 0.0f)
-		return false; // P is on the left side
-
-	// edge 3, needed to compute u
-	glm::vec3 CP = Intersection - C;
-	// we have computed AC already so we can avoid computing CA by
-	// inverting the vectors in the cross product:
-	// Cross(CA, CP) = cross(CP, AC);
-	glm::vec3 CAxCP = glm::cross(CP, AC);
-	float u_num = glm::dot(m_PlaneNormal, CAxCP);
-	if (u_num < 0.0f)
-		return false; // P is on the left side;
-
-	// TODO: This is nasty design, should just make some sort of constructor for this
-	pResult->SetIntersectedGeometry(this);
-	pResult->SetParam(t);
-	pResult->SetRay(*pRay);
-	return t > 0.0f;
-}
-
-RTTriangle::UVAndNormal RTTriangle::GetUVAndNormalAt(const IntersectionResult &IntersectResult) const
-{
-	UVAndNormal Result;
-
-	glm::vec3 q = IntersectResult.GetRay().GetPoint(IntersectResult.GetParam());
-	float area = glm::dot(glm::cross(m_V1 - m_V0, m_V2 - m_V0), m_PlaneNormal);
-	float beta = glm::dot(glm::cross(m_V0 - m_V2, q - m_V2), m_PlaneNormal) / area;
-	float gamma = glm::dot(glm::cross(m_V1 - m_V0, q - m_V0), m_PlaneNormal) / area;
-	float alpha = 1.0f - beta - gamma;
-
-	Result.UV = alpha * m_Tex0 + beta * m_Tex1 + gamma * m_Tex2;
-	Result.Normal = alpha * m_N0 + beta * m_N1 + gamma * m_N2;
-	return Result;
 }
 

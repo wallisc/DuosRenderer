@@ -3,6 +3,12 @@
 #include "glm/vec3.hpp"
 #include "glm/vec2.hpp"
 
+#include "embree/inc/rtcore.h"
+#include "embree/inc/rtcore_scene.h"
+#include "embree/inc/rtcore_ray.h"
+
+#include <unordered_map>
+
 class RTMaterial : public Material
 {
 public:
@@ -44,63 +50,50 @@ private:
 	glm::vec3 m_Direction;
 };
 
-class IntersectionResult;
-
-class RTIntersectable
+class RTCVertex
 {
 public:
-	struct UVAndNormal
+	RTCVertex(float x, float y, float z) :
+		m_x(x), m_y(y), m_z(z) {}
+
+	float m_x, m_y, m_z, m_padding;
+};
+
+class RTVertexData
+{
+public:
+	RTVertexData(glm::vec2 tex, glm::vec3 norm) :
+		m_tex(tex), m_norm(norm) {}
+
+	glm::vec2 m_tex;
+	glm::vec3 m_norm;
+};
+
+class RTTriangleData
+{
+public:
+	RTTriangleData(RTVertexData v0, RTVertexData v1, RTVertexData v2) :
+		m_v0(v0), m_v1(v1), m_v2(v2) {}
+
+	RTVertexData m_v0, m_v1, m_v2;
+	const RTVertexData &operator[](unsigned int index)
 	{
-		glm::vec2 UV;
-		glm::vec3 Normal;
-	};
-
-	virtual bool Intersects(const RTRay *pRay, _Out_ IntersectionResult *pResult = nullptr) = 0;
-	virtual UVAndNormal GetUVAndNormalAt(const IntersectionResult &Result) const = 0;
+		switch (index)
+		{
+		case 0:
+			return m_v0;
+		case 1:
+			return m_v1;
+		case 2:
+			return m_v2;
+		default:
+			assert(false);
+			return m_v0;
+		}
+	}
 };
 
-class IntersectionResult
-{
-public:
-	IntersectionResult(const RTIntersectable *pGeometry = nullptr, float Param = -1.0f) :
-		m_IntersectedGeometry(pGeometry), m_Param(Param) {}
-
-	float GetParam() const { return m_Param; }
-	const RTIntersectable* GetIntersectedGeometry() const { return m_IntersectedGeometry; }
-	void SetIntersectedGeometry(const RTIntersectable *pGeometry) { m_IntersectedGeometry = pGeometry; }
-	void SetParam(float Param) { m_Param = Param; }
-	void SetRay(const RTRay &Ray) { m_Ray = Ray; }
-	void SetMaterial(RTMaterial *pMaterial) { m_pMaterial = pMaterial; }
-	RTMaterial *GetMaterial() { return m_pMaterial; }
-	const RTRay &GetRay() const { return m_Ray; }
-private: 
-	const RTIntersectable *m_IntersectedGeometry;
-	RTRay m_Ray;
-	float m_Param;
-	RTMaterial *m_pMaterial;
-};
-
-class RTTriangle : public RTIntersectable, public Geometry
-{
-public:
-
-
-	RTTriangle(glm::vec3 Vertices[3], glm::vec3 Normals[3], glm::vec2 UVCoordinates[3]);
-	bool Intersects(const RTRay *pRay, _Out_ IntersectionResult *pResult);
-
-	void Translate(_In_ const Vec3 &translationVector) { assert(false); }	
-	void Rotate(float row, float yaw, float pitch) { assert(false); }
-
-	UVAndNormal GetUVAndNormalAt(const IntersectionResult &Result) const;
-
-private:
-	glm::vec3 m_V0, m_V1, m_V2;
-	glm::vec3 m_N0, m_N1, m_N2;
-	glm::vec2 m_Tex0, m_Tex1, m_Tex2;
-	glm::vec3 m_PlaneNormal;
-};
-
-class RTGeometry : public Geometry, public RTIntersectable
+class RTGeometry : public Geometry
 {
 public:
 	RTGeometry(_In_ CreateGeometryDescriptor *pCreateGeometryDescriptor);
@@ -109,12 +102,21 @@ public:
 	void Rotate(float row, float yaw, float pitch) { assert(false); }
 	void Translate(_In_ const Vec3 &translationVector) { assert(false); }
 
-	bool Intersects(const RTRay *pRay, _Out_ IntersectionResult *pResult = nullptr);
-	UVAndNormal GetUVAndNormalAt(const IntersectionResult &Result) const { assert(false); return UVAndNormal(); }
 	RTMaterial *GetMaterial() { return m_pMaterial; }
 
+	unsigned int GetNumVertices() { return m_vertexData.size(); }
+	unsigned int GetNumTriangles() { return m_indexData.size() / 3; }
+
+	RTCVertex *GetVertexData() { return &m_rtcVertexData[0]; }
+	size_t GetVertexDataSize() { return sizeof(RTCVertex) * m_rtcVertexData.size(); }
+
+	unsigned int *GetIndexBufferData() { return &m_indexData[0]; }
+	size_t GetIndexBufferDataSize() { return sizeof(unsigned int)* m_indexData.size(); }
+
 private:
-	std::vector<RTTriangle> m_Mesh;
+	std::vector<RTVertexData> m_vertexData;
+	std::vector<unsigned int> m_indexData;
+	std::vector<RTCVertex> m_rtcVertexData;
 	RTMaterial *m_pMaterial;
 };
 
@@ -175,22 +177,32 @@ private:
 class RTScene : public Scene
 {
 public:
+	RTScene(RTCDevice);
+	~RTScene();
+
 	void AddGeometry(_In_ Geometry *pGeometry);
 	void AddLight(_In_ Light *pLight);
 
 	std::vector<RTGeometry *> &GetGeometryList() { return m_GeometryList; }
 	std::vector<RTLight *> &GetLightList() { return m_LightList; }
 
+	RTCScene GetRTCScene() { return m_scene; }
+	RTGeometry *GetRTGeometry(unsigned int meshID) { return m_meshIDToRTGeometry[meshID]; }
+	void PreDraw();
 private:
+	bool m_bSceneCommitted;
 	std::vector<RTGeometry *> m_GeometryList;
 	std::vector<RTLight *> m_LightList;
+	std::unordered_map<unsigned int, RTGeometry *> m_meshIDToRTGeometry;
 
+	RTCScene m_scene;
 };
 
 class RTRenderer : public Renderer
 {
 public:
 	RTRenderer(unsigned int width, unsigned int height);
+	~RTRenderer();
 	
 	void SetCanvas(Canvas *pCanvas) { m_pCanvas = pCanvas; }
 	Geometry *CreateGeometry(_In_ CreateGeometryDescriptor *pCreateGeometryDescriptor);
@@ -211,16 +223,8 @@ public:
 	void DrawScene(Camera *pCamera, Scene *pScene);
 
 private:
+	RTCDevice  m_device;
 	Canvas *m_pCanvas;
-};
-
-class RTracer
-{
-public:
-	static void Trace(RTScene *pScene, RTCamera *pCamera, Canvas *pCanvas);
-
-private:
-	static IntersectionResult Intersect(const RTRay &Ray, const std::vector<RTGeometry *> &GeometryList);
 };
 
 #define RT_RENDERER_CAST reinterpret_cast

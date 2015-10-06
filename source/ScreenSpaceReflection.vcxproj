@@ -111,7 +111,7 @@
     <LinkIncremental>false</LinkIncremental>
     <GenerateManifest>true</GenerateManifest>
     <IncludePath>$(VC_IncludePath);$(WindowsSDK_IncludePath);dxtk\Inc;DXUT\core;DXUT\core</IncludePath>
-    <LibraryPath>$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64);;$(WindowsSDK_MetadataPath);;assimp\lib64</LibraryPath>
+    <LibraryPath>$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64);;$(WindowsSDK_MetadataPath);;assimp\lib64;embree\lib</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Profile|Win32'">
     <LinkIncremental>false</LinkIncremental>
@@ -179,7 +179,7 @@
     </ClCompile>
     <Link>
       <AdditionalOptions> %(AdditionalOptions)</AdditionalOptions>
-      <AdditionalDependencies>assimp/lib64/assimp.lib;Imm32.lib;version.lib;usp10.lib;d3d11.lib;d3dcompiler.lib;dxguid.lib;winmm.lib;comctl32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>embree\lib\embree.lib;assimp/lib64/assimp.lib;Imm32.lib;version.lib;usp10.lib;d3d11.lib;d3dcompiler.lib;dxguid.lib;winmm.lib;comctl32.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <LargeAddressAware>true</LargeAddressAware>
@@ -256,7 +256,7 @@
     </ClCompile>
     <Link>
       <AdditionalOptions> %(AdditionalOptions)</AdditionalOptions>
-      <AdditionalDependencies>assimp.lib;Imm32.lib;version.lib;usp10.lib;d3d11.lib;d3dcompiler.lib;dxguid.lib;winmm.lib;comctl32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>embree.lib;assimp.lib;Imm32.lib;version.lib;usp10.lib;d3d11.lib;d3dcompiler.lib;dxguid.lib;winmm.lib;comctl32.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <SubSystem>Windows</SubSystem>
       <OptimizeReferences>true</OptimizeReferences>
@@ -488,6 +488,11 @@
     <ClInclude Include="DXUT\Optional\ImeUi.h" />
     <ClInclude Include="DXUT\Optional\SDKmesh.h" />
     <ClInclude Include="DXUT\Optional\SDKmisc.h" />
+    <ClInclude Include="embree\inc\rtcore.h" />
+    <ClInclude Include="embree\inc\rtcore_geometry.h" />
+    <ClInclude Include="embree\inc\rtcore_geometry_user.h" />
+    <ClInclude Include="embree\inc\rtcore_ray.h" />
+    <ClInclude Include="embree\inc\rtcore_scene.h" />
     <ClInclude Include="glm\common.hpp" />
     <ClInclude Include="glm\exponential.hpp" />
     <ClInclude Include="glm\ext.hpp" />
@@ -592,6 +597,11 @@
     <None Include="assimp\inc\vector3.inl" />
     <None Include="DXUT\Optional\DXUTOpt_2012.vcxproj" />
     <None Include="DXUT\Optional\DXUTOpt_2012.vcxproj.filters" />
+    <None Include="embree\inc\rtcore.isph" />
+    <None Include="embree\inc\rtcore_geometry.isph" />
+    <None Include="embree\inc\rtcore_geometry_user.isph" />
+    <None Include="embree\inc\rtcore_ray.isph" />
+    <None Include="embree\inc\rtcore_scene.isph" />
     <None Include="glm\gtx\associated_min_max.inl" />
     <None Include="glm\gtx\bit.inl" />
     <None Include="glm\gtx\closest_point.inl" />
