@@ -116,6 +116,7 @@ public:
 	glm::vec3 GetColor(unsigned int primID, float alpha, float beta);
 	glm::vec2 GetUV(unsigned int primID, float alpha, float beta);
 	glm::vec3 GetPosition(unsigned int primID, float alpha, float beta);
+	glm::vec3 GetNormal(unsigned int primID, float alpha, float beta);
 
 private:
 	std::vector<RTVertexData> m_vertexData;

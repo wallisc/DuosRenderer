@@ -199,27 +199,33 @@ void RTRenderer::DrawScene(Camera *pCamera, Scene *pScene)
 
 				glm::vec3 TotalColor = glm::vec3(0.0f);
 				glm::vec3 matColor = pGeometry->GetColor(ray.primID, a, b);
+				glm::vec3 Norm = pGeometry->GetNormal(ray.primID, a, b);
 				glm::vec3 intersectPos = pGeometry->GetPosition(ray.primID, a, b);
 				for (RTLight *pLight : pRTScene->GetLightList())
 				{
 					glm::vec3 LightColor = pLight->GetLightColor(intersectPos);
 					glm::vec3 LightDirection = pLight->GetLightDirection(intersectPos);
 
-					glm::vec3 ShadowRayOrigin = intersectPos + LightDirection * .001f;
-					RTCRay ShadowRay{};
-					memcpy(ShadowRay.org, &ShadowRayOrigin, sizeof(ShadowRay.org));
-					memcpy(ShadowRay.dir, &LightDirection, sizeof(ShadowRay.dir));
-					ShadowRay.tnear = 0.0f;
-					ShadowRay.tfar = FLT_MAX;
-					ShadowRay.geomID = RTC_INVALID_GEOMETRY_ID;
-					ShadowRay.primID = RTC_INVALID_GEOMETRY_ID;
-					ShadowRay.mask = -1;
-					ShadowRay.time = 0;
-
-					rtcOccluded(pRTScene->GetRTCScene(), ShadowRay);
-					if (ShadowRay.geomID == RTC_INVALID_GEOMETRY_ID)
+					float nDotL = glm::dot(Norm, LightDirection);
+					if (nDotL > 0.0f)
 					{
-						TotalColor += matColor * LightColor;
+						glm::vec3 ShadowRayOrigin = intersectPos + LightDirection * .001f;
+						RTCRay ShadowRay{};
+						memcpy(ShadowRay.org, &ShadowRayOrigin, sizeof(ShadowRay.org));
+						memcpy(ShadowRay.dir, &LightDirection, sizeof(ShadowRay.dir));
+						ShadowRay.tnear = 0.0f;
+						ShadowRay.tfar = FLT_MAX;
+						ShadowRay.geomID = RTC_INVALID_GEOMETRY_ID;
+						ShadowRay.primID = RTC_INVALID_GEOMETRY_ID;
+						ShadowRay.mask = -1;
+						ShadowRay.time = 0;
+
+						rtcOccluded(pRTScene->GetRTCScene(), ShadowRay);
+						if (ShadowRay.geomID == RTC_INVALID_GEOMETRY_ID)
+						{
+
+							TotalColor += matColor * LightColor * nDotL;
+						}
 					}
 				}
 
@@ -360,6 +366,21 @@ glm::vec3 RTGeometry::GetPosition(unsigned int primID, float alpha, float beta)
 		RTCVertexToRendererVertex(m_rtcVertexData[i2]) * beta;
 
 }
+
+glm::vec3 RTGeometry::GetNormal(unsigned int primID, float alpha, float beta)
+{
+	assert(m_indexData.size() > primID * 3 + 2);
+	unsigned int i0 = m_indexData[primID * 3];
+	unsigned int i1 = m_indexData[primID * 3 + 1];
+	unsigned int i2 = m_indexData[primID * 3 + 2];
+
+	assert(alpha + beta <= 1.0f);
+	float gamma = 1.0f - alpha - beta;
+	return m_vertexData[i0].m_norm * gamma +
+		m_vertexData[i1].m_norm * alpha +
+		m_vertexData[i2].m_norm * beta;
+}
+
 
 RTCamera::RTCamera(CreateCameraDescriptor *pCreateCameraDescriptor) :
 	m_Width(pCreateCameraDescriptor->m_Width), m_Height(pCreateCameraDescriptor->m_Height),
