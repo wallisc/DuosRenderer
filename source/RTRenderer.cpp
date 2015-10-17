@@ -63,8 +63,17 @@ FORCEINLINE glm::vec3 RTCVertexToRendererVertex(RTCVertex Vertex)
 RTMaterial::RTMaterial(CreateMaterialDescriptor *pCreateMaterialDescriptor)
 {
 	int ComponentCount;
-	m_pImage = stbi_load(pCreateMaterialDescriptor->m_TextureName, &m_Width, &m_Height, &ComponentCount, STBI_rgb);
-	FAIL_CHK(ComponentCount != cComponentCount, "Stb_Image returned an unexpected component count");
+	if (pCreateMaterialDescriptor->m_TextureName && strlen(pCreateMaterialDescriptor->m_TextureName))
+	{
+		m_pImage = stbi_load(pCreateMaterialDescriptor->m_TextureName, &m_Width, &m_Height, &ComponentCount, STBI_rgb);
+		FAIL_CHK(ComponentCount != cComponentCount, "Stb_Image returned an unexpected component count");
+	}
+	else
+	{
+		m_pImage = nullptr;
+	}
+	m_Diffuse = RealArrayToGlmVec3(pCreateMaterialDescriptor->m_DiffuseColor);
+	m_Reflectivity = pCreateMaterialDescriptor->m_Reflectivity;
 }
 
 Material *RTRenderer::CreateMaterial(_In_ CreateMaterialDescriptor *pCreateMaterialDescriptor)
@@ -199,12 +208,14 @@ void RTRenderer::DrawScene(Camera *pCamera, Scene *pScene)
 
 				glm::vec3 TotalColor = glm::vec3(0.0f);
 				glm::vec3 matColor = pGeometry->GetColor(ray.primID, a, b);
+				float reflectivity = pGeometry->GetMaterial()->GetReflectivity();
 				glm::vec3 Norm = pGeometry->GetNormal(ray.primID, a, b);
 				glm::vec3 intersectPos = pGeometry->GetPosition(ray.primID, a, b);
 				for (RTLight *pLight : pRTScene->GetLightList())
 				{
 					glm::vec3 LightColor = pLight->GetLightColor(intersectPos);
 					glm::vec3 LightDirection = pLight->GetLightDirection(intersectPos);
+					glm::vec3 HalfVector = glm::normalize(LightDirection + -RayDirection);
 
 					float nDotL = glm::dot(Norm, LightDirection);
 					if (nDotL > 0.0f)
@@ -223,7 +234,6 @@ void RTRenderer::DrawScene(Camera *pCamera, Scene *pScene)
 						rtcOccluded(pRTScene->GetRTCScene(), ShadowRay);
 						if (ShadowRay.geomID == RTC_INVALID_GEOMETRY_ID)
 						{
-
 							TotalColor += matColor * LightColor * nDotL;
 						}
 					}

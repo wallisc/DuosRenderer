@@ -151,7 +151,7 @@ HRESULT CALLBACK OnDeviceCreated(_In_ ID3D11Device* pd3dDevice, _In_ const DXGI_
 
 	FAIL_CHK(FAILED(hr), "Failed to create DXUT dialog manager");
 
-	const aiScene* pAssimpScene = InitAssimpScene("Assets/blockScene/blockScene.dae");
+	const aiScene* pAssimpScene = InitAssimpScene("Assets/sampleScene/sampleScene.dae");
 
 	FAIL_CHK(!pAssimpScene, "Failed to open scene file");
 
@@ -215,10 +215,24 @@ void InitSceneAndCamera(_In_ Renderer *pRenderer, _In_ const aiScene &assimpScen
 		assert(pMat);
 
 		aiString path;
+		float reflectivity, shininess;
 		pMat->GetTexture(aiTextureType_DIFFUSE, 0, &path);
+		pMat->Get(AI_MATKEY_REFLECTIVITY, reflectivity);
+		pMat->Get(AI_MATKEY_SHININESS, shininess);
+
+		aiColor3D diffuse;
+		pMat->Get(AI_MATKEY_COLOR_DIFFUSE, diffuse);
 
 		CreateMaterialDescriptor CreateMaterialDescriptor;
 		CreateMaterialDescriptor.m_TextureName = path.C_Str();
+
+		CreateMaterialDescriptor.m_DiffuseColor.x = diffuse.r;
+		CreateMaterialDescriptor.m_DiffuseColor.y = diffuse.g;
+		CreateMaterialDescriptor.m_DiffuseColor.z = diffuse.b;
+
+		CreateMaterialDescriptor.m_Reflectivity = reflectivity;
+		CreateMaterialDescriptor.m_Roughness = sqrt(2.0 / (shininess + 2.0f));
+
 		materialList[i] = pRenderer->CreateMaterial(&CreateMaterialDescriptor);
 	}
 
@@ -268,7 +282,7 @@ void InitSceneAndCamera(_In_ Renderer *pRenderer, _In_ const aiScene &assimpScen
 	{
 		CreateLightDescriptor CreateLight;
 		CreateDirectionalLight CreateDirectional;
-		CreateDirectional.m_EmissionDirection = Vec3(1.0f, -1.0, 1.0);
+		CreateDirectional.m_EmissionDirection = Vec3(1.0f, -1.0, -1.0);
 		CreateLight.m_Color = Vec3(1.0f, 1.0f, 1.0f);
 		CreateLight.m_LightType = CreateLightDescriptor::DIRECTIONAL_LIGHT;
 		CreateLight.m_pCreateDirectionalLight = &CreateDirectional;
@@ -421,7 +435,7 @@ void CALLBACK OnMouseMove(_In_ bool bLeftButtonDown, _In_ bool bRightButtonDown,
 	}
 	else
 	{
-		const float CAMERA_ROTATION_SPEED = 3.14 / (WIDTH / 2.0);
+		const float CAMERA_ROTATION_SPEED = 3.14 / (WIDTH);
 
 		int deltaX = g_MouseX - xPos;
 		int deltaY = g_MouseY - yPos;
@@ -430,7 +444,7 @@ void CALLBACK OnMouseMove(_In_ bool bLeftButtonDown, _In_ bool bRightButtonDown,
 		
 		for (UINT i = 0; i < RENDERER_TYPE::NUM_RENDERER_TYPES; i++)
 		{
-			//g_pCamera[i]->Rotate(0.0f, -CAMERA_ROTATION_SPEED * deltaX, CAMERA_ROTATION_SPEED * deltaY);
+			g_pCamera[i]->Rotate(0.0f, -CAMERA_ROTATION_SPEED * deltaX, CAMERA_ROTATION_SPEED * deltaY);
 		}
 	}
 }

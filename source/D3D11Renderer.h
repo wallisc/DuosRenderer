@@ -3,6 +3,7 @@
 #include <d3d11_1.h>
 #include <directxmath.h>
 #include "D3D11Canvas.h"
+#include <unordered_map>
 
 struct CBCamera
 {
@@ -15,6 +16,7 @@ struct CBViewProjectionTransforms
 {
 	DirectX::XMMATRIX m_View;
 	DirectX::XMMATRIX m_Projection;
+	DirectX::XMMATRIX m_InvTransView;
 };
 
 struct CBDirectionalLight
@@ -23,12 +25,23 @@ struct CBDirectionalLight
 	DirectX::XMVECTOR m_Color;
 };
 
+struct CBMaterial
+{
+	DirectX::XMVECTOR m_Diffuse;
+	DirectX::XMVECTOR m_MaterialProperties; // (Reflectivity (R0), Roughness, ,)
+};
+
 class D3D11Material : public Material
 {
 public:
 	D3D11Material(_In_ ID3D11Device *pDevice, CreateMaterialDescriptor *pCreateMaterialDescriptor);
 	ID3D11ShaderResourceView *GetShaderResourceView() const { return pTextureResourceView; }
+
+	bool HasTexture() { return pTextureResourceView != nullptr; }
+	ID3D11Buffer *GetMaterialBuffer() { return m_pMaterialBuffer; }
 private:
+	CBMaterial m_CBMaterial;
+	ID3D11Buffer *m_pMaterialBuffer;
 	ID3D11ShaderResourceView *pTextureResourceView;
 };
 
@@ -68,7 +81,6 @@ public:
 	virtual void Translate(_In_ const Vec3 &translationVector) { D3D11Transformable::Translate(translationVector); }
 	virtual void Rotate(float row, float yaw, float pitch) { D3D11Transformable::Rotate(row, yaw, pitch); }
 
-
 private:
 	bool m_UsesIndexBuffer;
 	unsigned int m_VertexCount;
@@ -88,6 +100,7 @@ public:
 		m_Type(Type) {}
 
 	CreateLightDescriptor::LightType GetLightType() const { return m_Type; }
+	virtual void UpdateLight(ID3D11DeviceContext *pContext, const DirectX::XMMATRIX &viewTransformation) = 0;
 private:
 	CreateLightDescriptor::LightType m_Type;
 };
@@ -104,7 +117,9 @@ public:
 	
 	// The position from where we render the shadow buffer depends on the scene
 	ID3D11Buffer *GetViewProjBuffer(ID3D11DeviceContext *pContext, D3D11Scene *pScene, D3D11Camera *pCamera);
+	virtual void UpdateLight(ID3D11DeviceContext *pContext, const DirectX::XMMATRIX &viewTransformation);
 private:
+	DirectX::XMVECTOR m_lightDirection;
 	CBDirectionalLight m_CpuLightData;
 	CBViewProjectionTransforms m_ViewProjCpuData;
 
@@ -123,6 +138,8 @@ public:
 
 	ID3D11Buffer *GetCameraConstantBuffer();
 	ID3D11Buffer *GetViewProjBuffer();
+	const DirectX::XMMATRIX &GetViewMatrix() { return m_ViewProjCpuData.m_View; }
+	const DirectX::XMMATRIX &GetInvTransViewMatrix() { return m_ViewProjCpuData.m_InvTransView; }
 	float GetAspectRatio() { return m_Width / m_Height; }
 private:
 	CBCamera m_CameraCpuData;
@@ -168,6 +185,56 @@ private:
 	DirectX::XMVECTOR m_MinDimensions;
 };
 
+template <typename ShaderType>
+class D3D11ShaderCache
+{
+protected:
+	D3D11ShaderCache(const char *shaderFile, const char *entryName, const char *shaderModel) :
+		m_pShaderFile(shaderFile), m_pEntryName(entryName), m_pShaderModel(shaderModel) {}
+
+	virtual std::vector<D3D_SHADER_MACRO> GetMacrosFromShaderValue(UINT input) = 0;
+	virtual ShaderType *CreateShader(ID3D10Blob *pBlob) = 0;
+
+	typename ShaderType *GetShader(UINT shaderValue)
+	{
+		auto entry = m_shaderCache.find(shaderValue);
+		if (shaderValue == m_shaderCache.end())
+		{
+			ID3D10Blob *pShaderBlob;
+			CompileShaderHelper(m_pShaderFile, m_pEntryName, m_pShaderModel, &GetMacrosFromShaderValue(shaderValue)[0], &pShaderBlob);
+			FAIL_CHK(FAILED(hr), "The FX file cannot be compiled.  Please run this executable from the directory that contains the FX file.");
+
+			ShaderType *pShader = CreateShader(pBlob);
+			FAIL_CHK(!pShader, "Failed to CreateVertexShader");
+		}
+		else
+		{
+			return entry->second;
+		}
+	}
+
+	const char *m_pShaderFile, *m_pEntryName, *m_pShaderModel;
+	std::unordered_map<UINT, typename ShaderType*> m_shaderCache;
+};
+
+class PixelShaderCache : public D3D11ShaderCache<ID3D11PixelShader>
+{
+protected:
+	PixelShaderCache(ID3D11Device *pDevice, char *pFileName, char *pEntryName) :
+		D3D11ShaderCache<ID3D11PixelShader>(pFileName, pEntryName, "ps_5_0"),
+		m_pDevice(pDevice)
+	{}
+
+	ID3D11Device *m_pDevice;
+	virtual std::vector<D3D_SHADER_MACRO> GetMacrosFromShaderValue(UINT input) = 0;
+	ID3D11PixelShader *CreateShader(ID3D10Blob *pBlob)
+	{
+		ID3D11PixelShader *pShader;
+		m_pDevice->CreatePixelShader(pBlob->GetBufferPointer(), pBlob->GetBufferSize(), nullptr, &pShader);
+		return pShader;
+	}
+};
+
 class D3D11Renderer : public Renderer
 {
 public:
@@ -211,7 +278,8 @@ private:
 	ID3D11ShaderResourceView *m_pShadowResourceView;
 
 	ID3D11VertexShader* m_pForwardVertexShader;
-	ID3D11PixelShader* m_pForwardPixelShader;
+	ID3D11PixelShader* m_pForwardMattePixelShader;
+	ID3D11PixelShader* m_pForwardTexturedPixelShader;
 	ID3D11InputLayout* m_pForwardInputLayout;
 
 	ID3D11SamplerState *m_pSamplerState;

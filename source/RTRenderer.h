@@ -16,19 +16,29 @@ public:
 
 	glm::vec3 GetColor(glm::vec2 uv) 
 	{
-		glm::tvec2<int> coord = glm::vec2(uv.x * m_Width, uv.y * m_Height);
-		unsigned char *pPixel = &m_pImage[(coord.x + coord.y * m_Width) * cSizeofComponent * cComponentCount];
-		return glm::vec3(
-			ConvertCharToFloat(pPixel[0]), 
-			ConvertCharToFloat(pPixel[1]), 
-			ConvertCharToFloat(pPixel[2]));
+		if (m_pImage)
+		{
+			glm::tvec2<int> coord = glm::vec2(uv.x * m_Width, uv.y * m_Height);
+			unsigned char *pPixel = &m_pImage[(coord.x + coord.y * m_Width) * cSizeofComponent * cComponentCount];
+			return glm::vec3(
+				ConvertCharToFloat(pPixel[0]),
+				ConvertCharToFloat(pPixel[1]),
+				ConvertCharToFloat(pPixel[2]));
+		}
+		else
+		{
+			return m_Diffuse;
+		}
 	}
+
+	float GetReflectivity() { return m_Reflectivity; }
 private:
 	float ConvertCharToFloat(unsigned char CharColor)
 	{
 		return (float)CharColor / 256.0f;
 	}
-
+	glm::vec3 m_Diffuse;
+	float m_Reflectivity;
 	static const int cComponentCount = 3;
 	static const unsigned int cSizeofComponent = sizeof(unsigned char);
 

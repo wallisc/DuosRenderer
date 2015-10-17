@@ -1,4 +1,9 @@
 #define EPSILON 0.0001
+#define PI 3.14
+#define ENABLE_PBR 0
+
+// sqrt(2.0 / PI)
+#define SQRT_2_DIVIDED_BY_PI 0.7978845608
 
 Texture2D DiffuseTexture : register(t0);
 Texture2D shadowBuffer : register(t1);
@@ -16,6 +21,7 @@ cbuffer cbViewProjectionTransforms : register(b1)
 {
 	float4x4 View;
 	float4x4 Projection;
+	float4x4 InvTransView;
 }
 
 cbuffer cbDirectionalLight : register(b2)
@@ -30,6 +36,12 @@ cbuffer cbViewProjectionTransforms : register(b3)
 	float4x4 LightProjection;
 }
 
+cbuffer cbMaterial : register(b4)
+{
+	float4 DiffuseColor;
+	float4 MaterialProperties; // (Reflectivity (R0), Roughness (a), ,)
+}
+
 //--------------------------------------------------------------------------------------
 struct VS_INPUT
 {
@@ -40,7 +52,8 @@ struct VS_INPUT
 
 struct PS_INPUT
 {
-    float4 Pos : SV_POSITION;
+	float4 Pos : SV_POSITION;
+	float4 ViewPos : POSITION0;
     float2 Tex : TEXCOORD0;
     float4 Norm : NORMAL0;
 	float4 LightPos : NORMAL1;
@@ -58,12 +71,52 @@ PS_INPUT VS( VS_INPUT input )
 {
     PS_INPUT output;
 
-	output.Pos = mul(Projection, mul(View, input.Pos));
+	output.ViewPos = mul(View, input.Pos);
+	output.Pos = mul(Projection, output.ViewPos);
 	output.LightPos = mul(LightProjection, mul(LightView, input.Pos));
-    output.Norm = input.Norm;
+	output.Norm = mul(InvTransView, float4(input.Norm.xyz, 0.0));
     output.Tex = input.Tex;
     
     return output;
+}
+
+float GGX_Distribution(float3 h, float3 n, float roughness)
+{
+	float nDotH = saturate(dot(n, h));
+	float nDotHSquared = nDotH * nDotH;
+	float roughnessSquared = roughness * roughness;
+	return roughnessSquared / (PI * pow(nDotHSquared * (roughnessSquared - 1) + 1, 2.0));
+}
+
+float GGX_GeometryAttenuationPartial(float3 v, float3 n, float3 h, float roughness)
+{
+	float vDotN = dot(v, n);
+	float vDotNSquared = vDotN * vDotN;
+	float nDotH = dot(v, h);
+	int applyGGX = (vDotN / nDotH) > 0.0;
+	return applyGGX * 2.0 / (1.0 + sqrt(1.0 + roughness * roughness * (1.0 - vDotNSquared) / vDotNSquared));
+}
+
+float GGX_GeometryAttenuation(float3 v, float3 n, float3 h, float roughness)
+{
+	return GGX_GeometryAttenuationPartial(v, n, h, roughness);
+}
+
+float Schlicks_PartialGeometricAttenuation(float3 n, float3 v, float k)
+{
+	float nDotV = saturate(dot(n, v));
+	return nDotV / (nDotV * (1 - k) + k);
+}
+
+float Schlicks_GeometricAttenuation(float3 v, float3 l, float3 n, float roughness)
+{
+	float k = roughness * SQRT_2_DIVIDED_BY_PI;
+	return Schlicks_PartialGeometricAttenuation(n, v, k) * Schlicks_PartialGeometricAttenuation(n, l, roughness);
+}
+
+float Fresnel(float3 h, float3 n, float reflectivity)
+{
+	return (reflectivity + (1.0 - reflectivity) * pow(1 - saturate(dot(h, n)), 5));
 }
 
 //--------------------------------------------------------------------------------------
@@ -75,18 +128,45 @@ PS_OUTPUT PS( PS_INPUT input) : SV_Target
 
 	// Calculating in pixel shader for precision
 	float3 n = normalize(input.Norm.xyz);
-	float nDotL = dot(n, LightDirection);
+	float3 v = normalize(-input.ViewPos.xyz);
+	float R0 = MaterialProperties.r;
+	float roughness = MaterialProperties.g;
 
-	//input.LightPos.xy /= float2(800, 600);
+	float nDotL = saturate(dot(n, LightDirection));
+	float nDotV = saturate(dot(n, v));
+
 	input.LightPos /= input.LightPos.w;
 
 	input.LightPos.xy = (input.LightPos.xy + float2(1.0f, 1.0f))/ float2(2.0f, -2.0f);
 
-	output.Color = float4(0.0f, 0.0f, 0.0f, 1.0f);
+	float4 totalDiffuse = float4(0.0f, 0.0f, 0.0f, 1.0f);
+	float4 totalSpecular = float4(0.0f, 0.0f, 0.0f, 1.0f);
+	float totalFresnel = 0.0;
+
 	float ShadowMapDepth = shadowBuffer.Sample(samLinear, input.LightPos.xy).r;
-	if (input.LightPos.z <= ShadowMapDepth + EPSILON)
+	float3 h = normalize(LightDirection + v);
+
+	if (input.LightPos.z <= ShadowMapDepth + EPSILON && nDotL > 0.0)
 	{
-		output.Color += (nDotL > 0.0f) * (nDotL * LightColor * DiffuseTexture.Sample(samLinear, input.Tex));
+#if USE_TEXTURE
+		float4 diffuse = DiffuseTexture.Sample(samLinear, input.Tex);
+#else
+		float4 diffuse = DiffuseColor;
+#endif
+		totalDiffuse += (nDotL > 0.0f) * (nDotL * LightColor * diffuse);
+
+#if ENABLE_PBR
+		float G = Schlicks_GeometricAttenuation(v, LightDirection, n, roughness);
+		float F = Fresnel(h, n, R0);
+		float D = GGX_Distribution(h, n, roughness);
+		totalSpecular += LightColor * F * D * G / (4 * nDotL * nDotV);
+		totalFresnel += F;
+#endif
 	}
+#if ENABLE_PBR
+	output.Color = totalDiffuse * (1.0 - totalFresnel) + totalSpecular;
+#else
+	output.Color = totalDiffuse;
+#endif
 	return output;
 }

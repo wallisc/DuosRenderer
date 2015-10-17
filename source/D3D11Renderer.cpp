@@ -28,7 +28,7 @@ XMVECTOR RealArrayToXMVector(Vec3 Vector, VectorType Type)
 //
 // With VS 11, we could load up prebuilt .cso files instead...
 //--------------------------------------------------------------------------------------
-HRESULT CompileShaderHelper(WCHAR* szFileName, LPCSTR szEntryPoint, LPCSTR szShaderModel, ID3DBlob** ppBlobOut)
+HRESULT CompileShaderHelper(WCHAR* szFileName, LPCSTR szEntryPoint, LPCSTR szShaderModel, const D3D_SHADER_MACRO *pDefines, ID3DBlob** ppBlobOut)
 {
 	HRESULT hr = S_OK;
 
@@ -45,7 +45,7 @@ HRESULT CompileShaderHelper(WCHAR* szFileName, LPCSTR szEntryPoint, LPCSTR szSha
 #endif
 
 	ID3DBlob* pErrorBlob = nullptr;
-	hr = D3DCompileFromFile(szFileName, nullptr, nullptr, szEntryPoint, szShaderModel,
+	hr = D3DCompileFromFile(szFileName, pDefines, nullptr, szEntryPoint, szShaderModel,
 		dwShaderFlags, 0, ppBlobOut, &pErrorBlob);
 	if (FAILED(hr))
 	{
@@ -100,7 +100,7 @@ void D3D11Renderer::CompileShaders()
 	// Compile the forward rendering shaders
 	{
 		CComPtr<ID3DBlob> pVSBlob = nullptr;
-		HRESULT hr = CompileShaderHelper(L"GeometryRender.fx", "VS", "vs_4_0", &pVSBlob);
+		HRESULT hr = CompileShaderHelper(L"GeometryRender.fx", "VS", "vs_4_0", nullptr, &pVSBlob);
 		FAIL_CHK(FAILED(hr), "The FX file cannot be compiled.  Please run this executable from the directory that contains the FX file.");
 			
 		hr = m_pDevice->CreateVertexShader(pVSBlob->GetBufferPointer(), pVSBlob->GetBufferSize(), nullptr, &m_pForwardVertexShader);
@@ -118,11 +118,25 @@ void D3D11Renderer::CompileShaders()
 		hr = m_pDevice->CreateInputLayout(layout, numElements, pVSBlob->GetBufferPointer(),
 			pVSBlob->GetBufferSize(), &m_pForwardInputLayout);
 
+		D3D_SHADER_MACRO macros[2] = {};
+		macros[0].Name = "USE_TEXTURE";
+		macros[0].Definition = "1";
+
 		CComPtr<ID3DBlob> pPSBlob = nullptr;
-		hr = CompileShaderHelper(L"GeometryRender.fx", "PS", "ps_4_0", &pPSBlob);
+		hr = CompileShaderHelper(L"GeometryRender.fx", "PS", "ps_4_0", macros, &pPSBlob);
 		FAIL_CHK(FAILED(hr), "The FX file cannot be compiled.  Please run this executable from the directory that contains the FX file.");
 
-		hr = m_pDevice->CreatePixelShader(pPSBlob->GetBufferPointer(), pPSBlob->GetBufferSize(), nullptr, &m_pForwardPixelShader);
+		hr = m_pDevice->CreatePixelShader(pPSBlob->GetBufferPointer(), pPSBlob->GetBufferSize(), nullptr, &m_pForwardTexturedPixelShader);
+		FAIL_CHK(FAILED(hr), "Failed to CreatePixelShader");
+
+
+		macros[0].Name = "USE_TEXTURE";
+		macros[0].Definition = "0";
+		pPSBlob = nullptr;
+		hr = CompileShaderHelper(L"GeometryRender.fx", "PS", "ps_4_0", macros, &pPSBlob);
+		FAIL_CHK(FAILED(hr), "The FX file cannot be compiled.  Please run this executable from the directory that contains the FX file.");
+
+		hr = m_pDevice->CreatePixelShader(pPSBlob->GetBufferPointer(), pPSBlob->GetBufferSize(), nullptr, &m_pForwardMattePixelShader);
 		FAIL_CHK(FAILED(hr), "Failed to CreatePixelShader");
 	}
 }
@@ -284,13 +298,36 @@ void D3D11Renderer::DestroyCamera(Camera *pCamera)
 
 D3D11Material::D3D11Material(_In_ ID3D11Device *pDevice, CreateMaterialDescriptor *pCreateMaterialDescriptor)
 {
-	CA2WEX<MAX_ALLOWED_STR_LENGTH> WideTextureName(pCreateMaterialDescriptor->m_TextureName);
-	HRESULT result = CreateWICTextureFromFile(pDevice,
-		WideTextureName,
-		nullptr,
-		&pTextureResourceView,
-		20 * 1024 * 1024);
-	FAIL_CHK(FAILED(result), "Failed to create SRV for texture");
+	HRESULT result = S_OK;
+	if (pCreateMaterialDescriptor->m_TextureName && strlen(pCreateMaterialDescriptor->m_TextureName))
+	{
+		CA2WEX<MAX_ALLOWED_STR_LENGTH> WideTextureName(pCreateMaterialDescriptor->m_TextureName);
+		result = CreateWICTextureFromFile(pDevice,
+			WideTextureName,
+			nullptr,
+			&pTextureResourceView,
+			20 * 1024 * 1024);
+		FAIL_CHK(FAILED(result), "Failed to create SRV for texture");
+	}
+	else
+	{
+		pTextureResourceView = nullptr;
+	}
+	auto &diffuse = pCreateMaterialDescriptor->m_DiffuseColor;
+	m_CBMaterial.m_Diffuse = XMVectorSet(diffuse.x, diffuse.y, diffuse.z, 1.0f);
+	m_CBMaterial.m_MaterialProperties = XMVectorSet(pCreateMaterialDescriptor->m_Reflectivity, pCreateMaterialDescriptor->m_Roughness, 0, 0);
+
+	D3D11_BUFFER_DESC MaterialBufferDesc;
+	ZeroMemory(&MaterialBufferDesc, sizeof(MaterialBufferDesc));
+	MaterialBufferDesc.Usage = D3D11_USAGE_DEFAULT;
+	MaterialBufferDesc.ByteWidth = sizeof(CBMaterial);
+	MaterialBufferDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+	MaterialBufferDesc.CPUAccessFlags = 0;
+	D3D11_SUBRESOURCE_DATA MaterialBufferData;
+	ZeroMemory(&MaterialBufferData, sizeof(MaterialBufferData));
+	MaterialBufferData.pSysMem = &m_CBMaterial;
+	HRESULT hr = pDevice->CreateBuffer(&MaterialBufferDesc, &MaterialBufferData, &m_pMaterialBuffer);
+	FAIL_CHK(FAILED(hr), "Failed to create Index Buffer");
 }
 
 Material *D3D11Renderer::CreateMaterial(_In_ CreateMaterialDescriptor *pCreateMaterialDescriptor)
@@ -376,6 +413,12 @@ void D3D11Renderer::DrawScene(Camera *pCamera, Scene *pScene)
 {
 	D3D11Scene *pD3D11Scene = D3D11_RENDERER_CAST<D3D11Scene*>(pScene);
 	D3D11Camera *pD3D11Camera = D3D11_RENDERER_CAST<D3D11Camera*>(pCamera);
+
+	for (auto pLight : pD3D11Scene->GetDirectionalLightList())
+	{
+		pLight->UpdateLight(m_pImmediateContext, pD3D11Camera->GetInvTransViewMatrix());
+	}
+
 	m_pImmediateContext->ClearRenderTargetView(m_pSwapchainRenderTargetView, Colors::Gray);
 	m_pImmediateContext->ClearDepthStencilView(m_pDepthBuffer, D3D11_CLEAR_DEPTH, 1.0f, 0);
 	m_pImmediateContext->ClearDepthStencilView(m_pShadowDepthBuffer, D3D11_CLEAR_DEPTH, 1.0f, 0);
@@ -387,7 +430,6 @@ void D3D11Renderer::DrawScene(Camera *pCamera, Scene *pScene)
 	m_pImmediateContext->PSSetConstantBuffers(2, 1, &pDirectonalLightConstantBuffer);
 	m_pImmediateContext->VSSetConstantBuffers(0, 1, &pCameraConstantBuffer);
 
-	m_pImmediateContext->PSSetShader(m_pForwardPixelShader, NULL, 0);
 	m_pImmediateContext->VSSetShader(m_pForwardVertexShader, NULL, 0);
 
 	const unsigned int Strides = sizeof(Vertex);
@@ -409,10 +451,23 @@ void D3D11Renderer::DrawScene(Camera *pCamera, Scene *pScene)
 		{
 			ID3D11Buffer *pVertexBuffer = pGeometry->GetVertexBuffer();
 			ID3D11Buffer *pIndexBuffer = pGeometry->GetIndexBuffer();
+			ID3D11Buffer *pMaterialBuffer = pGeometry->GetMaterial()->GetMaterialBuffer();
+
 			m_pImmediateContext->IASetVertexBuffers(0, 1, &pVertexBuffer, &Strides, &Offsets);
 			m_pImmediateContext->IASetIndexBuffer(pIndexBuffer, DXGI_FORMAT_R32_UINT, 0);
-			ID3D11ShaderResourceView *pDiffuseTexture = pGeometry->GetMaterial()->GetShaderResourceView();
-			m_pImmediateContext->PSSetShaderResources(0, 1, &pDiffuseTexture);
+			m_pImmediateContext->PSSetConstantBuffers(4, 1, &pMaterialBuffer);
+
+			if (pGeometry->GetMaterial()->HasTexture())
+			{
+				ID3D11ShaderResourceView *pDiffuseTexture = pGeometry->GetMaterial()->GetShaderResourceView();
+				m_pImmediateContext->PSSetShaderResources(0, 1, &pDiffuseTexture);
+				m_pImmediateContext->PSSetShader(m_pForwardTexturedPixelShader, NULL, 0);
+			}
+			else
+			{
+				m_pImmediateContext->PSSetShader(m_pForwardMattePixelShader, NULL, 0);
+			}
+
 			if (pIndexBuffer)
 			{
 				m_pImmediateContext->DrawIndexed(pGeometry->GetIndexCount(), 0, 0);
@@ -527,10 +582,11 @@ D3D11DirectionalLight::D3D11DirectionalLight(
 {
 	assert(pCreateLight->m_LightType == CreateLightDescriptor::DIRECTIONAL_LIGHT);
 
-	// Flip direction since we want light direction, not emission direction
-	m_CpuLightData.m_Direction = 
-		-1.0f * XMVector3Normalize(RealArrayToXMVector(
+	m_lightDirection = -1.0f * XMVector3Normalize(RealArrayToXMVector(
 		pCreateLight->m_pCreateDirectionalLight->m_EmissionDirection, DIRECTION));
+
+	// Flip direction since we want light direction, not emission direction
+	m_CpuLightData.m_Direction = m_lightDirection;
 	m_CpuLightData.m_Color = RealArrayToXMVector(pCreateLight->m_Color, DIRECTION);
 
 	m_pLightConstantBuffer = CreateConstantBuffer(pDevice, &m_CpuLightData, sizeof(CBDirectionalLight));
@@ -539,7 +595,14 @@ D3D11DirectionalLight::D3D11DirectionalLight(
 	// allocate the buffer now
 	m_ViewProjCpuData.m_Projection = XMMatrixIdentity();
 	m_ViewProjCpuData.m_View = XMMatrixIdentity();
+	m_ViewProjCpuData.m_InvTransView = XMMatrixIdentity();
 	m_pViewProjBuffer = CreateConstantBuffer(pDevice, m_pLightConstantBuffer, sizeof(CBViewProjectionTransforms));
+}
+
+void D3D11DirectionalLight::UpdateLight(ID3D11DeviceContext *pContext, const XMMATRIX &invTransView)
+{
+	m_CpuLightData.m_Direction = XMVector3Normalize(XMVector4Transform(m_lightDirection, invTransView));
+	pContext->UpdateSubresource(m_pLightConstantBuffer, 0, nullptr, &m_CpuLightData, 0, 0);
 }
 
 ID3D11Buffer *D3D11DirectionalLight::GetViewProjBuffer(ID3D11DeviceContext *pContext, D3D11Scene *pScene, D3D11Camera *pCamera)
@@ -547,7 +610,7 @@ ID3D11Buffer *D3D11DirectionalLight::GetViewProjBuffer(ID3D11DeviceContext *pCon
 	// Calculate what's the biggest the scene can actually be.
 	float MaxSceneLength = XMVectorGetX(XMVector3Length(pScene->GetMaxDimensions() - pScene->GetMinDimensions()));
 	XMVECTOR SceneCenter = pScene->GetMaxDimensions() + pScene->GetMinDimensions();
-	XMVECTOR EyePosition = SceneCenter + m_CpuLightData.m_Direction * MaxSceneLength;
+	XMVECTOR EyePosition = SceneCenter + m_lightDirection * MaxSceneLength;
 
 	XMVECTOR LookDir = XMVector3Normalize(SceneCenter - EyePosition);
 	XMVECTOR Up;
@@ -570,7 +633,9 @@ ID3D11Buffer *D3D11DirectionalLight::GetViewProjBuffer(ID3D11DeviceContext *pCon
 		Up = XMVectorSet(0.0f, y, z, 0.0f);
 	}
 
+	XMVECTOR determinant;
 	m_ViewProjCpuData.m_View = XMMatrixLookAtLH(EyePosition, SceneCenter, Up);
+	m_ViewProjCpuData.m_InvTransView = XMMatrixTranspose(XMMatrixInverse(&determinant, m_ViewProjCpuData.m_View));
 	m_ViewProjCpuData.m_Projection = XMMatrixOrthographicLH(
 		MaxSceneLength,
 		MaxSceneLength / pCamera->GetAspectRatio(),
@@ -612,12 +677,12 @@ void D3D11Scene::AddGeometry(_In_ Geometry *pGeometry)
 
 void D3D11Scene::AddLight(_In_ Light *pLight)
 {
-	D3D11Light *pD3D11Light = D3D11_RENDERER_CAST<D3D11Light*>(pLight);
+	D3D11Light *pD3D11Light = (D3D11Light*)(pLight);
 	switch (pD3D11Light->GetLightType())
 	{
 	case CreateLightDescriptor::DIRECTIONAL_LIGHT:
 		assert(m_DirectionalLightList.size() == 0); // TODO: Only supporting 1 directional light for now
-		m_DirectionalLightList.push_back(D3D11_RENDERER_CAST<D3D11DirectionalLight*>(pLight));
+		m_DirectionalLightList.push_back((D3D11DirectionalLight*)(pLight));
 		break;
 	default:
 		assert(false);
@@ -640,11 +705,13 @@ D3D11Camera::D3D11Camera(ID3D11Device *pDevice, ID3D11DeviceContext *pContext, C
 	m_CameraCpuData.m_ClipDistance = XMVectorSet(pCreateCameraDescriptor->m_FarClip, 0, 0, 0);
 	m_CameraCpuData.m_Dimensions = XMVectorSet(pCreateCameraDescriptor->m_Width, pCreateCameraDescriptor->m_Height, 0, 0);
 	
+	XMVECTOR determinant;
 	m_ViewProjCpuData.m_Projection = XMMatrixPerspectiveFovLH(pCreateCameraDescriptor->m_FieldOfView,
 		pCreateCameraDescriptor->m_Width / pCreateCameraDescriptor->m_Height,
 		pCreateCameraDescriptor->m_NearClip,
 	 	pCreateCameraDescriptor->m_FarClip);
 	m_ViewProjCpuData.m_View = XMMatrixLookAtLH(m_Position, m_LookAt, m_Up);
+	m_ViewProjCpuData.m_InvTransView = XMMatrixTranspose(XMMatrixInverse(&determinant, m_ViewProjCpuData.m_View));
 
 	m_pCameraBuffer = CreateConstantBuffer(pDevice, &m_CameraCpuData, sizeof(CBCamera));
 	m_pViewProjBuffer = CreateConstantBuffer(pDevice, &m_ViewProjCpuData, sizeof(CBViewProjectionTransforms));
@@ -674,13 +741,13 @@ void D3D11Camera::Rotate(float row, float yaw, float pitch)
 		XMVECTOR right = XMVector3Cross(lookDir, m_Up);
 		XMMATRIX pitchRotation = XMMatrixRotationNormal(right, pitch);
 		lookDir = XMVector3Transform(lookDir, pitchRotation);
-		m_Up = XMVector3Transform(m_Up, pitchRotation);
+		m_Up = XMVector3Normalize(XMVector3Transform(m_Up, pitchRotation));
 	}
 
 	if (yaw)
 	{
-		XMMATRIX yawRotation = XMMatrixRotationNormal(m_Up, yaw);
-		lookDir = XMVector3Transform(lookDir, yawRotation);
+		XMMATRIX yawRotation = XMMatrixRotationNormal(XMVectorSet(0, 1, 0, 0), yaw);
+		lookDir = XMVector3Normalize(XMVector3Transform(lookDir, yawRotation));
 	}
 
 	m_LookAt = m_Position + XMVector3Length(m_LookAt - m_Position) * lookDir;
@@ -697,10 +764,12 @@ ID3D11Buffer* D3D11Camera::GetViewProjBuffer()
 {
 	if (m_ViewMatrixNeedsUpdate)
 	{
+		XMVECTOR determinant;
 		m_ViewProjCpuData.m_View = XMMatrixLookAtLH(m_Position, m_LookAt, m_Up);
+		m_ViewProjCpuData.m_InvTransView = XMMatrixTranspose(XMMatrixInverse(&determinant, m_ViewProjCpuData.m_View));
+
 		m_pContext->UpdateSubresource(m_pViewProjBuffer, 0, nullptr, &m_ViewProjCpuData, 0, 0);
 		m_ViewMatrixNeedsUpdate = false;
 	}
 	return m_pViewProjBuffer;
 }
-

@@ -58,6 +58,9 @@ struct CreateGeometryDescriptor
 struct CreateMaterialDescriptor
 {
 	const char *m_TextureName;
+	Vec3 m_DiffuseColor;
+	REAL m_Reflectivity;
+	REAL m_Roughness;
 };
 
 struct CreateDirectionalLight
