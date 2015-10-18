@@ -76,7 +76,7 @@ IDXGISwapChain* g_pSwapChain;
 // Forward declarations
 //--------------------------------------------------------------------------------------
 void InitSceneAndCamera(_In_ Renderer *, _In_ const aiScene &assimpScene, _In_ EnvironmentMap *pEnvMap, _Out_ Scene **, _Out_ Camera **);
-void InitEnvironmentMap(_In_ Renderer *pRenderer, char *CubeMapName, _Out_ EnvironmentMap **ppEnviromentMap);
+void InitEnvironmentMap(_In_ Renderer *pRenderer, char *CubeMapName, char *irradMapName, _Out_ EnvironmentMap **ppEnviromentMap);
 HRESULT InitWindow( HINSTANCE hInstance, int nCmdShow );
 LRESULT CALLBACK    WndProc( HWND, UINT, WPARAM, LPARAM );
 void UpdateCamera();
@@ -175,7 +175,7 @@ HRESULT CALLBACK OnDeviceCreated(_In_ ID3D11Device* pd3dDevice, _In_ const DXGI_
 		}
 
 		g_pRenderer[i]->SetCanvas(g_pCanvas);
-		InitEnvironmentMap(g_pRenderer[i], "Assets\\EnvironmentMap\\Uffizi\\Uffizi", &g_pEnvironmentMap[i]);
+		InitEnvironmentMap(g_pRenderer[i], "Assets\\EnvironmentMap\\Uffizi\\Uffizi", "Assets\\EnvironmentMap\\Uffizi\\irrad", &g_pEnvironmentMap[i]);
 		InitSceneAndCamera(g_pRenderer[i], *pAssimpScene, g_pEnvironmentMap[i], & g_pScene[i], &g_pCamera[i]);
 	}
 	return	S_OK;
@@ -209,16 +209,20 @@ Vec2 ConvertVec2(const aiVector3D &vec)
 	return Vec2(vec.x, vec.y);
 }
 
-void InitEnvironmentMap(_In_ Renderer *pRenderer, char *CubeMapName, _Out_ EnvironmentMap **ppEnviromentMap)
+void InitEnvironmentMap(_In_ Renderer *pRenderer, char *CubeMapName, char* irradMapName, _Out_ EnvironmentMap **ppEnviromentMap)
 {
 	CreateEnvironmentMapDescriptor EnvMapDescriptor;
 	char textureCubFileNames[TEXTURES_PER_CUBE][MAX_ALLOWED_STR_LENGTH];
+	char irradTextureCubFileNames[TEXTURES_PER_CUBE][MAX_ALLOWED_STR_LENGTH];
 	EnvMapDescriptor.m_EnvironmentType = CreateEnvironmentMapDescriptor::EnvironmentType::TEXTURE_CUBE;
 	CreateEnvironmentTextureCube &TexCubeDescriptor = EnvMapDescriptor.m_TextureCube;
 	for (UINT i = 0; i < TEXTURES_PER_CUBE; i++)
 	{
 		sprintf_s(textureCubFileNames[i], "%s_c0%d.bmp", CubeMapName, i);
 		TexCubeDescriptor.m_TextureNames[i] = textureCubFileNames[i];
+
+		sprintf_s(irradTextureCubFileNames[i], "%s_c0%d.bmp", irradMapName, i);
+		TexCubeDescriptor.m_IrradianceTextureNames[i] = irradTextureCubFileNames[i];
 	}
 
 	*ppEnviromentMap = pRenderer->CreateEnvironmentMap(&EnvMapDescriptor);

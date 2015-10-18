@@ -174,6 +174,8 @@ class D3D11EnvironmentMap : public EnvironmentMap
 {
 public:
 	virtual void DrawEnvironmentMap(_In_ ID3D11DeviceContext *pImmediateContext, D3D11Camera *pCamera, ID3D11RenderTargetView *pRenderTarget) = 0;
+	virtual ID3D11ShaderResourceView *GetEnvironmentMapSRV() = 0;
+	virtual ID3D11ShaderResourceView *GetIrradianceMapSRV() = 0;
 };
 
 class D3D11EnvironmentTextureCube : public D3D11EnvironmentMap
@@ -181,9 +183,12 @@ class D3D11EnvironmentTextureCube : public D3D11EnvironmentMap
 public:
 	D3D11EnvironmentTextureCube(_In_ ID3D11Device *pDevice, _In_ ID3D11DeviceContext *pImmediateContext, _In_ const CreateEnvironmentTextureCube *pCreateTextureCube);
 	void DrawEnvironmentMap(_In_ ID3D11DeviceContext *pImmediateContext, D3D11Camera *pCamera, ID3D11RenderTargetView *pRenderTarget);
-
+	ID3D11ShaderResourceView *GetEnvironmentMapSRV() { return m_pEnvironmentTextureCube; }
+	ID3D11ShaderResourceView *GetIrradianceMapSRV() { return m_pIrradianceTextureCube; }
 private:
+	static ID3D11ShaderResourceView *CreateTextureCube(_In_ ID3D11Device *pDevice, _In_ ID3D11DeviceContext *pImmediateContext, _In_reads_(TEXTURES_PER_CUBE) char * const *textureNames);
 	ID3D11ShaderResourceView *m_pEnvironmentTextureCube;
+	ID3D11ShaderResourceView *m_pIrradianceTextureCube;
 
 	struct CameraPlaneVertex
 	{
@@ -203,8 +208,10 @@ public:
 	D3D11EnvironmentColor(_In_ ID3D11Device *pDevice, const CreateEnvironmentColor *pCreateEnvironmnetColor) {
 		assert(false);
 	}
+	ID3D11ShaderResourceView *GetEnvironmentMapSRV() { return nullptr; }
+	ID3D11ShaderResourceView *GetIrradianceMapSRV() { return nullptr; }
 
-	virtual void DrawEnvironmentMap(_In_ ID3D11DeviceContext *pImmediateContext, D3D11Camera *pCamera, ID3D11RenderTargetView *pRenderTarget) {}
+	void DrawEnvironmentMap(_In_ ID3D11DeviceContext *pImmediateContext, D3D11Camera *pCamera, ID3D11RenderTargetView *pRenderTarget) {}
 };
 
 class D3D11Scene : public Scene

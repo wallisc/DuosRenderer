@@ -371,39 +371,8 @@ D3D11EnvironmentTextureCube::D3D11EnvironmentTextureCube(
 	_In_ ID3D11DeviceContext *pImmediateContext,
 	_In_ const CreateEnvironmentTextureCube *pCreateTextureCube)
 {
-	ID3D11Texture2D *pCubeResource;
-	for (UINT i = 0; i < TEXTURES_PER_CUBE; i++)
-	{
-		CA2WEX<MAX_ALLOWED_STR_LENGTH> WideTextureName(pCreateTextureCube->m_TextureNames[i]);
-		ID3D11Resource *pTempResource;
-		HRESULT hr = CreateWICTextureFromFile(pDevice,
-			WideTextureName,
-			&pTempResource,
-			nullptr,
-			20 * 1024 * 1024);
-		FAIL_CHK(FAILED(hr), "Failed to create texture from cube texture name");
-
-		if (i == 0)
-		{
-			D3D11_TEXTURE2D_DESC TextureDesc;
-			ID3D11Texture2D *pTempTexture;
-			pTempResource->QueryInterface<ID3D11Texture2D>(&pTempTexture);
-			pTempTexture->GetDesc(&TextureDesc);
-
-			D3D11_TEXTURE2D_DESC TextureCubeDesc = CD3D11_TEXTURE2D_DESC(
-				TextureDesc.Format, TextureDesc.Width, TextureDesc.Height, TEXTURES_PER_CUBE, 1,
-				D3D11_BIND_SHADER_RESOURCE, D3D11_USAGE_DEFAULT, 0, 1, 0, D3D11_RESOURCE_MISC_TEXTURECUBE);
-
-			hr = pDevice->CreateTexture2D(&TextureCubeDesc, nullptr, &pCubeResource);
-			FAIL_CHK(FAILED(hr), "Failed to create texture cube");
-
-			D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = CD3D11_SHADER_RESOURCE_VIEW_DESC(D3D11_SRV_DIMENSION_TEXTURECUBE, TextureCubeDesc.Format);
-			hr = pDevice->CreateShaderResourceView(pCubeResource, &srvDesc, &m_pEnvironmentTextureCube);
-			FAIL_CHK(FAILED(hr), "Failed to create SRV for texture cube");
-		}
-
-		pImmediateContext->CopySubresourceRegion(pCubeResource, ConvertRendererFaceToD3D11TextureFace((TextureFace)i), 0, 0, 0, pTempResource, 0, nullptr);
-	}
+	m_pEnvironmentTextureCube = CreateTextureCube(pDevice, pImmediateContext, pCreateTextureCube->m_TextureNames);
+	m_pIrradianceTextureCube = CreateTextureCube(pDevice, pImmediateContext, pCreateTextureCube->m_IrradianceTextureNames);
 
 	D3D11_BUFFER_DESC CameraVertexBufferDesc;
 	ZeroMemory(&CameraVertexBufferDesc, sizeof(CameraVertexBufferDesc));
@@ -435,6 +404,49 @@ D3D11EnvironmentTextureCube::D3D11EnvironmentTextureCube(
 		FAIL_CHK(FAILED(hr), "Failed to create the input layout for the environment shader");
 	}
 }
+
+ID3D11ShaderResourceView *D3D11EnvironmentTextureCube::CreateTextureCube(
+	_In_ ID3D11Device *pDevice, 
+	_In_ ID3D11DeviceContext *pImmediateContext,
+	_In_reads_(TEXTURES_PER_CUBE) char * const *textureNames)
+{
+	ID3D11Texture2D *pCubeResource;
+	ID3D11ShaderResourceView *pShaderResourceView;
+	for (UINT i = 0; i < TEXTURES_PER_CUBE; i++)
+	{
+		CA2WEX<MAX_ALLOWED_STR_LENGTH> WideTextureName(textureNames[i]);
+		ID3D11Resource *pTempResource;
+		HRESULT hr = CreateWICTextureFromFile(pDevice,
+			WideTextureName,
+			&pTempResource,
+			nullptr,
+			20 * 1024 * 1024);
+		FAIL_CHK(FAILED(hr), "Failed to create texture from cube texture name");
+
+		if (i == 0)
+		{
+			D3D11_TEXTURE2D_DESC TextureDesc;
+			ID3D11Texture2D *pTempTexture;
+			pTempResource->QueryInterface<ID3D11Texture2D>(&pTempTexture);
+			pTempTexture->GetDesc(&TextureDesc);
+
+			D3D11_TEXTURE2D_DESC TextureCubeDesc = CD3D11_TEXTURE2D_DESC(
+				TextureDesc.Format, TextureDesc.Width, TextureDesc.Height, TEXTURES_PER_CUBE, 1,
+				D3D11_BIND_SHADER_RESOURCE, D3D11_USAGE_DEFAULT, 0, 1, 0, D3D11_RESOURCE_MISC_TEXTURECUBE);
+
+			hr = pDevice->CreateTexture2D(&TextureCubeDesc, nullptr, &pCubeResource);
+			FAIL_CHK(FAILED(hr), "Failed to create texture cube");
+
+			D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = CD3D11_SHADER_RESOURCE_VIEW_DESC(D3D11_SRV_DIMENSION_TEXTURECUBE, TextureCubeDesc.Format);
+			hr = pDevice->CreateShaderResourceView(pCubeResource, &srvDesc, &pShaderResourceView);
+			FAIL_CHK(FAILED(hr), "Failed to create SRV for texture cube");
+		}
+
+		pImmediateContext->CopySubresourceRegion(pCubeResource, ConvertRendererFaceToD3D11TextureFace((TextureFace)i), 0, 0, 0, pTempResource, 0, nullptr);
+	}
+	return pShaderResourceView;
+}
+
 
 void D3D11EnvironmentTextureCube::DrawEnvironmentMap(_In_ ID3D11DeviceContext *pImmediateContext, D3D11Camera *pCamera, ID3D11RenderTargetView *pRenderTarget)
 {
@@ -563,14 +575,18 @@ public:
 	D3D11BasePass(
 		ID3D11Buffer *pViewProjBuffer, 
 		ID3D11Buffer *pLightViewProjBuffer, 
-		ID3D11ShaderResourceView *pShadowView, 
+		ID3D11ShaderResourceView *pShadowView,
+		ID3D11ShaderResourceView *pEnvironmentMap,
+		ID3D11ShaderResourceView *pIrradianceMap,
 		ID3D11RenderTargetView *pRenderTarget, 
 		ID3D11DepthStencilView *pDepthBuffer) :
 		m_pDepthBuffer(pDepthBuffer), 
 		m_pViewProjBuffer(pViewProjBuffer), 
 		m_pLightViewProjBuffer(pLightViewProjBuffer),
 		m_pRenderTarget(pRenderTarget),
-		m_pShadowView(pShadowView) {}
+		m_pShadowView(pShadowView),
+		m_pEnvironmentMap(pEnvironmentMap),
+		m_pIrradianceMap(pIrradianceMap) {}
 
 	void SetBindings(ID3D11DeviceContext *pContext)
 	{
@@ -578,6 +594,8 @@ public:
 		pContext->VSSetConstantBuffers(1, 1, &m_pViewProjBuffer);
 		pContext->VSSetConstantBuffers(3, 1, &m_pLightViewProjBuffer);
 		pContext->PSSetShaderResources(1, 1, &m_pShadowView);
+		pContext->PSSetShaderResources(2, 1, &m_pEnvironmentMap);
+		pContext->PSSetShaderResources(3, 1, &m_pIrradianceMap);
 	}
 
 private:
@@ -586,6 +604,8 @@ private:
 	ID3D11RenderTargetView* m_pRenderTarget;
 	ID3D11DepthStencilView* m_pDepthBuffer;
 	ID3D11ShaderResourceView *m_pShadowView;
+	ID3D11ShaderResourceView *m_pEnvironmentMap;
+	ID3D11ShaderResourceView *m_pIrradianceMap;
 };
 
 void D3D11Renderer::DrawScene(Camera *pCamera, Scene *pScene)
@@ -621,7 +641,13 @@ void D3D11Renderer::DrawScene(Camera *pCamera, Scene *pScene)
 	std::vector<D3D11Pass *> Passes;
 	D3D11ShadowPass ShadowPass(pLightViewProjBuffer, m_pShadowDepthBuffer);
 	Passes.push_back(&ShadowPass);
-	D3D11BasePass BasePass(pCameraViewProjBuffer, pLightViewProjBuffer, m_pShadowResourceView, m_pSwapchainRenderTargetView, m_pDepthBuffer);
+	D3D11BasePass BasePass(
+		pCameraViewProjBuffer, 
+		pLightViewProjBuffer, 
+		m_pShadowResourceView, 
+		pD3D11Scene->GetEnvironmentMap()->GetEnvironmentMapSRV(),
+		pD3D11Scene->GetEnvironmentMap()->GetIrradianceMapSRV(),
+		m_pSwapchainRenderTargetView, m_pDepthBuffer);
 	Passes.push_back(&BasePass);
 	for (D3D11Pass *pPass : Passes)
 	{

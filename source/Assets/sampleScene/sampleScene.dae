@@ -59,7 +59,7 @@
               <color sid="reflective">0.000000  0.000000 0.000000 1.000000</color>
             </reflective>
             <reflectivity>
-              <float sid="reflectivity">0.200000</float>
+              <float sid="reflectivity">0.10000</float>
             </reflectivity>
             <transparent opaque="RGB_ZERO">
               <color sid="transparent">0.000000  0.000000 0.000000 1.000000</color>
@@ -88,13 +88,13 @@
               <color sid="specular">0.500000  0.500000 0.500000 1.000000</color>
             </specular>
             <shininess>
-              <float sid="shininess">500.000000</float>
+              <float sid="shininess">5.000000</float>
             </shininess>
             <reflective>
               <color sid="reflective">0.000000  0.000000 0.000000 1.000000</color>
             </reflective>
             <reflectivity>
-              <float sid="reflectivity">0.500000</float>
+              <float sid="reflectivity">0.0500000</float>
             </reflectivity>
             <transparent opaque="RGB_ZERO">
               <color sid="transparent">0.000000  0.000000 0.000000 1.000000</color>
@@ -199,7 +199,7 @@
               <color sid="reflective">0.000000  0.000000 0.000000 1.000000</color>
             </reflective>
             <reflectivity>
-              <float sid="reflectivity">0.700000</float>
+              <float sid="reflectivity">0.500000</float>
             </reflectivity>
             <transparent opaque="RGB_ZERO">
               <color sid="transparent">0.000000  0.000000 0.000000 1.000000</color>

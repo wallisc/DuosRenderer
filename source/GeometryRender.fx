@@ -7,6 +7,8 @@
 
 Texture2D DiffuseTexture : register(t0);
 Texture2D shadowBuffer : register(t1);
+TextureCube EnvironmentMap : register(t2);
+TextureCube IrradianceMap : register(t3);
 
 SamplerState samLinear : register( s0 );
 
@@ -119,6 +121,18 @@ float Fresnel(float3 h, float3 n, float reflectivity)
 	return (reflectivity + (1.0 - reflectivity) * pow(1 - saturate(dot(h, n)), 5));
 }
 
+float3 BRDF(float3 v, float3 n, float3 l, float roughness, float baseReflectivity, float3 radiance, out float fresnel)
+{
+	float3 h = normalize(l + v);
+	float nDotL = saturate(dot(n, l));
+	float nDotV = saturate(dot(n, v));
+
+	float G = Schlicks_GeometricAttenuation(v, l, n, roughness);
+	fresnel = Fresnel(h, n, baseReflectivity);
+	float D = GGX_Distribution(h, n, roughness);
+	return radiance * fresnel * D * G / (4 * nDotL * nDotV);
+}
+
 //--------------------------------------------------------------------------------------
 // Pixel Shader
 //--------------------------------------------------------------------------------------
@@ -139,13 +153,11 @@ PS_OUTPUT PS( PS_INPUT input) : SV_Target
 
 	input.LightPos.xy = (input.LightPos.xy + float2(1.0f, 1.0f))/ float2(2.0f, -2.0f);
 
-	float4 totalDiffuse = float4(0.0f, 0.0f, 0.0f, 1.0f);
-	float4 totalSpecular = float4(0.0f, 0.0f, 0.0f, 1.0f);
+	float3 totalDiffuse = float3(0.0f, 0.0f, 0.0f);
+	float3 totalSpecular = float3(0.0f, 0.0f, 0.0f);
 	float totalFresnel = 0.0;
 
 	float ShadowMapDepth = shadowBuffer.Sample(samLinear, input.LightPos.xy).r;
-	float3 h = normalize(LightDirection + v);
-
 	if (input.LightPos.z <= ShadowMapDepth + EPSILON && nDotL > 0.0)
 	{
 #if USE_TEXTURE
@@ -156,17 +168,27 @@ PS_OUTPUT PS( PS_INPUT input) : SV_Target
 		totalDiffuse += (nDotL > 0.0f) * (nDotL * LightColor * diffuse);
 
 #if ENABLE_PBR
-		float G = Schlicks_GeometricAttenuation(v, LightDirection, n, roughness);
-		float F = Fresnel(h, n, R0);
-		float D = GGX_Distribution(h, n, roughness);
-		totalSpecular += LightColor * F * D * G / (4 * nDotL * nDotV);
-		totalFresnel += F;
+
+		float reflectivity;
+		totalSpecular += BRDF(v, n, LightDirection, roughness, R0, LightColor, reflectivity);
+		totalFresnel += reflectivity;
 #endif
 	}
 #if ENABLE_PBR
-	output.Color = totalDiffuse * (1.0 - totalFresnel) + totalSpecular;
+	{
+		float3 reflectionRay = reflect(-v, n);
+		float3 reflectionColor = EnvironmentMap.Sample(samLinear, reflectionRay);
+		float reflectivity;
+		totalSpecular += BRDF(v, n, reflectionRay, roughness, R0, reflectionColor, reflectivity);
+		totalFresnel += reflectivity;
+	}
+
+	uint SampleCount = 2;
+	totalSpecular /= SampleCount;
+	totalFresnel /= SampleCount;
+	output.Color = float4(totalDiffuse * (1.0 - totalFresnel) + totalSpecular, 1.0);
 #else
-	output.Color = totalDiffuse;
+	output.Color = float4(totalDiffuse, 1.0);
 #endif
 	return output;
 }
