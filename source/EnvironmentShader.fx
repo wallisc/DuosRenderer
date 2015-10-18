@@ -13,7 +13,7 @@ struct VS_OUTPUT
 float3 ConvertTextureCubeDir(float3 dir)
 {
 	float x = dir.x;
-	float y = -dir.y;
+	float y = dir.y;
 	float z = dir.z;
 	return float3(x, y, z);
 }

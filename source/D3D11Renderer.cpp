@@ -455,21 +455,21 @@ void D3D11EnvironmentTextureCube::DrawEnvironmentMap(_In_ ID3D11DeviceContext *p
 	
 	rotationQuaternion = XMQuaternionRotationAxis(viewUp, -horizontalFOV / 2.0f);
 	transformedViewDirection = XMVector3Rotate(viewDirection, rotationQuaternion);
-	rotationQuaternion = XMQuaternionRotationAxis(viewRight, -verticalFOV / 2.0f);
+	rotationQuaternion = XMQuaternionRotationAxis(viewRight, verticalFOV / 2.0f);
 	transformedViewDirection = XMVector3Rotate(transformedViewDirection, rotationQuaternion);
 	pVertexBuffer[0].m_ViewVector = XMVectorToRealArray(transformedViewDirection);
 	pVertexBuffer[0].m_Position = Vec3(-1.0, 1.0, 0.0);
 
 	rotationQuaternion = XMQuaternionRotationAxis(viewUp, horizontalFOV / 2.0);
 	transformedViewDirection = XMVector3Rotate(viewDirection, rotationQuaternion);
-	rotationQuaternion = XMQuaternionRotationAxis(viewRight, -verticalFOV / 2.0);
+	rotationQuaternion = XMQuaternionRotationAxis(viewRight, verticalFOV / 2.0);
 	transformedViewDirection = XMVector3Rotate(transformedViewDirection, rotationQuaternion);
 	pVertexBuffer[1].m_ViewVector = XMVectorToRealArray(transformedViewDirection);
 	pVertexBuffer[1].m_Position = Vec3(1.0, 1.0, 0.0);
 
 	rotationQuaternion = XMQuaternionRotationAxis(viewUp, -horizontalFOV / 2.0f);
 	transformedViewDirection = XMVector3Rotate(viewDirection, rotationQuaternion);
-	rotationQuaternion = XMQuaternionRotationAxis(viewRight, verticalFOV / 2.0f);
+	rotationQuaternion = XMQuaternionRotationAxis(viewRight, -verticalFOV / 2.0f);
 	transformedViewDirection = XMVector3Rotate(transformedViewDirection, rotationQuaternion);
 	pVertexBuffer[2].m_ViewVector = XMVectorToRealArray(transformedViewDirection);
 	pVertexBuffer[2].m_Position = Vec3(-1.0, -1.0, 0.0);
@@ -478,7 +478,7 @@ void D3D11EnvironmentTextureCube::DrawEnvironmentMap(_In_ ID3D11DeviceContext *p
 	pVertexBuffer[4] = pVertexBuffer[1];
 	rotationQuaternion = XMQuaternionRotationAxis(viewUp, horizontalFOV / 2.0f);
 	transformedViewDirection = XMVector3Rotate(viewDirection, rotationQuaternion);
-	rotationQuaternion = XMQuaternionRotationAxis(viewRight, verticalFOV / 2.0f);
+	rotationQuaternion = XMQuaternionRotationAxis(viewRight, -verticalFOV / 2.0f);
 	transformedViewDirection = XMVector3Rotate(transformedViewDirection, rotationQuaternion);
 	pVertexBuffer[5].m_ViewVector = XMVectorToRealArray(transformedViewDirection);
 	pVertexBuffer[5].m_Position = Vec3(1.0, -1.0, 0.0);
