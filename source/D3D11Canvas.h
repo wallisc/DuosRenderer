@@ -10,8 +10,9 @@ class D3D11Canvas : public Canvas
 {
 public:
 	D3D11Canvas(ID3D11Device *pDevice, ID3D11DeviceContext *pContext, UINT Width, UINT Height) :
-		m_pContext(pContext),  m_pMappedData(nullptr)
+		m_pContext(pContext), m_pMappedData(nullptr), PixelsWritten(false)
 	{
+		InitializeCriticalSection(&m_MapLock);
 
 		D3D11_TEXTURE2D_DESC CanvasDesc;
 		ZeroMemory(&CanvasDesc, sizeof(CanvasDesc));
@@ -51,14 +52,21 @@ public:
 		
 		hr = pDXGIResource->CreateSharedHandle(nullptr, DXGI_SHARED_RESOURCE_READ, L"", &m_ResourceHandle);
 		FAIL_CHK(FAILED(hr), "Failed getting a shared handle");
+
+		Map();
 	}
 
-	HANDLE GetCanvasResourceHandle() const { return m_ResourceHandle; }
+	~D3D11Canvas()
+	{
+		DeleteCriticalSection(&m_MapLock);
+	}
+
+	HANDLE GetCanvasResourceHandle() { return m_ResourceHandle; }
 
 	// The resource returned from GetCanvasResource() is only valid for the current frame. 
 	// If WritePixel() is called afterward, the app must use GetCanvasResource to see if the canvas
 	// resource may have changed
-	ID3D11Resource *GetCanvasResource() const 
+	ID3D11Resource *GetCanvasResource() 
 	{ 
 		if (m_pMappedData)
 		{
@@ -69,16 +77,14 @@ public:
 
 	void WritePixel(unsigned int x, unsigned int y, Vec3 Color)
 	{
-		if (m_pMappedData == nullptr)
-		{
-			Map();
-		}
+		assert(m_pMappedData != nullptr);
 
 		byte *pPixel = ((byte *)m_pMappedData) + m_RowPitch * y + x * sizeof(byte)* 4;
 		pPixel[0] = Color.x * 255.0f;
 		pPixel[1] = Color.y * 255.0f;
 		pPixel[2] = Color.z * 255.0f;
 		pPixel[3] = 0;
+		PixelsWritten = true;
 	}
 
 	void GetInterface(const char *InterfaceName, void **ppInterface)
@@ -99,17 +105,25 @@ private:
 		m_RowPitch = MappedResource.RowPitch;
 	}
 
-	void Unmap() const
+	void Unmap()
 	{
 		m_pContext->Unmap(m_pStagingResource, 0);
 		m_pMappedData = nullptr;
-		m_pContext->CopyResource(m_pResource, m_pStagingResource);
+		if (PixelsWritten)
+		{
+			m_pContext->CopyResource(m_pResource, m_pStagingResource);
+		}
+
+		PixelsWritten = false;
+		Map();
 	}
 
+	bool PixelsWritten;
 	ID3D11DeviceContext *m_pContext;
 	ID3D11Texture2D *m_pResource;
 	ID3D11Texture2D *m_pStagingResource;
 	unsigned int m_RowPitch;
 	HANDLE m_ResourceHandle;
 	mutable void* m_pMappedData;
+	CRITICAL_SECTION m_MapLock;
 };

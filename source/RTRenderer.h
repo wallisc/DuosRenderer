@@ -10,6 +10,7 @@
 #include <unordered_map>
 
 #define EPSILON 0.0001f
+#define RT_MULTITHREAD 1
 class RTImage
 {
 public:
@@ -218,6 +219,14 @@ private:
 	RTTextureCube m_TextureCube;
 };
 
+struct PixelRange
+{
+	PixelRange() : m_X(0), m_Y(0), m_Width(0), m_Height(0) {}
+	PixelRange(unsigned int x, unsigned int y, unsigned int width, unsigned int height) : m_X(x), m_Y(y), m_Width(width), m_Height(height) {}
+
+	unsigned int m_X, m_Y, m_Width, m_Height;
+};
+
 class RTScene : public Scene
 {
 public:
@@ -271,9 +280,23 @@ public:
 
 	void DrawScene(Camera *pCamera, Scene *pScene);
 
+	void RenderPixelRange(PixelRange *pRange, RTCamera *pCamera, RTScene *pScene);
 private:
+	void RenderPixel(unsigned int x, unsigned int y, RTCamera *pCamera, RTScene *pScene);
+
 	RTCDevice  m_device;
 	Canvas *m_pCanvas;
+};
+
+struct RayTraceThreadArgs
+{
+	RayTraceThreadArgs(RTRenderer *pRenderer, RTScene *pScene, RTCamera *pCamera, PixelRange range) :
+		m_pRenderer(pRenderer), m_pScene(pScene), m_pCamera(pCamera), m_PixelRange(range) {}
+
+	PixelRange m_PixelRange;
+	RTRenderer *m_pRenderer;
+	RTScene *m_pScene;
+	RTCamera *m_pCamera;
 };
 
 #define RT_RENDERER_CAST reinterpret_cast

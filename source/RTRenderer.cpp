@@ -3,6 +3,7 @@
 
 #include <atlbase.h>
 #include <algorithm>
+#include <queue>
 #include "glm/glm.hpp"
 #include "glm/vec3.hpp"
 #include "glm/gtx/transform.hpp"
@@ -32,6 +33,27 @@ void error_handler(const RTCError code, const char* str)
 	}
 	assert(false);
 	exit(1);
+}
+
+void FailWithLastError()     
+{
+	DWORD retSize;
+	LPTSTR pTemp = NULL;
+
+	retSize = FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER |
+		FORMAT_MESSAGE_FROM_SYSTEM |
+		FORMAT_MESSAGE_ARGUMENT_ARRAY,
+		NULL,
+		GetLastError(),
+		LANG_NEUTRAL,
+		(LPTSTR)&pTemp,
+		0,
+		NULL);
+
+	char ErrorBuffer[1024];
+	sprintf(ErrorBuffer, "%0.*s (0x%x)", sizeof(ErrorBuffer), pTemp, GetLastError());
+
+	FAIL_CHK(true, std::string(ErrorBuffer));
 }
 
 FORCEINLINE glm::vec3 RealArrayToGlmVec3(_In_ Vec3 Vector)
@@ -278,6 +300,100 @@ void RTRenderer::DestroyScene(Scene* pScene)
 	delete pScene;
 }
 
+void RTRenderer::RenderPixelRange(PixelRange *pRange, RTCamera *pCamera, RTScene *pScene)
+{
+	assert(pRange->m_Width > 0 && pRange->m_X + pRange->m_Width <= pCamera->GetWidth());
+	assert(pRange->m_Height > 0 && pRange->m_Y + pRange->m_Height <= pCamera->GetHeight());
+	for (UINT x = pRange->m_X; x < pRange->m_X + pRange->m_Width; x++)
+	{
+		for (UINT y = pRange->m_Y; y < pRange->m_Y + pRange->m_Height; y++)
+		{
+			RenderPixel(x, y, pCamera, pScene);
+		}
+	}
+}
+
+void RTRenderer::RenderPixel(unsigned int x, unsigned int y, RTCamera *pCamera, RTScene *pScene)
+{
+	const unsigned int Width = pCamera->GetWidth();
+	const unsigned int Height = pCamera->GetHeight();
+	const glm::vec3 FocalPoint = pCamera->GetFocalPoint();
+	const float PixelWidth = pCamera->GetLensWidth() / Width;
+	const float PixelHeight = pCamera->GetLensHeight() / Height;
+
+	glm::vec3 coord(pCamera->GetLensWidth() * (float)x / (float)Width, pCamera->GetLensHeight() * (float)(Height - y) / (float)Height, 0.0f);
+	coord -= glm::vec3(pCamera->GetLensWidth() / 2.0f, pCamera->GetLensHeight() / 2.0f, 0.0f);
+	coord += glm::vec3(PixelWidth / 2.0f, -PixelHeight / 2.0f, 0.0f); // Make sure the ray is centered in the pixel
+
+	glm::vec3 right = pCamera->GetRight();
+	glm::vec3 LensPoint = pCamera->GetLensPosition() + coord.y * pCamera->GetUp() + coord.x * right;
+	glm::vec3 RayDirection = glm::normalize(LensPoint - FocalPoint);
+
+	RTCRay ray{};
+	memcpy(ray.org, &LensPoint, sizeof(ray.org));
+	memcpy(ray.dir, &RayDirection, sizeof(ray.dir));
+	ray.tnear = 0.0f;
+	ray.tfar = FLT_MAX;
+	ray.geomID = RTC_INVALID_GEOMETRY_ID;
+	ray.primID = RTC_INVALID_GEOMETRY_ID;
+	ray.mask = -1;
+	ray.time = 0;
+
+	rtcIntersect(pScene->GetRTCScene(), ray);
+	unsigned int meshID = ray.geomID;
+
+	if (meshID != RTC_INVALID_GEOMETRY_ID)
+	{
+		RTGeometry *pGeometry = pScene->GetRTGeometry(meshID);
+		assert(pGeometry != nullptr);
+
+		float a = ray.u;
+		float b = ray.v;
+		float c = 1.0 - a - b;
+
+		glm::vec3 TotalColor = glm::vec3(0.0f);
+		glm::vec3 matColor = pGeometry->GetColor(ray.primID, a, b);
+		float reflectivity = pGeometry->GetMaterial()->GetReflectivity();
+		glm::vec3 Norm = pGeometry->GetNormal(ray.primID, a, b);
+		glm::vec3 intersectPos = pGeometry->GetPosition(ray.primID, a, b);
+		for (RTLight *pLight : pScene->GetLightList())
+		{
+			glm::vec3 LightColor = pLight->GetLightColor(intersectPos);
+			glm::vec3 LightDirection = pLight->GetLightDirection(intersectPos);
+			glm::vec3 HalfVector = glm::normalize(LightDirection + -RayDirection);
+
+			float nDotL = glm::dot(Norm, LightDirection);
+			if (nDotL > 0.0f)
+			{
+				glm::vec3 ShadowRayOrigin = intersectPos + LightDirection * .001f;
+				RTCRay ShadowRay{};
+				memcpy(ShadowRay.org, &ShadowRayOrigin, sizeof(ShadowRay.org));
+				memcpy(ShadowRay.dir, &LightDirection, sizeof(ShadowRay.dir));
+				ShadowRay.tnear = 0.0f;
+				ShadowRay.tfar = FLT_MAX;
+				ShadowRay.geomID = RTC_INVALID_GEOMETRY_ID;
+				ShadowRay.primID = RTC_INVALID_GEOMETRY_ID;
+				ShadowRay.mask = -1;
+				ShadowRay.time = 0;
+
+				rtcOccluded(pScene->GetRTCScene(), ShadowRay);
+				if (ShadowRay.geomID == RTC_INVALID_GEOMETRY_ID)
+				{
+					TotalColor += matColor * LightColor * nDotL;
+				}
+			}
+		}
+
+		m_pCanvas->WritePixel(x, y, GlmVec3ToRealArray(TotalColor));
+	}
+	else
+	{
+		glm::vec3 enviromentColor = pScene->GetEnvironmentMap()->GetColor(RayDirection);
+		m_pCanvas->WritePixel(x, y, GlmVec3ToRealArray(enviromentColor));
+	}
+}
+
+
 void RTRenderer::DrawScene(Camera *pCamera, Scene *pScene)
 {
 	RTScene *pRTScene = RT_RENDERER_CAST<RTScene*>(pScene);
@@ -288,86 +404,70 @@ void RTRenderer::DrawScene(Camera *pCamera, Scene *pScene)
 	UINT Width = pRTCamera->GetWidth();
 	UINT Height = pRTCamera->GetHeight();
 
-	glm::vec3 FocalPoint = pRTCamera->GetFocalPoint();
-	float PixelWidth = pRTCamera->GetLensWidth() / Width;
-	float PixelHeight = pRTCamera->GetLensHeight() / Height;
+	const UINT THREAD_BLOCK_SIZE = 256;
 
-	for (UINT y = 0; y < Height; y++)
+	SYSTEM_INFO sysinfo;
+	GetSystemInfo(&sysinfo);
+	const UINT numWorkerThreads = sysinfo.dwNumberOfProcessors;
+
+	UINT ongoingThreads = 0;
+	std::vector<RayTraceThreadArgs *> ThreadArgs;
+	std::vector<HANDLE>  hThreadArray;
+
+
+	auto RenderPixelBatch = [](PVOID pThreadData) -> DWORD {
+		RayTraceThreadArgs *pArgs = (RayTraceThreadArgs *)pThreadData;
+		pArgs->m_pRenderer->RenderPixelRange(
+			&pArgs->m_PixelRange,
+			pArgs->m_pCamera,
+			pArgs->m_pScene);
+		return 0;
+	};
+
+#if RT_MULTITHREAD
+	for (UINT y = 0; y < Height; y += THREAD_BLOCK_SIZE)
 	{
-		for (UINT x = 0; x < Width; x++)
+		for (UINT x = 0; x < Width; x += THREAD_BLOCK_SIZE)
 		{
-			glm::vec3 coord(pRTCamera->GetLensWidth() * (float)x / (float)Width, pRTCamera->GetLensHeight() * (float)(Height - y) / (float)Height, 0.0f);
-			coord -= glm::vec3(pRTCamera->GetLensWidth() / 2.0f, pRTCamera->GetLensHeight() / 2.0f, 0.0f);
-			coord += glm::vec3(PixelWidth / 2.0f, -PixelHeight / 2.0f, 0.0f); // Make sure the ray is centered in the pixel
-
-			glm::vec3 right = pRTCamera->GetRight();
-			glm::vec3 LensPoint = pRTCamera->GetLensPosition() + coord.y * pRTCamera->GetUp() + coord.x * right;
-			glm::vec3 RayDirection = glm::normalize(LensPoint - FocalPoint);
-
-			RTCRay ray {};
-			memcpy(ray.org, &LensPoint, sizeof(ray.org));
-			memcpy(ray.dir, &RayDirection, sizeof(ray.dir));
-			ray.tnear = 0.0f;
-			ray.tfar = FLT_MAX;
-			ray.geomID = RTC_INVALID_GEOMETRY_ID;
-			ray.primID = RTC_INVALID_GEOMETRY_ID;
-			ray.mask = -1;
-			ray.time = 0;
-
-			rtcIntersect(pRTScene->GetRTCScene(), ray);
-			unsigned int meshID = ray.geomID;
-
-			if(meshID != RTC_INVALID_GEOMETRY_ID)
+			if (hThreadArray.size() == numWorkerThreads)
 			{
-				RTGeometry *pGeometry = pRTScene->GetRTGeometry(meshID);
-				assert(pGeometry != nullptr);
-
-				float a = ray.u;
-				float b = ray.v;
-				float c = 1.0 - a - b;
-
-				glm::vec3 TotalColor = glm::vec3(0.0f);
-				glm::vec3 matColor = pGeometry->GetColor(ray.primID, a, b);
-				float reflectivity = pGeometry->GetMaterial()->GetReflectivity();
-				glm::vec3 Norm = pGeometry->GetNormal(ray.primID, a, b);
-				glm::vec3 intersectPos = pGeometry->GetPosition(ray.primID, a, b);
-				for (RTLight *pLight : pRTScene->GetLightList())
+				DWORD finishedThread = WaitForMultipleObjects(hThreadArray.size(), &hThreadArray[0], false, INFINITE);
+				if(finishedThread == WAIT_TIMEOUT || finishedThread == WAIT_FAILED ||
+					(finishedThread >= WAIT_ABANDONED_0 && finishedThread < WAIT_ABANDONED_0 + numWorkerThreads))
 				{
-					glm::vec3 LightColor = pLight->GetLightColor(intersectPos);
-					glm::vec3 LightDirection = pLight->GetLightDirection(intersectPos);
-					glm::vec3 HalfVector = glm::normalize(LightDirection + -RayDirection);
-
-					float nDotL = glm::dot(Norm, LightDirection);
-					if (nDotL > 0.0f)
-					{
-						glm::vec3 ShadowRayOrigin = intersectPos + LightDirection * .001f;
-						RTCRay ShadowRay{};
-						memcpy(ShadowRay.org, &ShadowRayOrigin, sizeof(ShadowRay.org));
-						memcpy(ShadowRay.dir, &LightDirection, sizeof(ShadowRay.dir));
-						ShadowRay.tnear = 0.0f;
-						ShadowRay.tfar = FLT_MAX;
-						ShadowRay.geomID = RTC_INVALID_GEOMETRY_ID;
-						ShadowRay.primID = RTC_INVALID_GEOMETRY_ID;
-						ShadowRay.mask = -1;
-						ShadowRay.time = 0;
-
-						rtcOccluded(pRTScene->GetRTCScene(), ShadowRay);
-						if (ShadowRay.geomID == RTC_INVALID_GEOMETRY_ID)
-						{
-							TotalColor += matColor * LightColor * nDotL;
-						}
-					}
+					FailWithLastError();
 				}
+				
+				UINT freedThreadIndex = finishedThread - WAIT_OBJECT_0;
+				delete ThreadArgs[freedThreadIndex];
+				CloseHandle(hThreadArray[freedThreadIndex]);
+				hThreadArray.erase(hThreadArray.begin() + freedThreadIndex);
+				ThreadArgs.erase(ThreadArgs.begin() + freedThreadIndex);
+			}
 
-				m_pCanvas->WritePixel(x, y, GlmVec3ToRealArray(TotalColor));
-			}
-			else
-			{
-				glm::vec3 enviromentColor = pRTScene->GetEnvironmentMap()->GetColor(RayDirection);
-				m_pCanvas->WritePixel(x, y, GlmVec3ToRealArray(enviromentColor));
-			}
+			ThreadArgs.push_back(new RayTraceThreadArgs(this, pRTScene, pRTCamera, PixelRange(x, y, std::min(Width - x, THREAD_BLOCK_SIZE), std::min(Height - y, THREAD_BLOCK_SIZE))));
+			hThreadArray.push_back(CreateThread(nullptr, 0, RenderPixelBatch, ThreadArgs.back(), 0, nullptr));
 		}
 	}
+
+	while (hThreadArray.size())
+	{
+		DWORD finishedThread = WaitForMultipleObjects(hThreadArray.size(), &hThreadArray[0], false, INFINITE);
+		if (finishedThread == WAIT_TIMEOUT || finishedThread == WAIT_FAILED ||
+			(finishedThread >= WAIT_ABANDONED_0 && finishedThread < WAIT_ABANDONED_0 + numWorkerThreads))
+		{
+			FailWithLastError();
+		}
+
+		UINT freedThreadIndex = finishedThread - WAIT_OBJECT_0;
+		delete ThreadArgs[freedThreadIndex];
+		CloseHandle(hThreadArray[freedThreadIndex]);
+		hThreadArray.erase(hThreadArray.begin() + freedThreadIndex);
+		ThreadArgs.erase(ThreadArgs.begin() + freedThreadIndex);
+	}
+#else
+	RenderPixelBatch(&RayTraceThreadArgs(this, pRTScene, pRTCamera, PixelRange(0, 0, Width, Height)));
+#endif
 }
 
 RTGeometry::RTGeometry(_In_ CreateGeometryDescriptor *pCreateGeometryDescriptor)
