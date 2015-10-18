@@ -8,6 +8,7 @@
 #include "embree/inc/rtcore_ray.h"
 
 #include <unordered_map>
+#include <windows.h>
 
 #define EPSILON 0.0001f
 #define RT_MULTITHREAD 1
@@ -253,6 +254,26 @@ private:
 	RTCScene m_scene;
 };
 
+class RTRenderer;
+struct RayTraceThreadArgs
+{
+	RayTraceThreadArgs() {}
+	RayTraceThreadArgs(RTRenderer *pRenderer, RTScene *pScene, RTCamera *pCamera, PixelRange range, LONG *pOngoingThreadCounter, HANDLE TracingFinishedEvent) :
+		m_pRenderer(pRenderer), 
+		m_pScene(pScene), 
+		m_pCamera(pCamera), 
+		m_PixelRange(range), 
+		m_pOngoingThreadCounter(pOngoingThreadCounter),
+		m_TracingFinishedEvent(TracingFinishedEvent) {}
+
+	PixelRange m_PixelRange;
+	RTRenderer *m_pRenderer;
+	RTScene *m_pScene;
+	RTCamera *m_pCamera;
+	LONG *m_pOngoingThreadCounter;
+	HANDLE m_TracingFinishedEvent;
+};
+
 class RTRenderer : public Renderer
 {
 public:
@@ -284,19 +305,17 @@ public:
 private:
 	void RenderPixel(unsigned int x, unsigned int y, RTCamera *pCamera, RTScene *pScene);
 
+	PTP_POOL m_ThreadPool;
+	PTP_CLEANUP_GROUP m_ThreadPoolCleanupGroup;
+
 	RTCDevice  m_device;
 	Canvas *m_pCanvas;
-};
 
-struct RayTraceThreadArgs
-{
-	RayTraceThreadArgs(RTRenderer *pRenderer, RTScene *pScene, RTCamera *pCamera, PixelRange range) :
-		m_pRenderer(pRenderer), m_pScene(pScene), m_pCamera(pCamera), m_PixelRange(range) {}
-
-	PixelRange m_PixelRange;
-	RTRenderer *m_pRenderer;
-	RTScene *m_pScene;
-	RTCamera *m_pCamera;
+	RTCamera *m_pLastCamera;
+	RTScene *m_pLastScene;
+	LONG m_RunningThreadCounter;
+	std::vector<RayTraceThreadArgs> m_ThreadArgs;
+	HANDLE m_TracingFinishedEvent;
 };
 
 #define RT_RENDERER_CAST reinterpret_cast

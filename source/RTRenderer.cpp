@@ -234,11 +234,32 @@ RTRenderer::RTRenderer(unsigned int width, unsigned int height)
 	m_device = rtcNewDevice();
 	rtcDeviceSetErrorFunction(m_device, error_handler);
 
+	SYSTEM_INFO sysinfo;
+	GetSystemInfo(&sysinfo);
+	const UINT numWorkerThreads = sysinfo.dwNumberOfProcessors;
+	m_ThreadPool = CreateThreadpool(nullptr);
+	if (!m_ThreadPool) FailWithLastError();
+
+	m_ThreadPoolCleanupGroup = CreateThreadpoolCleanupGroup();
+	if (!m_ThreadPoolCleanupGroup) FailWithLastError();
+	
+	TP_CALLBACK_ENVIRON PoolEnvironment;
+	InitializeThreadpoolEnvironment(&PoolEnvironment);
+	SetThreadpoolCallbackCleanupGroup(&PoolEnvironment, m_ThreadPoolCleanupGroup, nullptr);
+
+	SetThreadpoolThreadMaximum(m_ThreadPool, numWorkerThreads * 3);
+	SetThreadpoolThreadMinimum(m_ThreadPool, 1);
+
+	m_TracingFinishedEvent = CreateEvent(nullptr, true, false, nullptr);
+	m_pLastScene = nullptr;
+	m_pLastCamera = nullptr;
 }
 
 RTRenderer::~RTRenderer()
 {
 	rtcDeleteDevice(m_device);
+	CloseThreadpool(m_ThreadPool);
+	CloseThreadpoolCleanupGroup(m_ThreadPoolCleanupGroup);
 }
 
 
@@ -404,67 +425,58 @@ void RTRenderer::DrawScene(Camera *pCamera, Scene *pScene)
 	UINT Width = pRTCamera->GetWidth();
 	UINT Height = pRTCamera->GetHeight();
 
-	const UINT THREAD_BLOCK_SIZE = 256;
+	const UINT THREAD_BLOCK_SIZE = 16;
 
 	SYSTEM_INFO sysinfo;
 	GetSystemInfo(&sysinfo);
 	const UINT numWorkerThreads = sysinfo.dwNumberOfProcessors;
 
-	UINT ongoingThreads = 0;
+	if (m_pLastScene != pRTScene || pRTCamera != m_pLastCamera)
+	{
+		const UINT NumTasks = ceil(Height / (float)THREAD_BLOCK_SIZE) * ceil(Width / (float)THREAD_BLOCK_SIZE);
+		m_ThreadArgs.reserve(NumTasks);
+		for (UINT y = 0; y < Height; y += THREAD_BLOCK_SIZE)
+		{
+			for (UINT x = 0; x < Width; x += THREAD_BLOCK_SIZE)
+			{
+				m_ThreadArgs.push_back(RayTraceThreadArgs(
+					this, 
+					pRTScene, 
+					pRTCamera, 
+					PixelRange(x, y, std::min(Width - x, THREAD_BLOCK_SIZE), std::min(Height - y, THREAD_BLOCK_SIZE)),
+					&m_RunningThreadCounter,
+					m_TracingFinishedEvent));
+			}
+		}
+		m_pLastScene = pRTScene;
+		m_pLastCamera = pRTCamera;
+	}
+
+	m_RunningThreadCounter = m_ThreadArgs.size();
 	std::vector<RayTraceThreadArgs *> ThreadArgs;
 	std::vector<HANDLE>  hThreadArray;
 
-
-	auto RenderPixelBatch = [](PVOID pThreadData) -> DWORD {
+	auto RenderPixelBatch = [](PTP_CALLBACK_INSTANCE, PVOID pThreadData, PTP_WORK) -> void {
 		RayTraceThreadArgs *pArgs = (RayTraceThreadArgs *)pThreadData;
 		pArgs->m_pRenderer->RenderPixelRange(
 			&pArgs->m_PixelRange,
 			pArgs->m_pCamera,
 			pArgs->m_pScene);
-		return 0;
+		if (InterlockedDecrement(pArgs->m_pOngoingThreadCounter) == 0)
+		{
+			SetEvent(pArgs->m_TracingFinishedEvent);
+		}
 	};
 
 #if RT_MULTITHREAD
-	for (UINT y = 0; y < Height; y += THREAD_BLOCK_SIZE)
+	ResetEvent(m_TracingFinishedEvent);
+	for (auto &args : m_ThreadArgs)
 	{
-		for (UINT x = 0; x < Width; x += THREAD_BLOCK_SIZE)
-		{
-			if (hThreadArray.size() == numWorkerThreads)
-			{
-				DWORD finishedThread = WaitForMultipleObjects(hThreadArray.size(), &hThreadArray[0], false, INFINITE);
-				if(finishedThread == WAIT_TIMEOUT || finishedThread == WAIT_FAILED ||
-					(finishedThread >= WAIT_ABANDONED_0 && finishedThread < WAIT_ABANDONED_0 + numWorkerThreads))
-				{
-					FailWithLastError();
-				}
-				
-				UINT freedThreadIndex = finishedThread - WAIT_OBJECT_0;
-				delete ThreadArgs[freedThreadIndex];
-				CloseHandle(hThreadArray[freedThreadIndex]);
-				hThreadArray.erase(hThreadArray.begin() + freedThreadIndex);
-				ThreadArgs.erase(ThreadArgs.begin() + freedThreadIndex);
-			}
-
-			ThreadArgs.push_back(new RayTraceThreadArgs(this, pRTScene, pRTCamera, PixelRange(x, y, std::min(Width - x, THREAD_BLOCK_SIZE), std::min(Height - y, THREAD_BLOCK_SIZE))));
-			hThreadArray.push_back(CreateThread(nullptr, 0, RenderPixelBatch, ThreadArgs.back(), 0, nullptr));
-		}
+		PTP_WORK work = CreateThreadpoolWork(RenderPixelBatch, &args, nullptr);
+		SubmitThreadpoolWork(work);
 	}
-
-	while (hThreadArray.size())
-	{
-		DWORD finishedThread = WaitForMultipleObjects(hThreadArray.size(), &hThreadArray[0], false, INFINITE);
-		if (finishedThread == WAIT_TIMEOUT || finishedThread == WAIT_FAILED ||
-			(finishedThread >= WAIT_ABANDONED_0 && finishedThread < WAIT_ABANDONED_0 + numWorkerThreads))
-		{
-			FailWithLastError();
-		}
-
-		UINT freedThreadIndex = finishedThread - WAIT_OBJECT_0;
-		delete ThreadArgs[freedThreadIndex];
-		CloseHandle(hThreadArray[freedThreadIndex]);
-		hThreadArray.erase(hThreadArray.begin() + freedThreadIndex);
-		ThreadArgs.erase(ThreadArgs.begin() + freedThreadIndex);
-	}
+	WaitForSingleObject(m_TracingFinishedEvent, INFINITE);
+	CloseThreadpoolCleanupGroupMembers(m_ThreadPoolCleanupGroup, true, nullptr);
 #else
 	RenderPixelBatch(&RayTraceThreadArgs(this, pRTScene, pRTCamera, PixelRange(0, 0, Width, Height)));
 #endif
