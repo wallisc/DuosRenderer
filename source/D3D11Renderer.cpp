@@ -23,6 +23,30 @@ XMVECTOR RealArrayToXMVector(Vec3 Vector, VectorType Type)
 	return XMVectorSet(Vector.x, Vector.y, Vector.z, Type == DIRECTION ? (REAL)0.0 : (REAL)1.0);
 }
 
+Vec3 XMVectorToRealArray(XMVECTOR Vector)
+{
+	return Vec3(XMVectorGetX(Vector), XMVectorGetY(Vector), XMVectorGetZ(Vector));
+}
+
+D3D11_TEXTURECUBE_FACE ConvertRendererFaceToD3D11TextureFace(TextureFace Face)
+{
+	switch (Face)
+	{
+	case POS_X:
+		return D3D11_TEXTURECUBE_FACE_POSITIVE_X;
+	case POS_Y:
+		return D3D11_TEXTURECUBE_FACE_POSITIVE_Y;
+	case POS_Z:
+		return D3D11_TEXTURECUBE_FACE_POSITIVE_Z;
+	case NEG_X:
+		return D3D11_TEXTURECUBE_FACE_NEGATIVE_X;
+	case NEG_Y:
+		return D3D11_TEXTURECUBE_FACE_NEGATIVE_Y;
+	case NEG_Z:
+		return D3D11_TEXTURECUBE_FACE_NEGATIVE_Z;
+	}
+}
+
 //--------------------------------------------------------------------------------------
 // Helper for compiling shaders with D3DCompile
 //
@@ -247,7 +271,6 @@ void D3D11Renderer::SetDefaultState()
 
 	m_pImmediateContext->PSSetSamplers(0, 1, &m_pSamplerState);
 	m_pImmediateContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	m_pImmediateContext->IASetInputLayout(m_pForwardInputLayout);
 }
 
 Geometry* D3D11Renderer::CreateGeometry(_In_ CreateGeometryDescriptor *pCreateGeometryDescriptor)
@@ -343,9 +366,165 @@ void D3D11Renderer::DestroyMaterial(Material* pMaterial)
 }
 
 
-Scene *D3D11Renderer::CreateScene()
+D3D11EnvironmentTextureCube::D3D11EnvironmentTextureCube(
+	_In_ ID3D11Device *pDevice, 
+	_In_ ID3D11DeviceContext *pImmediateContext,
+	_In_ const CreateEnvironmentTextureCube *pCreateTextureCube)
 {
-	Scene *pScene = new D3D11Scene();
+	ID3D11Texture2D *pCubeResource;
+	for (UINT i = 0; i < TEXTURES_PER_CUBE; i++)
+	{
+		CA2WEX<MAX_ALLOWED_STR_LENGTH> WideTextureName(pCreateTextureCube->m_TextureNames[i]);
+		ID3D11Resource *pTempResource;
+		HRESULT hr = CreateWICTextureFromFile(pDevice,
+			WideTextureName,
+			&pTempResource,
+			nullptr,
+			20 * 1024 * 1024);
+		FAIL_CHK(FAILED(hr), "Failed to create texture from cube texture name");
+
+		if (i == 0)
+		{
+			D3D11_TEXTURE2D_DESC TextureDesc;
+			ID3D11Texture2D *pTempTexture;
+			pTempResource->QueryInterface<ID3D11Texture2D>(&pTempTexture);
+			pTempTexture->GetDesc(&TextureDesc);
+
+			D3D11_TEXTURE2D_DESC TextureCubeDesc = CD3D11_TEXTURE2D_DESC(
+				TextureDesc.Format, TextureDesc.Width, TextureDesc.Height, TEXTURES_PER_CUBE, 1,
+				D3D11_BIND_SHADER_RESOURCE, D3D11_USAGE_DEFAULT, 0, 1, 0, D3D11_RESOURCE_MISC_TEXTURECUBE);
+
+			hr = pDevice->CreateTexture2D(&TextureCubeDesc, nullptr, &pCubeResource);
+			FAIL_CHK(FAILED(hr), "Failed to create texture cube");
+
+			D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = CD3D11_SHADER_RESOURCE_VIEW_DESC(D3D11_SRV_DIMENSION_TEXTURECUBE, TextureCubeDesc.Format);
+			hr = pDevice->CreateShaderResourceView(pCubeResource, &srvDesc, &m_pEnvironmentTextureCube);
+			FAIL_CHK(FAILED(hr), "Failed to create SRV for texture cube");
+		}
+
+		pImmediateContext->CopySubresourceRegion(pCubeResource, ConvertRendererFaceToD3D11TextureFace((TextureFace)i), 0, 0, 0, pTempResource, 0, nullptr);
+	}
+
+	D3D11_BUFFER_DESC CameraVertexBufferDesc;
+	ZeroMemory(&CameraVertexBufferDesc, sizeof(CameraVertexBufferDesc));
+	CameraVertexBufferDesc.Usage = D3D11_USAGE_DYNAMIC;
+	CameraVertexBufferDesc.ByteWidth = sizeof(CameraPlaneVertex)* VerticesInCameraPlane;
+	CameraVertexBufferDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+	CameraVertexBufferDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+	HRESULT hr = pDevice->CreateBuffer(&CameraVertexBufferDesc, nullptr, &m_pCameraVertexBuffer);
+
+	{
+		ID3D10Blob *m_pPixelShaderBlob;
+		CompileShaderHelper(L"EnvironmentShader.fx", "PS", "ps_5_0", nullptr, &m_pPixelShaderBlob);
+		hr = pDevice->CreatePixelShader(m_pPixelShaderBlob->GetBufferPointer(), m_pPixelShaderBlob->GetBufferSize(), nullptr, &m_pEnvironmentPixelShader);
+		FAIL_CHK(FAILED(hr), "Failed to compile pixel shader");
+
+		ID3D10Blob *m_pVertexShaderBlob;
+		CompileShaderHelper(L"EnvironmentShader.fx", "VS", "vs_5_0", nullptr, &m_pVertexShaderBlob);
+		hr = pDevice->CreateVertexShader(m_pVertexShaderBlob->GetBufferPointer(), m_pVertexShaderBlob->GetBufferSize(), nullptr, &m_pEnvironmentVertexShader);
+		FAIL_CHK(FAILED(hr), "Failed to compile vertex shader");
+
+
+		D3D11_INPUT_ELEMENT_DESC inputElements[] = 
+		{
+			{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+			{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0 }
+		};
+
+		hr = pDevice->CreateInputLayout(inputElements, ARRAYSIZE(inputElements), m_pVertexShaderBlob->GetBufferPointer(), m_pVertexShaderBlob->GetBufferSize(), &m_pEnvironmentInputLayout);
+		FAIL_CHK(FAILED(hr), "Failed to create the input layout for the environment shader");
+	}
+}
+
+void D3D11EnvironmentTextureCube::DrawEnvironmentMap(_In_ ID3D11DeviceContext *pImmediateContext, D3D11Camera *pCamera, ID3D11RenderTargetView *pRenderTarget)
+{
+	D3D11_MAPPED_SUBRESOURCE MappedSubresource;
+	HRESULT hr = pImmediateContext->Map(m_pCameraVertexBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &MappedSubresource);
+	FAIL_CHK(FAILED(hr), "Failed to map camera vertex buffer for environment map");
+
+	CameraPlaneVertex *pVertexBuffer = (CameraPlaneVertex *) MappedSubresource.pData;
+
+	const XMVECTOR viewRight = pCamera->GetRight();
+	 XMVECTOR viewUp = pCamera->GetUp();
+	 XMVECTOR viewDirection = pCamera->GetViewDirection();
+	float horizontalFOV = pCamera->GetHorizontalFieldOfView();
+	float verticalFOV = pCamera->GetVerticalFieldOfView();
+
+	XMVECTOR rotationQuaternion;
+	XMVECTOR transformedViewDirection;
+	
+	rotationQuaternion = XMQuaternionRotationAxis(viewUp, -horizontalFOV / 2.0f);
+	transformedViewDirection = XMVector3Rotate(viewDirection, rotationQuaternion);
+	rotationQuaternion = XMQuaternionRotationAxis(viewRight, -verticalFOV / 2.0f);
+	transformedViewDirection = XMVector3Rotate(transformedViewDirection, rotationQuaternion);
+	pVertexBuffer[0].m_ViewVector = XMVectorToRealArray(transformedViewDirection);
+	pVertexBuffer[0].m_Position = Vec3(-1.0, 1.0, 0.0);
+
+	rotationQuaternion = XMQuaternionRotationAxis(viewUp, horizontalFOV / 2.0);
+	transformedViewDirection = XMVector3Rotate(viewDirection, rotationQuaternion);
+	rotationQuaternion = XMQuaternionRotationAxis(viewRight, -verticalFOV / 2.0);
+	transformedViewDirection = XMVector3Rotate(transformedViewDirection, rotationQuaternion);
+	pVertexBuffer[1].m_ViewVector = XMVectorToRealArray(transformedViewDirection);
+	pVertexBuffer[1].m_Position = Vec3(1.0, 1.0, 0.0);
+
+	rotationQuaternion = XMQuaternionRotationAxis(viewUp, -horizontalFOV / 2.0f);
+	transformedViewDirection = XMVector3Rotate(viewDirection, rotationQuaternion);
+	rotationQuaternion = XMQuaternionRotationAxis(viewRight, verticalFOV / 2.0f);
+	transformedViewDirection = XMVector3Rotate(transformedViewDirection, rotationQuaternion);
+	pVertexBuffer[2].m_ViewVector = XMVectorToRealArray(transformedViewDirection);
+	pVertexBuffer[2].m_Position = Vec3(-1.0, -1.0, 0.0);
+
+	pVertexBuffer[3] = pVertexBuffer[2];
+	pVertexBuffer[4] = pVertexBuffer[1];
+	rotationQuaternion = XMQuaternionRotationAxis(viewUp, horizontalFOV / 2.0f);
+	transformedViewDirection = XMVector3Rotate(viewDirection, rotationQuaternion);
+	rotationQuaternion = XMQuaternionRotationAxis(viewRight, verticalFOV / 2.0f);
+	transformedViewDirection = XMVector3Rotate(transformedViewDirection, rotationQuaternion);
+	pVertexBuffer[5].m_ViewVector = XMVectorToRealArray(transformedViewDirection);
+	pVertexBuffer[5].m_Position = Vec3(1.0, -1.0, 0.0);
+
+	pImmediateContext->Unmap(m_pCameraVertexBuffer, 0);
+
+	const UINT stride = sizeof(CameraPlaneVertex);
+	const UINT offset = 0;
+	pImmediateContext->IASetVertexBuffers(0, 1, &m_pCameraVertexBuffer, &stride, &offset);
+	pImmediateContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	pImmediateContext->IASetInputLayout(m_pEnvironmentInputLayout);
+	pImmediateContext->PSSetShader(m_pEnvironmentPixelShader, nullptr, 0);
+	pImmediateContext->VSSetShader(m_pEnvironmentVertexShader, nullptr, 0);
+	pImmediateContext->PSSetShaderResources(0, 1, &m_pEnvironmentTextureCube);
+	pImmediateContext->OMSetRenderTargets(1, &pRenderTarget, nullptr);
+
+	pImmediateContext->DrawInstanced(VerticesInCameraPlane, 1, 0, 0);
+}
+
+EnvironmentMap *D3D11Renderer::CreateEnvironmentMap(CreateEnvironmentMapDescriptor *pCreateEnvironmnetMapDescriptor)
+{
+	EnvironmentMap *pEnvironmentMap;
+	switch (pCreateEnvironmnetMapDescriptor->m_EnvironmentType)
+	{
+	case CreateEnvironmentMapDescriptor::SOLID_COLOR:
+		pEnvironmentMap = new D3D11EnvironmentColor(m_pDevice, &pCreateEnvironmnetMapDescriptor->m_SolidColor);
+		break;
+	case CreateEnvironmentMapDescriptor::TEXTURE_CUBE:
+		pEnvironmentMap = new D3D11EnvironmentTextureCube(m_pDevice, m_pImmediateContext, &pCreateEnvironmnetMapDescriptor->m_TextureCube);
+		break;
+	}
+
+	return pEnvironmentMap;
+}
+
+void D3D11Renderer::DestroyEnviromentMap(EnvironmentMap *pEnvironmentMap)
+{
+	delete pEnvironmentMap;
+}
+
+Scene *D3D11Renderer::CreateScene(EnvironmentMap *pEnvironmentMap)
+{
+	D3D11EnvironmentMap *pD3D11EnvironmentMap = (D3D11EnvironmentMap *)pEnvironmentMap;
+	FAIL_CHK(pEnvironmentMap == nullptr, "Null environment passed into CreateScene");
+
+	Scene *pScene = new D3D11Scene(pD3D11EnvironmentMap);
 	MEM_CHK(pScene);
 	return pScene;
 }
@@ -419,12 +598,13 @@ void D3D11Renderer::DrawScene(Camera *pCamera, Scene *pScene)
 		pLight->UpdateLight(m_pImmediateContext, pD3D11Camera->GetInvTransViewMatrix());
 	}
 
-	m_pImmediateContext->ClearRenderTargetView(m_pSwapchainRenderTargetView, Colors::Gray);
+	pD3D11Scene->GetEnvironmentMap()->DrawEnvironmentMap(m_pImmediateContext, pD3D11Camera, m_pSwapchainRenderTargetView);
 	m_pImmediateContext->ClearDepthStencilView(m_pDepthBuffer, D3D11_CLEAR_DEPTH, 1.0f, 0);
 	m_pImmediateContext->ClearDepthStencilView(m_pShadowDepthBuffer, D3D11_CLEAR_DEPTH, 1.0f, 0);
 
 	ID3D11Buffer *pCameraConstantBuffer = pD3D11Camera->GetCameraConstantBuffer();
-	
+	m_pImmediateContext->IASetInputLayout(m_pForwardInputLayout);
+
 	assert(pD3D11Scene->GetDirectionalLightList().size() == 1); // TODO hard coded for one directional light
 	ID3D11Buffer *pDirectonalLightConstantBuffer = pD3D11Scene->GetDirectionalLightList()[0]->GetDirectionalLightConstantBuffer();
 	m_pImmediateContext->PSSetConstantBuffers(2, 1, &pDirectonalLightConstantBuffer);
@@ -647,7 +827,8 @@ ID3D11Buffer *D3D11DirectionalLight::GetViewProjBuffer(ID3D11DeviceContext *pCon
 }
 
 
-D3D11Scene::D3D11Scene()
+D3D11Scene::D3D11Scene(D3D11EnvironmentMap *pEnvironmentMap) :
+	m_pEnvironmentMap(pEnvironmentMap)
 {
 	m_MaxDimensions = XMVectorSet(-FLT_MAX, -FLT_MAX, -FLT_MAX, 0.0f);
 	m_MinDimensions = XMVectorSet(FLT_MAX, FLT_MAX, FLT_MAX, 0.0f);
@@ -691,11 +872,12 @@ void D3D11Scene::AddLight(_In_ Light *pLight)
 }
 
 D3D11Camera::D3D11Camera(ID3D11Device *pDevice, ID3D11DeviceContext *pContext, CreateCameraDescriptor *pCreateCameraDescriptor) :
-	m_pContext(pContext)
+	m_pContext(pContext), 
+	m_VerticalFieldOfView(pCreateCameraDescriptor->m_VerticalFieldOfView),
+	m_Width(pCreateCameraDescriptor->m_Width),
+	m_Height(pCreateCameraDescriptor->m_Height)
 {
-
-	m_Width = pCreateCameraDescriptor->m_Width;
-	m_Height = pCreateCameraDescriptor->m_Height;
+	m_HorizontalFieldOfView = 2.0f * atan(tan(m_VerticalFieldOfView / 2) * GetAspectRatio());
 
 	m_Position = RealArrayToXMVector(pCreateCameraDescriptor->m_FocalPoint, POSITION);
 	m_LookAt = RealArrayToXMVector(pCreateCameraDescriptor->m_LookAt, POSITION);
@@ -706,7 +888,7 @@ D3D11Camera::D3D11Camera(ID3D11Device *pDevice, ID3D11DeviceContext *pContext, C
 	m_CameraCpuData.m_Dimensions = XMVectorSet(pCreateCameraDescriptor->m_Width, pCreateCameraDescriptor->m_Height, 0, 0);
 	
 	XMVECTOR determinant;
-	m_ViewProjCpuData.m_Projection = XMMatrixPerspectiveFovLH(pCreateCameraDescriptor->m_FieldOfView,
+	m_ViewProjCpuData.m_Projection = XMMatrixPerspectiveFovLH(pCreateCameraDescriptor->m_VerticalFieldOfView,
 		pCreateCameraDescriptor->m_Width / pCreateCameraDescriptor->m_Height,
 		pCreateCameraDescriptor->m_NearClip,
 	 	pCreateCameraDescriptor->m_FarClip);
@@ -734,11 +916,11 @@ void D3D11Camera::Translate(_In_ const Vec3 &translationVector)
 
 void D3D11Camera::Rotate(float row, float yaw, float pitch)
 {
-	XMVECTOR lookDir = XMVector3Normalize(m_LookAt - m_Position);
+	XMVECTOR lookDir = GetViewDirection();
 
 	if (pitch)
 	{
-		XMVECTOR right = XMVector3Cross(lookDir, m_Up);
+		XMVECTOR right = GetRight();
 		XMMATRIX pitchRotation = XMMatrixRotationNormal(right, pitch);
 		lookDir = XMVector3Transform(lookDir, pitchRotation);
 		m_Up = XMVector3Normalize(XMVector3Transform(m_Up, pitchRotation));

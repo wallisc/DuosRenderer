@@ -46,9 +46,12 @@ enum RENDERER_TYPE
 	NUM_RENDERER_TYPES
 };
 
+const float CAMERA_ROTATION_SPEED = 3.14 / (WIDTH);
+
 Renderer *g_pRenderer[NUM_RENDERER_TYPES];
 Scene *g_pScene[NUM_RENDERER_TYPES];
 Camera *g_pCamera[NUM_RENDERER_TYPES];
+EnvironmentMap *g_pEnvironmentMap[NUM_RENDERER_TYPES];
 RENDERER_TYPE g_ActiveRenderer = D3D11;
 D3D11Canvas *g_pCanvas;
 Assimp::Importer g_importer;
@@ -72,9 +75,11 @@ IDXGISwapChain* g_pSwapChain;
 //--------------------------------------------------------------------------------------
 // Forward declarations
 //--------------------------------------------------------------------------------------
-void InitSceneAndCamera(_In_ Renderer *, _In_ const aiScene &assimpScene, _Out_ Scene **, _Out_ Camera **);
+void InitSceneAndCamera(_In_ Renderer *, _In_ const aiScene &assimpScene, _In_ EnvironmentMap *pEnvMap, _Out_ Scene **, _Out_ Camera **);
+void InitEnvironmentMap(_In_ Renderer *pRenderer, char *CubeMapName, _Out_ EnvironmentMap **ppEnviromentMap);
 HRESULT InitWindow( HINSTANCE hInstance, int nCmdShow );
 LRESULT CALLBACK    WndProc( HWND, UINT, WPARAM, LPARAM );
+void UpdateCamera();
 void Render();
 
 HRESULT CALLBACK OnDeviceCreated(_In_ ID3D11Device* pd3dDevice, _In_ const DXGI_SURFACE_DESC* pBackBufferSurfaceDesc, _In_opt_ void* pUserContext);
@@ -170,7 +175,8 @@ HRESULT CALLBACK OnDeviceCreated(_In_ ID3D11Device* pd3dDevice, _In_ const DXGI_
 		}
 
 		g_pRenderer[i]->SetCanvas(g_pCanvas);
-		InitSceneAndCamera(g_pRenderer[i], *pAssimpScene, &g_pScene[i], &g_pCamera[i]);
+		InitEnvironmentMap(g_pRenderer[i], "Assets\\EnvironmentMap\\Uffizi\\Uffizi", &g_pEnvironmentMap[i]);
+		InitSceneAndCamera(g_pRenderer[i], *pAssimpScene, g_pEnvironmentMap[i], & g_pScene[i], &g_pCamera[i]);
 	}
 	return	S_OK;
 }
@@ -203,9 +209,24 @@ Vec2 ConvertVec2(const aiVector3D &vec)
 	return Vec2(vec.x, vec.y);
 }
 
-void InitSceneAndCamera(_In_ Renderer *pRenderer, _In_ const aiScene &assimpScene, _Out_ Scene **ppScene, _Out_ Camera **ppCamera)
+void InitEnvironmentMap(_In_ Renderer *pRenderer, char *CubeMapName, _Out_ EnvironmentMap **ppEnviromentMap)
 {
-	*ppScene = pRenderer->CreateScene();
+	CreateEnvironmentMapDescriptor EnvMapDescriptor;
+	char textureCubFileNames[TEXTURES_PER_CUBE][MAX_ALLOWED_STR_LENGTH];
+	EnvMapDescriptor.m_EnvironmentType = CreateEnvironmentMapDescriptor::EnvironmentType::TEXTURE_CUBE;
+	CreateEnvironmentTextureCube &TexCubeDescriptor = EnvMapDescriptor.m_TextureCube;
+	for (UINT i = 0; i < TEXTURES_PER_CUBE; i++)
+	{
+		sprintf_s(textureCubFileNames[i], "%s_c0%d.bmp", CubeMapName, i);
+		TexCubeDescriptor.m_TextureNames[i] = textureCubFileNames[i];
+	}
+
+	*ppEnviromentMap = pRenderer->CreateEnvironmentMap(&EnvMapDescriptor);
+}
+
+void InitSceneAndCamera(_In_ Renderer *pRenderer, _In_ const aiScene &assimpScene, _In_ EnvironmentMap *pEnvMap, _Out_ Scene **ppScene, _Out_ Camera **ppCamera)
+{
+	*ppScene = pRenderer->CreateScene(pEnvMap);
 	Scene *pScene = *ppScene;
 
 	std::vector<Material *> materialList(assimpScene.mNumMaterials);
@@ -318,7 +339,7 @@ void InitSceneAndCamera(_In_ Renderer *pRenderer, _In_ const aiScene &assimpScen
 	CameraDescriptor.m_Up = ConvertVec3(pCam->mUp);
 	CameraDescriptor.m_NearClip = pCam->mClipPlaneNear;
 	CameraDescriptor.m_FarClip = pCam->mClipPlaneFar;
-	CameraDescriptor.m_FieldOfView = pCam->mHorizontalFOV * 2.0f / pCam->mAspect;
+	CameraDescriptor.m_VerticalFieldOfView = pCam->mHorizontalFOV * 2.0f / pCam->mAspect;
 
 	*ppCamera = pRenderer->CreateCamera(&CameraDescriptor);
 }
@@ -335,8 +356,8 @@ void RenderText(float fps)
 
 void CALLBACK OnFrameRender(_In_ ID3D11Device* pd3dDevice, _In_ ID3D11DeviceContext* pd3dImmediateContext, _In_ double fTime, _In_ float fElapsedTime, _In_opt_ void* pUserContext)
 {
+	UpdateCamera();
 	g_pRenderer[g_ActiveRenderer]->DrawScene(g_pCamera[g_ActiveRenderer], g_pScene[g_ActiveRenderer]);
-
 
 	ID3D11Texture2D* pBackBuffer = nullptr;
 	HRESULT hr = g_pSwapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), reinterpret_cast<void**>(&pBackBuffer));
@@ -403,13 +424,19 @@ void CALLBACK OnKeyPress(_In_ UINT nChar, _In_ bool bKeyDown, _In_ bool bAltDown
 	{
 		switch (nChar)
 		{
+		case 'Q':
+			g_pCamera[i]->Translate(Vec3(0.0f, 0.0f, CAMERA_SPEED));
+			break;
+		case 'E':
+			g_pCamera[i]->Translate(Vec3(0.0f, 0.0f, -CAMERA_SPEED));
+			break;
 		case VK_UP:
 		case 'W':
-			g_pCamera[i]->Translate(Vec3(0.0f, 0.0f, CAMERA_SPEED));
+			g_pCamera[i]->Translate(Vec3(0.0f, CAMERA_SPEED, 0.0f));
 			break;
 		case VK_DOWN:
 		case 'S':
-			g_pCamera[i]->Translate(Vec3(0.0f, 0.0f, -CAMERA_SPEED));
+			g_pCamera[i]->Translate(Vec3(0.0f, -CAMERA_SPEED, 0.0f));
 			break;
 		case VK_RIGHT:
 		case 'D':
@@ -420,6 +447,33 @@ void CALLBACK OnKeyPress(_In_ UINT nChar, _In_ bool bKeyDown, _In_ bool bAltDown
 			g_pCamera[i]->Translate(Vec3(CAMERA_SPEED, 0.0f, 0.0f));
 			break;
 		}
+	}
+}
+
+void UpdateCamera()
+{
+	int deltaX = 0, deltaY = 0;
+	if (g_MouseX < 100)
+	{
+		deltaX += 1;
+	}
+	else if (g_MouseX > WIDTH - 100)
+	{
+		deltaX -= 1;
+	}
+
+	if (g_MouseY < 100)
+	{
+		deltaY += 1;
+	}
+	else if (g_MouseY > HEIGHT - 100)
+	{
+		deltaY -= 1;
+	}
+
+	for (UINT i = 0; i < RENDERER_TYPE::NUM_RENDERER_TYPES; i++)
+	{
+		g_pCamera[i]->Rotate(0.0f, -CAMERA_ROTATION_SPEED * deltaX, CAMERA_ROTATION_SPEED * deltaY);
 	}
 }
 
@@ -435,13 +489,11 @@ void CALLBACK OnMouseMove(_In_ bool bLeftButtonDown, _In_ bool bRightButtonDown,
 	}
 	else
 	{
-		const float CAMERA_ROTATION_SPEED = 3.14 / (WIDTH);
-
 		int deltaX = g_MouseX - xPos;
 		int deltaY = g_MouseY - yPos;
 		g_MouseX = xPos;
 		g_MouseY = yPos;
-		
+
 		for (UINT i = 0; i < RENDERER_TYPE::NUM_RENDERER_TYPES; i++)
 		{
 			g_pCamera[i]->Rotate(0.0f, -CAMERA_ROTATION_SPEED * deltaX, CAMERA_ROTATION_SPEED * deltaY);

@@ -9,42 +9,46 @@
 
 #include <unordered_map>
 
+#define EPSILON 0.0001f
+class RTImage
+{
+public:
+	RTImage();
+	RTImage(const char *TextureName);
+	glm::vec3 Sample(glm::vec2 uv);
+	bool HasValidTexture() { return m_pImage != nullptr; }
+private:
+	float ConvertCharToFloat(unsigned char CharColor) { return (float)CharColor / 256.0f; }
+
+	int m_Width, m_Height;
+	int m_ComponentCount = 3;
+	unsigned char* m_pImage;
+	static const unsigned int cSizeofComponent = sizeof(unsigned char);
+};
+
+class RTTextureCube
+{
+public:
+	RTTextureCube();
+	RTTextureCube(char **TextureNames);
+	glm::vec3 Sample(glm::vec3 dir);
+	bool HasValidTexture() { return m_pImages[0].HasValidTexture(); }
+private:
+	TextureFace GetTextureFace(glm::vec3 dir);
+	RTImage m_pImages[TEXTURES_PER_CUBE];
+};
+
 class RTMaterial : public Material
 {
 public:
 	RTMaterial(CreateMaterialDescriptor *pCreateMaterialDescriptor);
 
-	glm::vec3 GetColor(glm::vec2 uv) 
-	{
-		if (m_pImage)
-		{
-			glm::tvec2<int> coord = glm::vec2(uv.x * m_Width, uv.y * m_Height);
-			unsigned char *pPixel = &m_pImage[(coord.x + coord.y * m_Width) * cSizeofComponent * cComponentCount];
-			return glm::vec3(
-				ConvertCharToFloat(pPixel[0]),
-				ConvertCharToFloat(pPixel[1]),
-				ConvertCharToFloat(pPixel[2]));
-		}
-		else
-		{
-			return m_Diffuse;
-		}
-	}
-
+	glm::vec3 GetColor(glm::vec2 uv);
 	float GetReflectivity() { return m_Reflectivity; }
 private:
-	float ConvertCharToFloat(unsigned char CharColor)
-	{
-		return (float)CharColor / 256.0f;
-	}
 	glm::vec3 m_Diffuse;
 	float m_Reflectivity;
-	static const int cComponentCount = 3;
-	static const unsigned int cSizeofComponent = sizeof(unsigned char);
-
-	unsigned char* m_pImage;
-	int m_Width;
-	int m_Height;
+	RTImage m_Image;
 };
 
 class RTRay
@@ -184,15 +188,40 @@ private:
 	glm::vec3 m_LookAt;
 	glm::vec3 m_Up;
 	
-	REAL m_FieldOfView;
+	REAL m_VerticalFieldOfView;
 	REAL m_NearClip;
 	REAL m_FarClip;
+};
+
+class RTEnvironmentMap : public EnvironmentMap
+{
+public:
+	virtual glm::vec3 GetColor(glm::vec3 ray) = 0;
+};
+
+class RTEnvironmentColor : public RTEnvironmentMap
+{
+public:
+	RTEnvironmentColor(CreateEnvironmentColor *pCreateEnvironmentColor);
+	glm::vec3 GetColor(glm::vec3 ray) { return m_Color; }
+private:
+	glm::vec3 m_Color;
+};
+
+class RTEnvironmentTextureCube : public RTEnvironmentMap
+{
+public:
+	RTEnvironmentTextureCube(CreateEnvironmentTextureCube *pCreateEnvironmentTextureCube);
+	glm::vec3 GetColor(glm::vec3 ray) { return m_TextureCube.Sample(ray); }
+
+private:
+	RTTextureCube m_TextureCube;
 };
 
 class RTScene : public Scene
 {
 public:
-	RTScene(RTCDevice);
+	RTScene(RTCDevice, RTEnvironmentMap *pEnvironmentMap);
 	~RTScene();
 
 	void AddGeometry(_In_ Geometry *pGeometry);
@@ -204,8 +233,10 @@ public:
 	RTCScene GetRTCScene() { return m_scene; }
 	RTGeometry *GetRTGeometry(unsigned int meshID) { return m_meshIDToRTGeometry[meshID]; }
 	void PreDraw();
+	RTEnvironmentMap *GetEnvironmentMap() { return m_pEnvironmentMap; }
 private:
 	bool m_bSceneCommitted;
+	RTEnvironmentMap *m_pEnvironmentMap;
 	std::vector<RTGeometry *> m_GeometryList;
 	std::vector<RTLight *> m_LightList;
 	std::unordered_map<unsigned int, RTGeometry *> m_meshIDToRTGeometry;
@@ -232,7 +263,10 @@ public:
 	Material *CreateMaterial(_In_ CreateMaterialDescriptor *pCreateMaterialDescriptor);
 	void DestroyMaterial(Material* pMaterial);
 
-	Scene *CreateScene();
+	EnvironmentMap *CreateEnvironmentMap(CreateEnvironmentMapDescriptor *pCreateEnvironmnetMapDescriptor);
+	void DestroyEnviromentMap(EnvironmentMap *pEnvironmentMap);
+
+	Scene *CreateScene(EnvironmentMap *pEnvironmentMap);
 	void DestroyScene(Scene *pScene);
 
 	void DrawScene(Camera *pCamera, Scene *pScene);

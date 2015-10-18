@@ -39,6 +39,101 @@ FORCEINLINE glm::vec3 RealArrayToGlmVec3(_In_ Vec3 Vector)
 	return glm::vec3(Vector.x, Vector.y, Vector.z);
 }
 
+FORCEINLINE Vec3 GlmVec3ToRealArray(_In_ glm::vec3 Vector)
+{
+	return Vec3(Vector.x, Vector.y, Vector.z);
+}
+
+RTImage::RTImage() : m_pImage(nullptr) {}
+
+RTImage::RTImage(const char *TextureName) : m_pImage(nullptr)
+{
+	const bool ValidTextureString = (TextureName != nullptr && strlen(TextureName) > 0);
+	if (ValidTextureString)
+	{
+		int ComponentCount;
+		m_pImage = stbi_load(TextureName, &m_Width, &m_Height, &ComponentCount, STBI_rgb);
+		FAIL_CHK(ComponentCount != 3 && ComponentCount != 4, "Stb_Image returned an unexpected component count");
+	}
+}
+
+
+glm::vec3 RTImage::Sample(glm::vec2 uv)
+{
+	assert(m_pImage);
+	glm::tvec2<int> coord = glm::vec2(uv.x * m_Width, uv.y * m_Height);
+	unsigned char *pPixel = &m_pImage[(coord.x + coord.y * m_Width) * cSizeofComponent * m_ComponentCount];
+	return glm::vec3(
+		ConvertCharToFloat(pPixel[0]),
+		ConvertCharToFloat(pPixel[1]),
+		ConvertCharToFloat(pPixel[2]));
+}
+
+RTTextureCube::RTTextureCube() {}
+RTTextureCube::RTTextureCube(char **TextureNames)
+{
+	for (UINT i = 0; i < TEXTURES_PER_CUBE; i++)
+	{
+		m_pImages[i] = RTImage(TextureNames[i]);
+	}
+}
+
+TextureFace RTTextureCube::GetTextureFace(glm::vec3 dir)
+{
+	const float absZ = fabsf(dir.z);
+	const float absY = fabsf(dir.y);
+	const float absX = fabsf(dir.x);
+	if (absZ > absX && absZ > absY)
+	{
+		return dir.z > 0.0 ? POS_Z : NEG_Z;
+	}
+	else if (absY > absX)
+	{
+		return dir.y > 0.0f ? POS_Y : NEG_Y;
+	}
+	else
+	{
+		assert(absX >= absZ && absX >= absY);
+		return dir.x > 0.0f ? POS_X : NEG_X;
+	}
+}
+
+glm::vec3 RTTextureCube::Sample(glm::vec3 dir)
+{
+	const TextureFace Face = GetTextureFace(dir);
+	glm::vec2 uv;
+	switch (Face)
+	{
+	case POS_X:
+		uv = glm::vec2((dir.z / dir.x + 1.0f) * 0.5,
+			1.0f - (dir.y / dir.x + 1.0f) * 0.5);
+		break;
+	case NEG_X:
+		uv = glm::vec2((dir.z / dir.x + 1.0f) * 0.5,
+			(dir.y / dir.x + 1.0f) * 0.5);
+		break;
+	case POS_Y:
+		uv = glm::vec2((dir.z / dir.y + 1.0f) * 0.5,
+			(dir.x / dir.y + 1.0f) * 0.5);
+		break;
+	case NEG_Y:
+		uv = glm::vec2(1.0f - (dir.z / dir.y + 1.0f) * 0.5,
+			(dir.x / dir.y + 1.0f) * 0.5);
+		break;
+	case POS_Z:
+		uv = glm::vec2(1.0f - (dir.x / dir.z + 1.0f) * 0.5,
+			1.0f - (dir.y / dir.z + 1.0f) * 0.5);
+		break;
+	case NEG_Z:
+		uv = glm::vec2(1.0f - (dir.x / dir.z + 1.0f) * 0.5,
+			(dir.y / dir.z + 1.0f) * 0.5);
+		break;
+	}
+	assert(uv.x >= -EPSILON && uv.x <= 1.0f + EPSILON);
+	assert(uv.y >= -EPSILON && uv.y <= 1.0f + EPSILON);
+	return m_pImages[Face].Sample(uv);
+}
+
 FORCEINLINE RTCVertex RendererVertexToRTCVertex(Vertex &Vertex)
 {
 	Vec3 &Pos = Vertex.m_Position;
@@ -62,18 +157,21 @@ FORCEINLINE glm::vec3 RTCVertexToRendererVertex(RTCVertex Vertex)
 
 RTMaterial::RTMaterial(CreateMaterialDescriptor *pCreateMaterialDescriptor)
 {
-	int ComponentCount;
-	if (pCreateMaterialDescriptor->m_TextureName && strlen(pCreateMaterialDescriptor->m_TextureName))
+	m_Image = RTImage(pCreateMaterialDescriptor->m_TextureName);
+	m_Diffuse = RealArrayToGlmVec3(pCreateMaterialDescriptor->m_DiffuseColor);
+	m_Reflectivity = pCreateMaterialDescriptor->m_Reflectivity;
+}
+
+glm::vec3 RTMaterial::GetColor(glm::vec2 uv)
+{
+	if (m_Image.HasValidTexture())
 	{
-		m_pImage = stbi_load(pCreateMaterialDescriptor->m_TextureName, &m_Width, &m_Height, &ComponentCount, STBI_rgb);
-		FAIL_CHK(ComponentCount != cComponentCount, "Stb_Image returned an unexpected component count");
+		return m_Image.Sample(uv);
 	}
 	else
 	{
-		m_pImage = nullptr;
+		return m_Diffuse;
 	}
-	m_Diffuse = RealArrayToGlmVec3(pCreateMaterialDescriptor->m_DiffuseColor);
-	m_Reflectivity = pCreateMaterialDescriptor->m_Reflectivity;
 }
 
 Material *RTRenderer::CreateMaterial(_In_ CreateMaterialDescriptor *pCreateMaterialDescriptor)
@@ -86,6 +184,27 @@ Material *RTRenderer::CreateMaterial(_In_ CreateMaterialDescriptor *pCreateMater
 void RTRenderer::DestroyMaterial(Material* pMaterial)
 {
 	delete pMaterial;
+}
+
+EnvironmentMap *RTRenderer::CreateEnvironmentMap(CreateEnvironmentMapDescriptor *pCreateEnvironnentMapDescriptor)
+{
+	EnvironmentMap *pEnvironmentMap;
+	switch (pCreateEnvironnentMapDescriptor->m_EnvironmentType)
+	{
+	case CreateEnvironmentMapDescriptor::SOLID_COLOR:
+		pEnvironmentMap = new RTEnvironmentColor(&pCreateEnvironnentMapDescriptor->m_SolidColor);
+		break;
+	case CreateEnvironmentMapDescriptor::TEXTURE_CUBE:
+		pEnvironmentMap = new RTEnvironmentTextureCube(&pCreateEnvironnentMapDescriptor->m_TextureCube);
+		break;
+	}
+	MEM_CHK(pEnvironmentMap);
+	return pEnvironmentMap;
+}
+
+void RTRenderer::DestroyEnviromentMap(EnvironmentMap *pEnvironmentMap)
+{
+	delete pEnvironmentMap;
 }
 
 RTRenderer::RTRenderer(unsigned int width, unsigned int height)
@@ -146,9 +265,10 @@ void RTRenderer::DestroyCamera(Camera *pCamera)
 	delete pCamera;
 }
 
-Scene *RTRenderer::CreateScene()
+Scene *RTRenderer::CreateScene(EnvironmentMap *pEnvironmentMap)
 {
-	Scene *pScene = new RTScene(m_device);
+	RTEnvironmentMap *pRTEnvironmentMap = (RTEnvironmentMap *)pEnvironmentMap;
+	Scene *pScene = new RTScene(m_device, pRTEnvironmentMap);
 	MEM_CHK(pScene);
 	return pScene;
 }
@@ -239,11 +359,12 @@ void RTRenderer::DrawScene(Camera *pCamera, Scene *pScene)
 					}
 				}
 
-				m_pCanvas->WritePixel(x, y, Vec3(TotalColor.r, TotalColor.g, TotalColor.b));
+				m_pCanvas->WritePixel(x, y, GlmVec3ToRealArray(TotalColor));
 			}
 			else
 			{
-				m_pCanvas->WritePixel(x, y, Vec3(1.0f, 0.0f, 1.0f));
+				glm::vec3 enviromentColor = pRTScene->GetEnvironmentMap()->GetColor(RayDirection);
+				m_pCanvas->WritePixel(x, y, GlmVec3ToRealArray(enviromentColor));
 			}
 		}
 	}
@@ -298,8 +419,17 @@ RTDirectionalLight::RTDirectionalLight(_In_ CreateLightDescriptor *pCreateLightD
 	m_Color = RealArrayToGlmVec3(pCreateLightDescriptor->m_Color);
 }
 
-RTScene::RTScene(RTCDevice device) :
-	m_bSceneCommitted(false)
+RTEnvironmentColor::RTEnvironmentColor(CreateEnvironmentColor *pCreateEnvironmentColor) :
+	m_Color(RealArrayToGlmVec3(pCreateEnvironmentColor->m_Color)) {}
+
+RTEnvironmentTextureCube::RTEnvironmentTextureCube(CreateEnvironmentTextureCube *pCreateEnvironmentTextureCube)
+{
+	m_TextureCube = RTTextureCube(pCreateEnvironmentTextureCube->m_TextureNames);
+}
+
+RTScene::RTScene(RTCDevice device, RTEnvironmentMap *pEnvironmentMap) :
+	m_bSceneCommitted(false),
+	m_pEnvironmentMap(pEnvironmentMap)
 {
 	m_scene = rtcDeviceNewScene(device, cSceneFlags, RTC_INTERSECT1);
 }
@@ -395,7 +525,7 @@ glm::vec3 RTGeometry::GetNormal(unsigned int primID, float alpha, float beta)
 RTCamera::RTCamera(CreateCameraDescriptor *pCreateCameraDescriptor) :
 	m_Width(pCreateCameraDescriptor->m_Width), m_Height(pCreateCameraDescriptor->m_Height),
 	m_NearClip(pCreateCameraDescriptor->m_NearClip), m_FarClip(pCreateCameraDescriptor->m_FarClip),
-	m_FieldOfView(pCreateCameraDescriptor->m_FieldOfView)
+	m_VerticalFieldOfView(pCreateCameraDescriptor->m_VerticalFieldOfView)
 {
 	m_FocalPoint = RealArrayToGlmVec3(pCreateCameraDescriptor->m_FocalPoint);
  	m_LookAt = RealArrayToGlmVec3(pCreateCameraDescriptor->m_LookAt);
@@ -419,7 +549,7 @@ float RTCamera::GetAspectRatio()
 
 const glm::vec3 RTCamera::GetLensPosition()
 {
-	float FocalLength = 1.0f / tan(m_FieldOfView / 2.0f);
+	float FocalLength = 1.0f / tan(m_VerticalFieldOfView / 2.0f);
 	return m_FocalPoint + GetLookDir() * FocalLength;
 }
 
@@ -477,7 +607,7 @@ void RTCamera::Rotate(float row, float yaw, float pitch)
 
 	if (yaw)
 	{
-		glm::mat4 yawRotation = glm::rotate(yaw, m_Up);
+		glm::mat4 yawRotation = glm::rotate(yaw, glm::vec3(0, 1, 0));
 		lookDir = yawRotation * lookDir;
 	}
 

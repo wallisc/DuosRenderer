@@ -529,6 +529,9 @@
     <FxCompile Include="GeometryRender.fx">
       <Filter>Shaders</Filter>
     </FxCompile>
+    <FxCompile Include="EnvironmentShader.fx">
+      <Filter>Shaders</Filter>
+    </FxCompile>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="ScreenSpaceReflection.rc">

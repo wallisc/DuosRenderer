@@ -140,7 +140,13 @@ public:
 	ID3D11Buffer *GetViewProjBuffer();
 	const DirectX::XMMATRIX &GetViewMatrix() { return m_ViewProjCpuData.m_View; }
 	const DirectX::XMMATRIX &GetInvTransViewMatrix() { return m_ViewProjCpuData.m_InvTransView; }
+	const DirectX::XMVECTOR &GetViewDirection() { return DirectX::XMVector3Normalize(DirectX::XMVectorSubtract(m_LookAt, m_Position)); }
+	const DirectX::XMVECTOR &GetUp() { return m_Up; }
+	const DirectX::XMVECTOR &GetRight() { return DirectX::XMVector3Cross(GetViewDirection(), m_Up); }
 	float GetAspectRatio() { return m_Width / m_Height; }
+	float GetVerticalFieldOfView() { return m_VerticalFieldOfView; }
+	float GetHorizontalFieldOfView() { return m_HorizontalFieldOfView; }
+
 private:
 	CBCamera m_CameraCpuData;
 	CBViewProjectionTransforms m_ViewProjCpuData;
@@ -152,6 +158,9 @@ private:
 
 	REAL m_Width;
 	REAL m_Height;
+	
+	REAL m_VerticalFieldOfView;
+	REAL m_HorizontalFieldOfView;
 
 	bool m_ViewMatrixNeedsUpdate;
 
@@ -161,10 +170,47 @@ private:
 	DirectX::XMVECTOR m_Up;
 };
 
+class D3D11EnvironmentMap : public EnvironmentMap
+{
+public:
+	virtual void DrawEnvironmentMap(_In_ ID3D11DeviceContext *pImmediateContext, D3D11Camera *pCamera, ID3D11RenderTargetView *pRenderTarget) = 0;
+};
+
+class D3D11EnvironmentTextureCube : public D3D11EnvironmentMap
+{
+public:
+	D3D11EnvironmentTextureCube(_In_ ID3D11Device *pDevice, _In_ ID3D11DeviceContext *pImmediateContext, _In_ const CreateEnvironmentTextureCube *pCreateTextureCube);
+	void DrawEnvironmentMap(_In_ ID3D11DeviceContext *pImmediateContext, D3D11Camera *pCamera, ID3D11RenderTargetView *pRenderTarget);
+
+private:
+	ID3D11ShaderResourceView *m_pEnvironmentTextureCube;
+
+	struct CameraPlaneVertex
+	{
+		Vec3 m_Position;
+		Vec3 m_ViewVector;
+	};
+	ID3D11Buffer *m_pCameraVertexBuffer;
+	ID3D11PixelShader *m_pEnvironmentPixelShader;
+	ID3D11VertexShader *m_pEnvironmentVertexShader;
+	ID3D11InputLayout *m_pEnvironmentInputLayout;
+	const UINT VerticesInCameraPlane = 6;
+};
+
+class D3D11EnvironmentColor : public D3D11EnvironmentMap
+{
+public:
+	D3D11EnvironmentColor(_In_ ID3D11Device *pDevice, const CreateEnvironmentColor *pCreateEnvironmnetColor) {
+		assert(false);
+	}
+
+	virtual void DrawEnvironmentMap(_In_ ID3D11DeviceContext *pImmediateContext, D3D11Camera *pCamera, ID3D11RenderTargetView *pRenderTarget) {}
+};
+
 class D3D11Scene : public Scene
 {
 public:
-	D3D11Scene();
+	D3D11Scene(D3D11EnvironmentMap *m_pEnvironmentMap);
 
 	void AddGeometry(_In_ Geometry *pGeometry);
 	void AddLight(_In_ Light *pLight);
@@ -172,12 +218,15 @@ public:
 	DirectX::XMVECTOR GetMaxDimensions() const { return m_MaxDimensions; }
 	DirectX::XMVECTOR GetMinDimensions() const { return m_MinDimensions; }
 
+	D3D11EnvironmentMap *GetEnvironmentMap() { return m_pEnvironmentMap; }
 	friend class D3D11Renderer;
 protected:
 	std::vector<D3D11Geometry *> &GetGeometryList() { return m_GeometryList; }
 	std::vector<D3D11DirectionalLight *> &GetDirectionalLightList() { return m_DirectionalLightList; }
 
 private:
+	D3D11EnvironmentMap *m_pEnvironmentMap;
+
 	std::vector<D3D11Geometry *> m_GeometryList;
 	std::vector<D3D11DirectionalLight *> m_DirectionalLightList;
 
@@ -254,7 +303,10 @@ public:
 	Material *CreateMaterial(_In_ CreateMaterialDescriptor *pCreateMaterialDescriptor);
 	void DestroyMaterial(Material* pMaterial);
 
-	Scene *CreateScene();
+	EnvironmentMap *CreateEnvironmentMap(CreateEnvironmentMapDescriptor *pCreateEnvironmnetMapDescriptor);
+	void DestroyEnviromentMap(EnvironmentMap *pEnvironmentMap);
+
+	Scene *CreateScene(EnvironmentMap *pEnvironmentMap);
 	void DestroyScene(Scene *pScene);
 
 	void DrawScene(Camera *pCamera, Scene *pScene);

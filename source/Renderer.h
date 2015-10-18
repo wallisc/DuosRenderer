@@ -90,11 +90,55 @@ public:
 	Vec3 m_LookAt;
 	Vec3 m_Up;
 
-	REAL m_FieldOfView;
+	REAL m_VerticalFieldOfView;
 	REAL m_NearClip;
 	REAL m_FarClip;
 	REAL m_Width;
 	REAL m_Height;
+};
+
+// Defines which textures map to which plan for Texture Cubes
+enum TextureFace
+{
+	POS_Z = 0,
+	NEG_Z,
+	POS_Y,
+	NEG_Y,
+	POS_X,
+	NEG_X,
+	TEXTURES_PER_CUBE
+};
+
+class CreateEnvironmentTextureCube
+{
+public:
+	char *m_TextureNames[TEXTURES_PER_CUBE];
+};
+
+class CreateEnvironmentColor
+{
+public:
+	Vec3 m_Color;
+};
+
+
+class CreateEnvironmentMapDescriptor
+{
+public:
+	enum EnvironmentType
+	{
+		TEXTURE_CUBE,
+		SOLID_COLOR
+	} m_EnvironmentType;
+
+	union
+	{
+		CreateEnvironmentTextureCube m_TextureCube;
+		struct // Hack to get around Union's needing a default constructor
+		{
+			CreateEnvironmentColor m_SolidColor;
+		};
+	};
 };
 
 class Light
@@ -125,6 +169,10 @@ class Geometry : public Transformable
 {
 };
 
+class EnvironmentMap
+{
+};
+
 class Scene
 {
 public:
@@ -151,7 +199,10 @@ public:
 	virtual Material *CreateMaterial(_In_ CreateMaterialDescriptor *pCreateMaterialDescriptor) = 0;
 	virtual void DestroyMaterial(Material* pMaterial) = 0;
 
-	virtual Scene *CreateScene() = 0;
+	virtual EnvironmentMap *CreateEnvironmentMap(CreateEnvironmentMapDescriptor *pCreateEnvironmnetMapDescriptor) = 0;
+	virtual void DestroyEnviromentMap(EnvironmentMap *pEnvironmentMap) = 0;
+
+	virtual Scene *CreateScene(EnvironmentMap *pEnvironmentMap) = 0;
 	virtual void DestroyScene(Scene *pScene) = 0;
 };
 
