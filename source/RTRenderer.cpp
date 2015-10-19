@@ -2,9 +2,8 @@
 #include "RendererException.h"
 
 #include <atlbase.h>
-#include <algorithm>
 #include <queue>
-#include "glm/glm.hpp"
+
 #include "glm/vec3.hpp"
 #include "glm/gtx/transform.hpp"
 
@@ -135,19 +134,19 @@ glm::vec3 RTTextureCube::Sample(glm::vec3 dir)
 			(dir.y / dir.x + 1.0f) * 0.5);
 		break;
 	case POS_Y:
-		uv = glm::vec2((dir.z / dir.y + 1.0f) * 0.5,
-			(dir.x / dir.y + 1.0f) * 0.5);
+		uv = glm::vec2(1.0f  - (dir.x / dir.y + 1.0f) * 0.5,
+			(dir.z / dir.y + 1.0f) * 0.5);
 		break;
 	case NEG_Y:
-		uv = glm::vec2(1.0f - (dir.z / dir.y + 1.0f) * 0.5,
-			(dir.x / dir.y + 1.0f) * 0.5);
+		uv = glm::vec2((dir.x / dir.y + 1.0f) * 0.5,
+			(dir.z / dir.y + 1.0f) * 0.5);
 		break;
 	case POS_Z:
-		uv = glm::vec2(1.0f - (dir.x / dir.z + 1.0f) * 0.5,
+		uv = glm::vec2((dir.x / dir.z + 1.0f) * 0.5,
 			1.0f - (dir.y / dir.z + 1.0f) * 0.5);
 		break;
 	case NEG_Z:
-		uv = glm::vec2(1.0f - (dir.x / dir.z + 1.0f) * 0.5,
+		uv = glm::vec2((dir.x / dir.z + 1.0f) * 0.5,
 			(dir.y / dir.z + 1.0f) * 0.5);
 		break;
 	}
@@ -182,6 +181,7 @@ RTMaterial::RTMaterial(CreateMaterialDescriptor *pCreateMaterialDescriptor)
 	m_Image = RTImage(pCreateMaterialDescriptor->m_TextureName);
 	m_Diffuse = RealArrayToGlmVec3(pCreateMaterialDescriptor->m_DiffuseColor);
 	m_Reflectivity = pCreateMaterialDescriptor->m_Reflectivity;
+	m_Roughness = pCreateMaterialDescriptor->m_Roughness;
 }
 
 glm::vec3 RTMaterial::GetColor(glm::vec2 uv)
@@ -321,67 +321,178 @@ void RTRenderer::DestroyScene(Scene* pScene)
 	delete pScene;
 }
 
+RayBatch::RayBatch(RTCScene Scene, _In_reads_(NumRays) glm::vec3 *RayOrigins, _In_reads_(NumRays) glm::vec3 *RayDirections, unsigned int NumRays) :
+m_NumRays(NumRays)
+{
+	if (NumRays == 1)
+	{
+		Ray = {};
+		Ray.tnear = 0.0f;
+		Ray.tfar = FLT_MAX;
+		Ray.geomID = RTC_INVALID_GEOMETRY_ID;
+		Ray.primID = RTC_INVALID_GEOMETRY_ID;
+		Ray.mask = -1;
+		Ray.time = 0;
+		memcpy(Ray.org, RayOrigins, sizeof(*RayOrigins));
+		memcpy(Ray.dir, RayDirections, sizeof(*RayDirections));
+
+		rtcIntersect(Scene, Ray);
+	}
+	else if (NumRays <= 4)
+	{
+		InitRayStruct(Ray4, RayOrigins, RayDirections, NumRays);
+		rtcIntersect4(&ValidMask, Scene, Ray4);
+	}
+	else
+	{
+		InitRayStruct(Ray16, RayOrigins, RayDirections, NumRays);
+		rtcIntersect16(&ValidMask, Scene, Ray16);
+	}
+}
+
+unsigned int RayBatch::GetGeometryID(unsigned int RayIndex)
+{
+	assert(RayIndex < m_NumRays);
+	if (m_NumRays == 1)
+	{
+		return Ray.geomID;
+	}
+	else if (m_NumRays <= 4)
+	{
+		return GetGeometryIDInternal(Ray4, RayIndex);
+	}
+	else
+	{
+		return GetGeometryIDInternal(Ray16, RayIndex);
+	}
+}
+
+unsigned int RayBatch::GetPrimID(unsigned int RayIndex)
+{
+	assert(RayIndex < m_NumRays);
+	if (m_NumRays == 1)
+	{
+		return Ray.primID;
+	}
+	else if (m_NumRays <= 4)
+	{
+		return GetPrimIDInternal(Ray4, RayIndex);
+	}
+	else
+	{
+		return GetPrimIDInternal(Ray16, RayIndex);
+	}
+}
+
+glm::vec3 RayBatch::GetBaryocentricCoordinate(unsigned int RayIndex)
+{
+	assert(RayIndex < m_NumRays);
+	float u, v;
+	if (m_NumRays == 1)
+	{
+		u = Ray.u;
+		v = Ray.v;
+	}
+	else if (m_NumRays <= 4)
+	{
+		GetBaryocentricCoordinateInternal(Ray4, RayIndex, u, v);
+	}
+	else
+	{
+		GetBaryocentricCoordinateInternal(Ray16, RayIndex, u, v);
+	}
+	return glm::vec3(u, v, 1.0 - u - v);
+}
+
+
 void RTRenderer::RenderPixelRange(PixelRange *pRange, RTCamera *pCamera, RTScene *pScene)
 {
 	assert(pRange->m_Width > 0 && pRange->m_X + pRange->m_Width <= pCamera->GetWidth());
 	assert(pRange->m_Height > 0 && pRange->m_Y + pRange->m_Height <= pCamera->GetHeight());
-	for (UINT x = pRange->m_X; x < pRange->m_X + pRange->m_Width; x++)
-	{
-		for (UINT y = pRange->m_Y; y < pRange->m_Y + pRange->m_Height; y++)
-		{
-			RenderPixel(x, y, pCamera, pScene);
-		}
-	}
-}
 
-void RTRenderer::RenderPixel(unsigned int x, unsigned int y, RTCamera *pCamera, RTScene *pScene)
-{
+	const UINT INTERSECT_BLOCK_SIZE = 2;
+	const UINT RAYS_PER_BLOCK = INTERSECT_BLOCK_SIZE * INTERSECT_BLOCK_SIZE;
+
 	const unsigned int Width = pCamera->GetWidth();
 	const unsigned int Height = pCamera->GetHeight();
 	const glm::vec3 FocalPoint = pCamera->GetFocalPoint();
 	const float PixelWidth = pCamera->GetLensWidth() / Width;
 	const float PixelHeight = pCamera->GetLensHeight() / Height;
+	const glm::vec3 right = pCamera->GetRight();
 
-	glm::vec3 coord(pCamera->GetLensWidth() * (float)x / (float)Width, pCamera->GetLensHeight() * (float)(Height - y) / (float)Height, 0.0f);
-	coord -= glm::vec3(pCamera->GetLensWidth() / 2.0f, pCamera->GetLensHeight() / 2.0f, 0.0f);
-	coord += glm::vec3(PixelWidth / 2.0f, -PixelHeight / 2.0f, 0.0f); // Make sure the ray is centered in the pixel
 
-	glm::vec3 right = pCamera->GetRight();
-	glm::vec3 LensPoint = pCamera->GetLensPosition() + coord.y * pCamera->GetUp() + coord.x * right;
-	glm::vec3 RayDirection = glm::normalize(LensPoint - FocalPoint);
-
-	RTCRay ray{};
-	memcpy(ray.org, &LensPoint, sizeof(ray.org));
-	memcpy(ray.dir, &RayDirection, sizeof(ray.dir));
-	ray.tnear = 0.0f;
-	ray.tfar = FLT_MAX;
-	ray.geomID = RTC_INVALID_GEOMETRY_ID;
-	ray.primID = RTC_INVALID_GEOMETRY_ID;
-	ray.mask = -1;
-	ray.time = 0;
-
-	rtcIntersect(pScene->GetRTCScene(), ray);
-	unsigned int meshID = ray.geomID;
-
-	if (meshID != RTC_INVALID_GEOMETRY_ID)
+	for (UINT topLeftX = pRange->m_X; topLeftX < pRange->m_X + pRange->m_Width; topLeftX += INTERSECT_BLOCK_SIZE)
 	{
-		RTGeometry *pGeometry = pScene->GetRTGeometry(meshID);
+		for (UINT topLeftY = pRange->m_Y; topLeftY < pRange->m_Y + pRange->m_Height; topLeftY += INTERSECT_BLOCK_SIZE)
+		{
+			glm::vec3 LensPoints[RAYS_PER_BLOCK];
+			glm::vec3 RayDirections[RAYS_PER_BLOCK];
+
+			UINT rayIndex = 0;
+			const UINT BlockWidth = min(INTERSECT_BLOCK_SIZE, (pRange->m_X + pRange->m_Width) - topLeftX);
+			const UINT BlockHeight = min(INTERSECT_BLOCK_SIZE, (pRange->m_Y + pRange->m_Height) - topLeftY);
+			for (UINT xOffset = 0; xOffset < BlockWidth; xOffset++)
+			{
+				for (UINT yOffset = 0; yOffset < BlockHeight; yOffset++)
+				{
+					UINT x = topLeftX + xOffset;
+					UINT y = topLeftY + yOffset;
+
+					glm::vec3 coord(pCamera->GetLensWidth() * (float)x / (float)Width, pCamera->GetLensHeight() * (float)(Height - y) / (float)Height, 0.0f);
+					coord -= glm::vec3(pCamera->GetLensWidth() / 2.0f, pCamera->GetLensHeight() / 2.0f, 0.0f);
+					coord += glm::vec3(PixelWidth / 2.0f, -PixelHeight / 2.0f, 0.0f); // Make sure the ray is centered in the pixel
+
+					LensPoints[rayIndex] = pCamera->GetLensPosition() + coord.y * pCamera->GetUp() + coord.x * right;
+					RayDirections[rayIndex] = glm::normalize(LensPoints[rayIndex] - FocalPoint);
+					rayIndex++;
+				}
+			}
+
+			RayBatch batch(pScene->GetRTCScene(), &LensPoints[0], &RayDirections[0], rayIndex);
+
+			rayIndex = 0;
+			for (UINT xOffset = 0; xOffset < BlockWidth; xOffset++)
+			{
+				for (UINT yOffset = 0; yOffset < BlockHeight; yOffset++)
+				{
+					UINT x = topLeftX + xOffset;
+					UINT y = topLeftY + yOffset;
+
+					unsigned int meshID = batch.GetGeometryID(rayIndex);
+					unsigned int primID = batch.GetPrimID(rayIndex);
+					RTGeometry *pGeometry = meshID == RTC_INVALID_GEOMETRY_ID ? nullptr : pScene->GetRTGeometry(meshID);
+					glm::vec3 baryocentricCoord = batch.GetBaryocentricCoordinate(rayIndex);
+
+					glm::vec3 color = ShadePixel(pScene, primID, pGeometry, baryocentricCoord, -RayDirections[rayIndex]);
+					m_pCanvas->WritePixel(x, y, GlmVec3ToRealArray(color));
+					rayIndex++;
+				}
+			}
+
+		}
+	}
+}
+
+glm::vec3 RTRenderer::ShadePixel(RTScene *pScene, unsigned int primID, RTGeometry *pGeometry, glm::vec3 baryocentricCoord, glm::vec3 ViewVector)
+{
+	if (pGeometry)
+	{
 		assert(pGeometry != nullptr);
 
-		float a = ray.u;
-		float b = ray.v;
-		float c = 1.0 - a - b;
+		glm::vec3 TotalDiffuse = glm::vec3(0.0f);
+		glm::vec3 TotalSpecular = glm::vec3(0.0f);
+		float TotalFresnel = 0.0f;
 
-		glm::vec3 TotalColor = glm::vec3(0.0f);
-		glm::vec3 matColor = pGeometry->GetColor(ray.primID, a, b);
+		glm::vec3 matColor = pGeometry->GetColor(primID, baryocentricCoord.x, baryocentricCoord.y);
 		float reflectivity = pGeometry->GetMaterial()->GetReflectivity();
-		glm::vec3 Norm = pGeometry->GetNormal(ray.primID, a, b);
-		glm::vec3 intersectPos = pGeometry->GetPosition(ray.primID, a, b);
+		float Roughness = pGeometry->GetMaterial()->GetRoughness();
+		glm::vec3 Norm = pGeometry->GetNormal(primID, baryocentricCoord.x, baryocentricCoord.y);
+		glm::vec3 intersectPos = pGeometry->GetPosition(primID, baryocentricCoord.x, baryocentricCoord.y);
 		for (RTLight *pLight : pScene->GetLightList())
 		{
 			glm::vec3 LightColor = pLight->GetLightColor(intersectPos);
 			glm::vec3 LightDirection = pLight->GetLightDirection(intersectPos);
-			glm::vec3 HalfVector = glm::normalize(LightDirection + -RayDirection);
+			glm::vec3 HalfVector = glm::normalize(LightDirection + ViewVector);
 
 			float nDotL = glm::dot(Norm, LightDirection);
 			if (nDotL > 0.0f)
@@ -400,17 +511,31 @@ void RTRenderer::RenderPixel(unsigned int x, unsigned int y, RTCamera *pCamera, 
 				rtcOccluded(pScene->GetRTCScene(), ShadowRay);
 				if (ShadowRay.geomID == RTC_INVALID_GEOMETRY_ID)
 				{
-					TotalColor += matColor * LightColor * nDotL;
+					TotalDiffuse += matColor * LightColor * nDotL;
+
+					float fresnel;
+					TotalSpecular += LightColor * CookTorrance().BRDF(ViewVector, Norm, LightDirection, Roughness, reflectivity, fresnel);
+					TotalFresnel += fresnel;
 				}
 			}
 		}
 
-		m_pCanvas->WritePixel(x, y, GlmVec3ToRealArray(TotalColor));
+		{
+			glm::vec3 ReflectionVector = glm::reflect(-ViewVector, Norm);
+			float fresnel;
+			TotalSpecular += pScene->GetEnvironmentMap()->GetColor(ReflectionVector) * CookTorrance().BRDF(ViewVector, Norm, ReflectionVector, Roughness, reflectivity, fresnel);
+			TotalFresnel += fresnel;
+		}
+
+
+		TotalSpecular /= 2.0f;
+		TotalFresnel /= 2.0f;
+
+		return glm::clamp(TotalDiffuse * (1.0f - TotalFresnel) + TotalSpecular, glm::vec3(0.0f), glm::vec3(1.0f));
 	}
 	else
 	{
-		glm::vec3 enviromentColor = pScene->GetEnvironmentMap()->GetColor(RayDirection);
-		m_pCanvas->WritePixel(x, y, GlmVec3ToRealArray(enviromentColor));
+		return pScene->GetEnvironmentMap()->GetColor(-ViewVector);
 	}
 }
 
@@ -443,7 +568,7 @@ void RTRenderer::DrawScene(Camera *pCamera, Scene *pScene)
 					this, 
 					pRTScene, 
 					pRTCamera, 
-					PixelRange(x, y, std::min(Width - x, THREAD_BLOCK_SIZE), std::min(Height - y, THREAD_BLOCK_SIZE)),
+					PixelRange(x, y, min(Width - x, THREAD_BLOCK_SIZE), min(Height - y, THREAD_BLOCK_SIZE)),
 					&m_RunningThreadCounter,
 					m_TracingFinishedEvent));
 			}
@@ -543,7 +668,7 @@ RTScene::RTScene(RTCDevice device, RTEnvironmentMap *pEnvironmentMap) :
 	m_bSceneCommitted(false),
 	m_pEnvironmentMap(pEnvironmentMap)
 {
-	m_scene = rtcDeviceNewScene(device, cSceneFlags, RTC_INTERSECT1);
+	m_scene = rtcDeviceNewScene(device, cSceneFlags, RTC_INTERSECT1 | RTC_INTERSECT4 | RTC_INTERSECT16);
 }
 
 RTScene::~RTScene()
@@ -628,9 +753,9 @@ glm::vec3 RTGeometry::GetNormal(unsigned int primID, float alpha, float beta)
 
 	assert(alpha + beta <= 1.0f);
 	float gamma = 1.0f - alpha - beta;
-	return m_vertexData[i0].m_norm * gamma +
+	return glm::normalize(m_vertexData[i0].m_norm * gamma +
 		m_vertexData[i1].m_norm * alpha +
-		m_vertexData[i2].m_norm * beta;
+		m_vertexData[i2].m_norm * beta);
 }
 
 
@@ -726,3 +851,14 @@ void RTCamera::Rotate(float row, float yaw, float pitch)
 	m_LookAt = m_FocalPoint + glm::vec3(lookDir) * glm::length(m_LookAt - m_FocalPoint);
 }
 
+float CookTorrance::BRDF(_In_ const glm::vec3 &ViewVector, _In_ const glm::vec3 &Normal, _In_ const glm::vec3 &IncomingRadianceVector, _In_ float Roughness, _In_ float BaseReflectivity, _Out_ float &FresnelFactor)
+{
+	glm::vec3 HalfwayVector = glm::normalize(ViewVector + IncomingRadianceVector);
+	float nDotL = saturate(glm::dot(Normal, IncomingRadianceVector));
+	float nDotV = saturate(glm::dot(Normal, ViewVector));
+
+	FresnelFactor = F(Normal, HalfwayVector, BaseReflectivity);
+	float Distribution = D(Normal, HalfwayVector, Roughness);
+	float GeometricAttenuation = G(ViewVector, Normal, IncomingRadianceVector, Roughness);
+	return FresnelFactor * Distribution * GeometricAttenuation / (4.0 * nDotL * nDotV);
+}

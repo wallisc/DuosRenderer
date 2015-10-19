@@ -1,6 +1,6 @@
 #define EPSILON 0.0001
 #define PI 3.14
-#define ENABLE_PBR 0
+#define ENABLE_PBR 1
 
 // sqrt(2.0 / PI)
 #define SQRT_2_DIVIDED_BY_PI 0.7978845608
@@ -90,20 +90,6 @@ float GGX_Distribution(float3 h, float3 n, float roughness)
 	return roughnessSquared / (PI * pow(nDotHSquared * (roughnessSquared - 1) + 1, 2.0));
 }
 
-float GGX_GeometryAttenuationPartial(float3 v, float3 n, float3 h, float roughness)
-{
-	float vDotN = dot(v, n);
-	float vDotNSquared = vDotN * vDotN;
-	float nDotH = dot(v, h);
-	int applyGGX = (vDotN / nDotH) > 0.0;
-	return applyGGX * 2.0 / (1.0 + sqrt(1.0 + roughness * roughness * (1.0 - vDotNSquared) / vDotNSquared));
-}
-
-float GGX_GeometryAttenuation(float3 v, float3 n, float3 h, float roughness)
-{
-	return GGX_GeometryAttenuationPartial(v, n, h, roughness);
-}
-
 float Schlicks_PartialGeometricAttenuation(float3 n, float3 v, float k)
 {
 	float nDotV = saturate(dot(n, v));
@@ -113,7 +99,7 @@ float Schlicks_PartialGeometricAttenuation(float3 n, float3 v, float k)
 float Schlicks_GeometricAttenuation(float3 v, float3 l, float3 n, float roughness)
 {
 	float k = roughness * SQRT_2_DIVIDED_BY_PI;
-	return Schlicks_PartialGeometricAttenuation(n, v, k) * Schlicks_PartialGeometricAttenuation(n, l, roughness);
+	return Schlicks_PartialGeometricAttenuation(n, v, k) * Schlicks_PartialGeometricAttenuation(n, l, k);
 }
 
 float Fresnel(float3 h, float3 n, float reflectivity)
@@ -168,13 +154,13 @@ PS_OUTPUT PS( PS_INPUT input) : SV_Target
 		totalDiffuse += (nDotL > 0.0f) * (nDotL * LightColor * diffuse);
 
 #if ENABLE_PBR
-
 		float reflectivity;
 		totalSpecular += BRDF(v, n, LightDirection, roughness, R0, LightColor, reflectivity);
 		totalFresnel += reflectivity;
 #endif
 	}
 #if ENABLE_PBR
+	if (1)
 	{
 		float3 reflectionRay = reflect(-v, n);
 		float3 reflectionColor = EnvironmentMap.Sample(samLinear, reflectionRay);
@@ -186,9 +172,10 @@ PS_OUTPUT PS( PS_INPUT input) : SV_Target
 	uint SampleCount = 2;
 	totalSpecular /= SampleCount;
 	totalFresnel /= SampleCount;
-	output.Color = float4(totalDiffuse * (1.0 - totalFresnel) + totalSpecular, 1.0);
+	output.Color = saturate(float4(totalDiffuse * (1.0 - totalFresnel) + totalSpecular, 1.0));
 #else
 	output.Color = float4(totalDiffuse, 1.0);
 #endif
+
 	return output;
 }
