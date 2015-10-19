@@ -2,13 +2,19 @@
 
 #include "glm/vec3.hpp"
 #include "glm/vec2.hpp"
+#include "glm/glm.hpp"
 
 #include "embree/inc/rtcore.h"
 #include "embree/inc/rtcore_scene.h"
 #include "embree/inc/rtcore_ray.h"
 
 #include <unordered_map>
+#include <algorithm>
 #include <windows.h>
+#include <minmax.h>
+
+#define _USE_MATH_DEFINES
+#include <math.h>
 
 #define EPSILON 0.0001f
 #define RT_MULTITHREAD 1
@@ -47,9 +53,11 @@ public:
 
 	glm::vec3 GetColor(glm::vec2 uv);
 	float GetReflectivity() { return m_Reflectivity; }
+	float GetRoughness() { return m_Roughness; }
 private:
 	glm::vec3 m_Diffuse;
 	float m_Reflectivity;
+	float m_Roughness;
 	RTImage m_Image;
 };
 
@@ -274,6 +282,72 @@ struct RayTraceThreadArgs
 	HANDLE m_TracingFinishedEvent;
 };
 
+class RayBatch
+{
+public:
+	RayBatch(RTCScene Scene, _In_reads_(NumRays) glm::vec3 *RayOrigins, _In_reads_(NumRays) glm::vec3 *RayDirections, unsigned int NumRays);
+
+	unsigned int GetGeometryID(unsigned int RayIndex);
+	unsigned int GetPrimID(unsigned int RayIndex);
+	glm::vec3 GetBaryocentricCoordinate(unsigned int RayIndex);
+private:
+	template<class RayType>
+	unsigned int GetGeometryIDInternal(typename const RayType &RayStruct, unsigned int RayIndex)
+	{
+		return RayStruct.geomID[RayIndex];
+	}
+
+	template<class RayType>
+	unsigned int GetPrimIDInternal(typename const RayType &RayStruct, unsigned int RayIndex)
+	{
+		return RayStruct.primID[RayIndex];
+	}
+
+	template<class RayType>
+	void GetBaryocentricCoordinateInternal(typename const RayType &RayStruct, unsigned int RayIndex, float &u, float &v)
+	{
+		u = RayStruct.u[RayIndex];
+		v = RayStruct.v[RayIndex];
+	}
+
+	template<class RayType>
+	void InitRayStruct(typename RayType &RayStruct, _In_reads_(NumRays) glm::vec3 *RayOrigins, _In_reads_(NumRays) glm::vec3 *RayDirections, unsigned int NumRays)
+	{
+		for (UINT RayIndex = 0; RayIndex < NumRays; RayIndex++)
+		{
+			RayStruct.tnear[RayIndex] = 0.0f;
+			RayStruct.tfar[RayIndex] = FLT_MAX;
+			RayStruct.geomID[RayIndex] = RTC_INVALID_GEOMETRY_ID;
+			RayStruct.primID[RayIndex] = RTC_INVALID_GEOMETRY_ID;
+			RayStruct.mask[RayIndex] = -1;
+			
+			RayStruct.dirx[RayIndex] = RayDirections[RayIndex].x;
+			RayStruct.diry[RayIndex] = RayDirections[RayIndex].y;
+			RayStruct.dirz[RayIndex] = RayDirections[RayIndex].z;
+			
+			RayStruct.orgx[RayIndex] = RayOrigins[RayIndex].x;
+			RayStruct.orgy[RayIndex] = RayOrigins[RayIndex].y;
+			RayStruct.orgz[RayIndex] = RayOrigins[RayIndex].z;
+			ValidMask[RayIndex] = -1;
+		}
+
+		for (UINT RayIndex = NumRays; RayIndex < 16; RayIndex++)
+		{
+			ValidMask[RayIndex] = 0;
+		}
+	}
+
+	unsigned int m_NumRays;
+	__declspec(align(16)) int ValidMask[16];
+
+	union
+	{
+		RTCRay Ray;
+		__declspec(align(16)) RTCRay4 Ray4;
+		__declspec(align(64)) RTCRay16 Ray16;
+	};
+};
+
 class RTRenderer : public Renderer
 {
 public:
@@ -303,7 +377,7 @@ public:
 
 	void RenderPixelRange(PixelRange *pRange, RTCamera *pCamera, RTScene *pScene);
 private:
-	void RenderPixel(unsigned int x, unsigned int y, RTCamera *pCamera, RTScene *pScene);
+	glm::vec3 ShadePixel(RTScene *pScene, unsigned int primID, RTGeometry *pGeometry, glm::vec3 baryocentricCoord, glm::vec3 ViewVector);
 
 	PTP_POOL m_ThreadPool;
 	PTP_CLEANUP_GROUP m_ThreadPoolCleanupGroup;
@@ -317,5 +391,58 @@ private:
 	std::vector<RayTraceThreadArgs> m_ThreadArgs;
 	HANDLE m_TracingFinishedEvent;
 };
+
+class BRDFShader
+{
+public:
+	virtual float BRDF(_In_ const glm::vec3 &ViewVector, _In_ const glm::vec3 &Normal, _In_ const glm::vec3 &IncomingRadianceVector, _In_ float roughness, _In_ float baseReflectivity, _Out_ float &FresnelFactor) = 0;
+};
+
+typedef float(*FresnelFunction)(const glm::vec3 &Normal, const glm::vec3 &HalfwayVector, float BaseReflectivity);
+typedef float(*DistributionFunction)(const glm::vec3 &Normal, const glm::vec3 &IncomingRadianceDirection, float Roughness);
+typedef float(*GeometryAttenuationFunction)(const glm::vec3 &ViewDirection, const glm::vec3 &Normal, const glm::vec3 &HalfwayVector, float Roughness);
+
+static float saturate(float n)
+{
+	return min(1.0f, max(n, 0.0f));
+}
+
+static float Fresnel_ShlicksApproximation(const glm::vec3 &Normal, const glm::vec3 &HalfwayVector, float BaseReflectivity)
+{
+	return (BaseReflectivity + (1.0 - BaseReflectivity) * pow(1.0f - saturate(glm::dot(HalfwayVector, Normal)), 5));
+}
+
+static float GeometryAttenuationPartial_Schlicks(const glm::vec3 &Normal, const glm::vec3 &IncomingRadiationDirection, float k)
+{
+	float nDotV = saturate(glm::dot(Normal, IncomingRadiationDirection));
+	return nDotV / (nDotV * (1 - k) + k);
+}
+
+static float GeometricAttenuation_Schlick(const glm::vec3 &ViewDirection, const glm::vec3 &Normal, const glm::vec3 &IncomingRadianceDirection, float Roughness)
+{
+	float k = Roughness * sqrt(2.0 / M_PI);
+	return GeometryAttenuationPartial_Schlicks(Normal, ViewDirection, k) * GeometryAttenuationPartial_Schlicks(Normal, IncomingRadianceDirection, k);
+}
+
+
+static float Distribution_GGX(const glm::vec3 &Normal, const glm::vec3 &HalfwayVector, float Roughness)
+{
+	float nDotH = saturate(glm::dot(Normal, HalfwayVector));
+	float nDotHSquared = nDotH * nDotH;
+	float roughnessSquared = Roughness * Roughness;
+	return roughnessSquared / (M_PI * pow(nDotHSquared * (roughnessSquared - 1) + 1, 2.0));
+}
+
+class CookTorrance : public BRDFShader
+{
+public:
+	float BRDF(_In_ const glm::vec3 &ViewVector, _In_ const glm::vec3 &Normal, _In_ const glm::vec3 &IncomingRadianceVector, _In_ float roughness, _In_ float baseReflectivity, _Out_ float &FresnelFactor);
+
+private:
+	const FresnelFunction F = Fresnel_ShlicksApproximation;
+	const DistributionFunction D = Distribution_GGX;
+	const GeometryAttenuationFunction G = GeometricAttenuation_Schlick;
+};
+
 
 #define RT_RENDERER_CAST reinterpret_cast
