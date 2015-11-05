@@ -592,6 +592,7 @@ public:
 	{
 		pContext->OMSetRenderTargets(1, &m_pRenderTarget, m_pDepthBuffer);
 		pContext->VSSetConstantBuffers(1, 1, &m_pViewProjBuffer);
+		pContext->PSSetConstantBuffers(1, 1, &m_pViewProjBuffer);
 		pContext->VSSetConstantBuffers(3, 1, &m_pLightViewProjBuffer);
 		pContext->PSSetShaderResources(1, 1, &m_pShadowView);
 		pContext->PSSetShaderResources(2, 1, &m_pEnvironmentMap);
@@ -903,13 +904,12 @@ D3D11Camera::D3D11Camera(ID3D11Device *pDevice, ID3D11DeviceContext *pContext, C
 	m_Width(pCreateCameraDescriptor->m_Width),
 	m_Height(pCreateCameraDescriptor->m_Height)
 {
-	m_HorizontalFieldOfView = 2.0f * atan(tan(m_VerticalFieldOfView / 2) * GetAspectRatio());
+	m_HorizontalFieldOfView = 2.0 * atan(tan((double)m_VerticalFieldOfView / 2.0) * (double)GetAspectRatio());
 
 	m_Position = RealArrayToXMVector(pCreateCameraDescriptor->m_FocalPoint, POSITION);
 	m_LookAt = RealArrayToXMVector(pCreateCameraDescriptor->m_LookAt, POSITION);
 	m_Up = RealArrayToXMVector(pCreateCameraDescriptor->m_Up, DIRECTION);
 
-	m_CameraCpuData.m_CamPos = m_Position;
 	m_CameraCpuData.m_ClipDistance = XMVectorSet(pCreateCameraDescriptor->m_FarClip, 0, 0, 0);
 	m_CameraCpuData.m_Dimensions = XMVectorSet(pCreateCameraDescriptor->m_Width, pCreateCameraDescriptor->m_Height, 0, 0);
 	
@@ -920,6 +920,7 @@ D3D11Camera::D3D11Camera(ID3D11Device *pDevice, ID3D11DeviceContext *pContext, C
 	 	pCreateCameraDescriptor->m_FarClip);
 	m_ViewProjCpuData.m_View = XMMatrixLookAtLH(m_Position, m_LookAt, m_Up);
 	m_ViewProjCpuData.m_InvTransView = XMMatrixTranspose(XMMatrixInverse(&determinant, m_ViewProjCpuData.m_View));
+	m_ViewProjCpuData.m_CamPos = m_Position;
 
 	m_pCameraBuffer = CreateConstantBuffer(pDevice, &m_CameraCpuData, sizeof(CBCamera));
 	m_pViewProjBuffer = CreateConstantBuffer(pDevice, &m_ViewProjCpuData, sizeof(CBViewProjectionTransforms));
@@ -956,6 +957,7 @@ void D3D11Camera::Rotate(float row, float yaw, float pitch)
 	{
 		XMMATRIX yawRotation = XMMatrixRotationNormal(XMVectorSet(0, 1, 0, 0), yaw);
 		lookDir = XMVector3Normalize(XMVector3Transform(lookDir, yawRotation));
+		m_Up = XMVector3Normalize(XMVector3Transform(m_Up, yawRotation));
 	}
 
 	m_LookAt = m_Position + XMVector3Length(m_LookAt - m_Position) * lookDir;
@@ -975,6 +977,7 @@ ID3D11Buffer* D3D11Camera::GetViewProjBuffer()
 		XMVECTOR determinant;
 		m_ViewProjCpuData.m_View = XMMatrixLookAtLH(m_Position, m_LookAt, m_Up);
 		m_ViewProjCpuData.m_InvTransView = XMMatrixTranspose(XMMatrixInverse(&determinant, m_ViewProjCpuData.m_View));
+		m_ViewProjCpuData.m_CamPos = m_Position;
 
 		m_pContext->UpdateSubresource(m_pViewProjBuffer, 0, nullptr, &m_ViewProjCpuData, 0, 0);
 		m_ViewMatrixNeedsUpdate = false;

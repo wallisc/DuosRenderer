@@ -14,7 +14,6 @@ SamplerState samLinear : register( s0 );
 
 cbuffer cbCamera : register( b0 )
 {
-    float4 CamPos;
 	float4 Dimensions;
 	float FarClip;
 };
@@ -24,6 +23,7 @@ cbuffer cbViewProjectionTransforms : register(b1)
 	float4x4 View;
 	float4x4 Projection;
 	float4x4 InvTransView;
+	float4 CamPos;
 }
 
 cbuffer cbDirectionalLight : register(b2)
@@ -56,9 +56,11 @@ struct PS_INPUT
 {
 	float4 Pos : SV_POSITION;
 	float4 ViewPos : POSITION0;
+	float4 WorldPos : POSITION2;
     float2 Tex : TEXCOORD0;
-    float4 Norm : NORMAL0;
+	float4 Norm : NORMAL0;
 	float4 LightPos : NORMAL1;
+	float4 WorldNorm : NORMAL2;
 };
 
 struct PS_OUTPUT
@@ -78,6 +80,8 @@ PS_INPUT VS( VS_INPUT input )
 	output.LightPos = mul(LightProjection, mul(LightView, input.Pos));
 	output.Norm = mul(InvTransView, float4(input.Norm.xyz, 0.0));
     output.Tex = input.Tex;
+	output.WorldPos = input.Pos;
+	output.WorldNorm = input.Norm;
     
     return output;
 }
@@ -163,7 +167,10 @@ PS_OUTPUT PS( PS_INPUT input) : SV_Target
 	if (1)
 	{
 		float3 reflectionRay = reflect(-v, n);
-		float3 reflectionColor = EnvironmentMap.Sample(samLinear, reflectionRay);
+		float3 incomingViewDir = normalize(CamPos.xyz - input.WorldPos.xyz);
+		float3 worldReflectionRay = reflect(-incomingViewDir, normalize(input.WorldNorm.xyz));
+
+		float3 reflectionColor = EnvironmentMap.Sample(samLinear, worldReflectionRay);
 		float reflectivity;
 		totalSpecular += BRDF(v, n, reflectionRay, roughness, R0, reflectionColor, reflectivity);
 		totalFresnel += reflectivity;

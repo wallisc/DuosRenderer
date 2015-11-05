@@ -23,5 +23,5 @@ SamplerState environmentSampler : register(s0);
 
 float4 PS(VS_OUTPUT input) : SV_Target
 {
-	return environmentMap.Sample(environmentSampler, input.ViewDirection.xyz);
+	return environmentMap.Sample(environmentSampler, normalize(input.ViewDirection.xyz));
 }

@@ -845,6 +845,7 @@ void RTCamera::Rotate(float row, float yaw, float pitch)
 	if (yaw)
 	{
 		glm::mat4 yawRotation = glm::rotate(yaw, glm::vec3(0, 1, 0));
+		m_Up = glm::vec3(yawRotation * glm::vec4(m_Up, 0.0f));
 		lookDir = yawRotation * lookDir;
 	}
 

@@ -7,7 +7,6 @@
 
 struct CBCamera
 {
-	DirectX::XMVECTOR m_CamPos;
 	DirectX::XMVECTOR m_Dimensions;
 	DirectX::XMVECTOR m_ClipDistance;
 };
@@ -17,6 +16,7 @@ struct CBViewProjectionTransforms
 	DirectX::XMMATRIX m_View;
 	DirectX::XMMATRIX m_Projection;
 	DirectX::XMMATRIX m_InvTransView;
+	DirectX::XMVECTOR m_CamPos;
 };
 
 struct CBDirectionalLight
