@@ -47,6 +47,7 @@ enum RENDERER_TYPE
 };
 
 const float CAMERA_ROTATION_SPEED = 3.14 / (WIDTH);
+const float CAMERA_SIDE_SCREEN_ROTATION_SPEED = 3.14 / 4.0;
 
 Renderer *g_pRenderer[NUM_RENDERER_TYPES];
 Scene *g_pScene[NUM_RENDERER_TYPES];
@@ -456,28 +457,45 @@ void CALLBACK OnKeyPress(_In_ UINT nChar, _In_ bool bKeyDown, _In_ bool bAltDown
 
 void UpdateCamera()
 {
-	int deltaX = 0, deltaY = 0;
-	if (g_MouseX < 100)
+	static bool firstTimeQuery = true;
+	static LARGE_INTEGER lastTime;
+	static LARGE_INTEGER performanceFrequency;
+	if (firstTimeQuery)
 	{
-		deltaX += 1;
+		firstTimeQuery = false;
+		QueryPerformanceCounter(&lastTime);
+		QueryPerformanceFrequency(&performanceFrequency);
 	}
-	else if (g_MouseX > WIDTH - 100)
+	else
 	{
-		deltaX -= 1;
-	}
+		LARGE_INTEGER newTime;
+		QueryPerformanceCounter(&newTime);
+		float deltaTime = (float)(newTime.QuadPart - lastTime.QuadPart) / (float)performanceFrequency.QuadPart;
+		lastTime = newTime;
 
-	if (g_MouseY < 100)
-	{
-		deltaY += 1;
-	}
-	else if (g_MouseY > HEIGHT - 100)
-	{
-		deltaY -= 1;
-	}
+		float deltaX = 0, deltaY = 0;
+		if (g_MouseX < 100)
+		{
+			deltaX += 1;
+		}
+		else if (g_MouseX > WIDTH - 100)
+		{
+			deltaX -= 1;
+		}
 
-	for (UINT i = 0; i < RENDERER_TYPE::NUM_RENDERER_TYPES; i++)
-	{
-		g_pCamera[i]->Rotate(0.0f, -CAMERA_ROTATION_SPEED * deltaX, CAMERA_ROTATION_SPEED * deltaY);
+		if (g_MouseY < 100)
+		{
+			deltaY += 1;
+		}
+		else if (g_MouseY > HEIGHT - 100)
+		{
+			deltaY -= 1;
+		}
+
+		for (UINT i = 0; i < RENDERER_TYPE::NUM_RENDERER_TYPES; i++)
+		{
+			g_pCamera[i]->Rotate(0.0f, -CAMERA_SIDE_SCREEN_ROTATION_SPEED * deltaX * deltaTime, CAMERA_SIDE_SCREEN_ROTATION_SPEED * deltaY * deltaTime);
+		}
 	}
 }
 
