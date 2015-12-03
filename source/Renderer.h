@@ -126,6 +126,8 @@ public:
 class CreateEnvironmentMapDescriptor
 {
 public:
+	CreateEnvironmentMapDescriptor() {}
+
 	enum EnvironmentType
 	{
 		TEXTURE_CUBE,
