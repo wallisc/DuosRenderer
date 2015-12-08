@@ -539,6 +539,26 @@ glm::vec3 RTRenderer::ShadePixel(RTScene *pScene, unsigned int primID, RTGeometr
 	}
 }
 
+Geometry *RTRenderer::GetGeometryAtPixel(Camera *pCamera, Scene *pScene, Vec2 PixelCoord)
+{
+	RTScene *pRTScene = RT_RENDERER_CAST<RTScene*>(pScene);
+	RTCamera *pRTCamera = RT_RENDERER_CAST<RTCamera*>(pCamera);
+
+	pRTScene->PreDraw();
+	const UINT Width = pRTCamera->GetWidth();
+	const UINT Height = pRTCamera->GetHeight();
+
+	const float PixelWidth = pRTCamera->GetLensWidth() / Width;
+	const float PixelHeight = pRTCamera->GetLensHeight() / Height;
+
+	glm::vec3 coord(pRTCamera->GetLensWidth() * PixelCoord.x / (float)Width, pRTCamera->GetLensHeight() * (float)(Height - PixelCoord.y) / (float)Height, 0.0f);
+	coord -= glm::vec3(pRTCamera->GetLensWidth() / 2.0f, pRTCamera->GetLensHeight() / 2.0f, 0.0f);
+	coord += glm::vec3(PixelWidth / 2.0f, -PixelHeight / 2.0f, 0.0f); // Make sure the ray is centered in the pixel
+
+	return nullptr;
+}
+
+
 
 void RTRenderer::DrawScene(Camera *pCamera, Scene *pScene)
 {

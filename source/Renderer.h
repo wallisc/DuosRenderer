@@ -189,6 +189,7 @@ public:
 	virtual void SetCanvas(Canvas *pCanvas) = 0;
 
 	virtual void DrawScene(Camera *pCamera, Scene *pScene) = 0;
+	virtual Geometry *GetGeometryAtPixel(Camera *pCamera, Scene *pScene, Vec2 PixelCoord) = 0;
 
 	virtual Geometry *CreateGeometry(_In_ CreateGeometryDescriptor *pCreateGeometryDescriptor) = 0;
 	virtual void DestroyGeometry(_In_ Geometry *pGeometry) = 0;

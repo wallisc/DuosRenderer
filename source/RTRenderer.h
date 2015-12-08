@@ -374,6 +374,7 @@ public:
 	void DestroyScene(Scene *pScene);
 
 	void DrawScene(Camera *pCamera, Scene *pScene);
+	Geometry *GetGeometryAtPixel(Camera *pCamera, Scene *pScene, Vec2 PixelCoord);
 
 	void RenderPixelRange(PixelRange *pRange, RTCamera *pCamera, RTScene *pScene);
 private:
