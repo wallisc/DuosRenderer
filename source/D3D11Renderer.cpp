@@ -658,15 +658,15 @@ void D3D11Renderer::DrawScene(Camera *pCamera, Scene *pScene)
 		{
 			ID3D11Buffer *pVertexBuffer = pGeometry->GetVertexBuffer();
 			ID3D11Buffer *pIndexBuffer = pGeometry->GetIndexBuffer();
-			ID3D11Buffer *pMaterialBuffer = pGeometry->GetMaterial()->GetMaterialBuffer();
+			ID3D11Buffer *pMaterialBuffer = pGeometry->GetD3D11Material()->GetMaterialBuffer();
 
 			m_pImmediateContext->IASetVertexBuffers(0, 1, &pVertexBuffer, &Strides, &Offsets);
 			m_pImmediateContext->IASetIndexBuffer(pIndexBuffer, DXGI_FORMAT_R32_UINT, 0);
 			m_pImmediateContext->PSSetConstantBuffers(4, 1, &pMaterialBuffer);
 
-			if (pGeometry->GetMaterial()->HasTexture())
+			if (pGeometry->GetD3D11Material()->HasTexture())
 			{
-				ID3D11ShaderResourceView *pDiffuseTexture = pGeometry->GetMaterial()->GetShaderResourceView();
+				ID3D11ShaderResourceView *pDiffuseTexture = pGeometry->GetD3D11Material()->GetShaderResourceView();
 				m_pImmediateContext->PSSetShaderResources(0, 1, &pDiffuseTexture);
 				m_pImmediateContext->PSSetShader(m_pForwardTexturedPixelShader, NULL, 0);
 			}

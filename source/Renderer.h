@@ -154,7 +154,9 @@ class Transform
 
 class Material
 {
-
+public:
+	virtual float GetRoughness() const = 0;
+	virtual float GetReflectivity() const = 0;
 };
 
 class Transformable
@@ -170,6 +172,8 @@ class Camera : public Transformable
 
 class Geometry : public Transformable
 {
+public:
+	virtual Material *GetMaterial() const = 0;
 };
 
 class EnvironmentMap

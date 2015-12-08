@@ -27,6 +27,9 @@ struct CBDirectionalLight
 
 struct CBMaterial
 {
+	static const UINT REFLECTIVITY_INDEX = 0;
+	static const UINT ROUGHNESS_INDEX = 1;
+
 	DirectX::XMVECTOR m_Diffuse;
 	DirectX::XMVECTOR m_MaterialProperties; // (Reflectivity (R0), Roughness, ,)
 };
@@ -39,6 +42,9 @@ public:
 
 	bool HasTexture() { return pTextureResourceView != nullptr; }
 	ID3D11Buffer *GetMaterialBuffer() { return m_pMaterialBuffer; }
+
+	float GetRoughness() const { return DirectX::XMVectorGetByIndex(m_CBMaterial.m_MaterialProperties, CBMaterial::ROUGHNESS_INDEX); }
+	float GetReflectivity() const { return DirectX::XMVectorGetByIndex(m_CBMaterial.m_MaterialProperties, CBMaterial::REFLECTIVITY_INDEX); }
 private:
 	CBMaterial m_CBMaterial;
 	ID3D11Buffer *m_pMaterialBuffer;
@@ -73,7 +79,8 @@ public:
 	ID3D11Buffer *GetIndexBuffer() const { return m_pIndexBuffer; }
 	unsigned int GetVertexCount() const { return m_VertexCount; }
 	unsigned int GetIndexCount() const { return m_IndexCount; }
-	D3D11Material *GetMaterial() const { return m_pMaterial; }
+	D3D11Material *GetD3D11Material() const { return m_pMaterial; }
+	Material *GetMaterial() const { return GetD3D11Material(); }
 
 	DirectX::XMVECTOR GetMaxDimensions() const { return m_MaxDimensions; }
 	DirectX::XMVECTOR GetMinDimensions() const { return m_MinDimensions; }

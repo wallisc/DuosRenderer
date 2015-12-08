@@ -52,8 +52,8 @@ public:
 	RTMaterial(CreateMaterialDescriptor *pCreateMaterialDescriptor);
 
 	glm::vec3 GetColor(glm::vec2 uv);
-	float GetReflectivity() { return m_Reflectivity; }
-	float GetRoughness() { return m_Roughness; }
+	float GetReflectivity() const { return m_Reflectivity; }
+	float GetRoughness() const { return m_Roughness; }
 private:
 	glm::vec3 m_Diffuse;
 	float m_Reflectivity;
@@ -126,7 +126,8 @@ public:
 	void Rotate(float row, float yaw, float pitch) { assert(false); }
 	void Translate(_In_ const Vec3 &translationVector) { assert(false); }
 
-	RTMaterial *GetMaterial() { return m_pMaterial; }
+	RTMaterial *GetRTMaterial() const { return m_pMaterial; }
+	Material *GetMaterial() const { return GetRTMaterial(); }
 
 	unsigned int GetNumVertices() { return m_vertexData.size(); }
 	unsigned int GetNumTriangles() { return m_indexData.size() / 3; }
@@ -285,7 +286,7 @@ struct RayTraceThreadArgs
 class RayBatch
 {
 public:
-	RayBatch(RTCScene Scene, _In_reads_(NumRays) glm::vec3 *RayOrigins, _In_reads_(NumRays) glm::vec3 *RayDirections, unsigned int NumRays);
+	RayBatch(RTCScene Scene, _In_reads_(NumRays) const glm::vec3 *RayOrigins, _In_reads_(NumRays) const glm::vec3 *RayDirections, unsigned int NumRays);
 
 	unsigned int GetGeometryID(unsigned int RayIndex);
 	unsigned int GetPrimID(unsigned int RayIndex);
@@ -311,7 +312,7 @@ private:
 	}
 
 	template<class RayType>
-	void InitRayStruct(typename RayType &RayStruct, _In_reads_(NumRays) glm::vec3 *RayOrigins, _In_reads_(NumRays) glm::vec3 *RayDirections, unsigned int NumRays)
+	void InitRayStruct(typename RayType &RayStruct, _In_reads_(NumRays) const glm::vec3 *RayOrigins, _In_reads_(NumRays) const glm::vec3 *RayDirections, unsigned int NumRays)
 	{
 		for (UINT RayIndex = 0; RayIndex < NumRays; RayIndex++)
 		{

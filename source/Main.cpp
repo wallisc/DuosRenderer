@@ -20,7 +20,7 @@
 #include "assimp/postprocess.h"     // Post processing flags
 
 #include <list>
-
+#include "Strsafe.h"
 
 using namespace DirectX;
 using namespace Assimp;
@@ -30,7 +30,8 @@ using namespace Assimp;
 
 enum
 {
-	CMD_CHANGE_RENDERER
+	CMD_CHANGE_RENDERER,
+	ROUGHNESS_TEXT
 };
 
 //--------------------------------------------------------------------------------------
@@ -65,6 +66,7 @@ CDXUTDialogResourceManager  g_DialogResourceManager; // manager for shared resou
 CDXUTDialog  g_GUI;
 CDXUTTextHelper* g_pTextWriter = nullptr;
 
+CDXUTStatic *g_RoughnessDisplay;
 
 ID3D11Device *g_pDevice;
 ID3D11DeviceContext *g_pImmediateContext;
@@ -153,7 +155,11 @@ HRESULT CALLBACK OnDeviceCreated(_In_ ID3D11Device* pd3dDevice, _In_ const DXGI_
 	g_GUI.Init(&g_DialogResourceManager);
 
 	g_GUI.SetCallback(OnGUIEvent); int iY = 10;
-	g_GUI.AddButton(CMD_CHANGE_RENDERER, L"Change renderer (space)", 0, iY, 170, 22, VK_SPACE);
+	const INT BUTTON_HEIGHT = 22;
+	g_GUI.AddButton(CMD_CHANGE_RENDERER, L"Change renderer (space)", 0, iY, 170, BUTTON_HEIGHT, VK_SPACE);
+
+	iY += BUTTON_HEIGHT;
+	g_GUI.AddStatic(ROUGHNESS_TEXT, L"Roughness: 0.0", 0, iY, 170, BUTTON_HEIGHT, false, &g_RoughnessDisplay);
 
 	FAIL_CHK(FAILED(hr), "Failed to create DXUT dialog manager");
 
@@ -519,6 +525,24 @@ void CALLBACK OnMouseMove(_In_ bool bLeftButtonDown, _In_ bool bRightButtonDown,
 		for (UINT i = 0; i < RENDERER_TYPE::NUM_RENDERER_TYPES; i++)
 		{
 			g_pCamera[i]->Rotate(0.0f, -CAMERA_ROTATION_SPEED * deltaX, CAMERA_ROTATION_SPEED * deltaY);
+		}
+
+		if (bLeftButtonDown)
+		{
+			const UINT RendererIndex = RAYTRACER; // Not implemented in D3D11 renderer
+			Geometry *pGeometry = g_pRenderer[RendererIndex]->GetGeometryAtPixel(g_pCamera[RendererIndex], g_pScene[RendererIndex], Vec2(xPos, yPos));
+
+			WCHAR RoughnessDisplayString[256];
+			if (pGeometry)
+			{
+				StringCbPrintf(RoughnessDisplayString, sizeof(RoughnessDisplayString), L"Roughness: %f", pGeometry->GetMaterial()->GetRoughness());
+			}
+			else
+			{
+				StringCbPrintf(RoughnessDisplayString, sizeof(RoughnessDisplayString), L"Roughness: Nothing selected");
+			}
+
+			g_RoughnessDisplay->SetText(RoughnessDisplayString);
 		}
 	}
 }

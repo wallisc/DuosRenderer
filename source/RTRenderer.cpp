@@ -321,7 +321,7 @@ void RTRenderer::DestroyScene(Scene* pScene)
 	delete pScene;
 }
 
-RayBatch::RayBatch(RTCScene Scene, _In_reads_(NumRays) glm::vec3 *RayOrigins, _In_reads_(NumRays) glm::vec3 *RayDirections, unsigned int NumRays) :
+RayBatch::RayBatch(RTCScene Scene, _In_reads_(NumRays) const glm::vec3 *RayOrigins, _In_reads_(NumRays) const glm::vec3 *RayDirections, unsigned int NumRays) :
 m_NumRays(NumRays)
 {
 	if (NumRays == 1)
@@ -484,8 +484,8 @@ glm::vec3 RTRenderer::ShadePixel(RTScene *pScene, unsigned int primID, RTGeometr
 		float TotalFresnel = 0.0f;
 
 		glm::vec3 matColor = pGeometry->GetColor(primID, baryocentricCoord.x, baryocentricCoord.y);
-		float reflectivity = pGeometry->GetMaterial()->GetReflectivity();
-		float Roughness = pGeometry->GetMaterial()->GetRoughness();
+		float reflectivity = pGeometry->GetRTMaterial()->GetReflectivity();
+		float Roughness = pGeometry->GetRTMaterial()->GetRoughness();
 		glm::vec3 Norm = pGeometry->GetNormal(primID, baryocentricCoord.x, baryocentricCoord.y);
 		glm::vec3 intersectPos = pGeometry->GetPosition(primID, baryocentricCoord.x, baryocentricCoord.y);
 		for (RTLight *pLight : pScene->GetLightList())
@@ -555,7 +555,13 @@ Geometry *RTRenderer::GetGeometryAtPixel(Camera *pCamera, Scene *pScene, Vec2 Pi
 	coord -= glm::vec3(pRTCamera->GetLensWidth() / 2.0f, pRTCamera->GetLensHeight() / 2.0f, 0.0f);
 	coord += glm::vec3(PixelWidth / 2.0f, -PixelHeight / 2.0f, 0.0f); // Make sure the ray is centered in the pixel
 
-	return nullptr;
+	const glm::vec3 LensPoints = pRTCamera->GetLensPosition() + coord.y * pRTCamera->GetUp() + coord.x * pRTCamera->GetRight();
+	const glm::vec3 RayDirections = glm::normalize(LensPoints - pRTCamera->GetFocalPoint());
+
+	RayBatch batch(pRTScene->GetRTCScene(), &LensPoints, &RayDirections, 1);
+
+	unsigned int meshID = batch.GetGeometryID(0);
+	return  meshID == RTC_INVALID_GEOMETRY_ID ? nullptr : pRTScene->GetRTGeometry(meshID);;
 }
 
 
