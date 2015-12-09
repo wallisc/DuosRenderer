@@ -157,6 +157,9 @@ class Material
 public:
 	virtual float GetRoughness() const = 0;
 	virtual float GetReflectivity() const = 0;
+
+	virtual void SetRoughness(float Roughness) = 0;
+	virtual void SetReflectivity(float Reflectivity) = 0;
 };
 
 class Transformable

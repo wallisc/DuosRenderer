@@ -37,7 +37,7 @@ struct CBMaterial
 class D3D11Material : public Material
 {
 public:
-	D3D11Material(_In_ ID3D11Device *pDevice, CreateMaterialDescriptor *pCreateMaterialDescriptor);
+	D3D11Material(_In_ ID3D11Device *pDevice, ID3D11DeviceContext *pContext, CreateMaterialDescriptor *pCreateMaterialDescriptor);
 	ID3D11ShaderResourceView *GetShaderResourceView() const { return pTextureResourceView; }
 
 	bool HasTexture() { return pTextureResourceView != nullptr; }
@@ -45,7 +45,12 @@ public:
 
 	float GetRoughness() const { return DirectX::XMVectorGetByIndex(m_CBMaterial.m_MaterialProperties, CBMaterial::ROUGHNESS_INDEX); }
 	float GetReflectivity() const { return DirectX::XMVectorGetByIndex(m_CBMaterial.m_MaterialProperties, CBMaterial::REFLECTIVITY_INDEX); }
+
+	void SetRoughness(float Roughness);
+	void SetReflectivity(float Reflectivity);
 private:
+	void UpdateMaterialBuffer();
+	ID3D11DeviceContext *m_pContext;
 	CBMaterial m_CBMaterial;
 	ID3D11Buffer *m_pMaterialBuffer;
 	ID3D11ShaderResourceView *pTextureResourceView;

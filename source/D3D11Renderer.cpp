@@ -319,7 +319,8 @@ void D3D11Renderer::DestroyCamera(Camera *pCamera)
 	delete pCamera;
 }
 
-D3D11Material::D3D11Material(_In_ ID3D11Device *pDevice, CreateMaterialDescriptor *pCreateMaterialDescriptor)
+D3D11Material::D3D11Material(_In_ ID3D11Device *pDevice, ID3D11DeviceContext *pContext, CreateMaterialDescriptor *pCreateMaterialDescriptor) :
+	m_pContext(pContext)
 {
 	HRESULT result = S_OK;
 	if (pCreateMaterialDescriptor->m_TextureName && strlen(pCreateMaterialDescriptor->m_TextureName))
@@ -353,9 +354,26 @@ D3D11Material::D3D11Material(_In_ ID3D11Device *pDevice, CreateMaterialDescripto
 	FAIL_CHK(FAILED(hr), "Failed to create Index Buffer");
 }
 
+void D3D11Material::SetRoughness(float Roughness)
+{
+	XMVectorSetByIndex(m_CBMaterial.m_MaterialProperties, Roughness, CBMaterial::ROUGHNESS_INDEX);
+	UpdateMaterialBuffer();
+}
+
+void D3D11Material::SetReflectivity(float Reflectivity)
+{
+	XMVectorSetByIndex(m_CBMaterial.m_MaterialProperties, Reflectivity, CBMaterial::REFLECTIVITY_INDEX);
+	UpdateMaterialBuffer();
+}
+
+void D3D11Material::UpdateMaterialBuffer()
+{
+	m_pContext->UpdateSubresource(m_pMaterialBuffer, 0, nullptr, &m_CBMaterial, 0, 0);
+}
+
 Material *D3D11Renderer::CreateMaterial(_In_ CreateMaterialDescriptor *pCreateMaterialDescriptor)
 {
-	D3D11Material *pMaterial = new D3D11Material(m_pDevice, pCreateMaterialDescriptor);
+	D3D11Material *pMaterial = new D3D11Material(m_pDevice, m_pImmediateContext, pCreateMaterialDescriptor);
 	MEM_CHK(pMaterial);
 	return pMaterial;
 }

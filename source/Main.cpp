@@ -31,7 +31,8 @@ using namespace Assimp;
 enum
 {
 	CMD_CHANGE_RENDERER,
-	ROUGHNESS_TEXT
+	ROUGHNESS_TEXT,
+	ROGUHNESS_SLIDER
 };
 
 //--------------------------------------------------------------------------------------
@@ -53,6 +54,8 @@ const float CAMERA_SIDE_SCREEN_ROTATION_SPEED = 3.14 / 4.0;
 Renderer *g_pRenderer[NUM_RENDERER_TYPES];
 Scene *g_pScene[NUM_RENDERER_TYPES];
 Camera *g_pCamera[NUM_RENDERER_TYPES];
+std::vector<Material *> g_MaterialList[NUM_RENDERER_TYPES];
+
 EnvironmentMap *g_pEnvironmentMap[NUM_RENDERER_TYPES];
 RENDERER_TYPE g_ActiveRenderer = D3D11;
 D3D11Canvas *g_pCanvas;
@@ -62,11 +65,15 @@ bool g_MouseInitialized = false;
 int g_MouseX;
 int g_MouseY;
 
+const unsigned int NO_MATERIAL_SELECTED = (unsigned int)-1;
+unsigned int g_SelectedMaterialIndex = NO_MATERIAL_SELECTED;
+
 CDXUTDialogResourceManager  g_DialogResourceManager; // manager for shared resources of dialogs
 CDXUTDialog  g_GUI;
 CDXUTTextHelper* g_pTextWriter = nullptr;
 
-CDXUTStatic *g_RoughnessDisplay;
+const INT MAX_SLIDER_VALUE = 100;
+CDXUTSlider *g_RoughnessSlider;
 
 ID3D11Device *g_pDevice;
 ID3D11DeviceContext *g_pImmediateContext;
@@ -78,7 +85,7 @@ IDXGISwapChain* g_pSwapChain;
 //--------------------------------------------------------------------------------------
 // Forward declarations
 //--------------------------------------------------------------------------------------
-void InitSceneAndCamera(_In_ Renderer *, _In_ const aiScene &assimpScene, _In_ EnvironmentMap *pEnvMap, _Out_ Scene **, _Out_ Camera **);
+void InitSceneAndCamera(_In_ Renderer *, _In_ const aiScene &assimpScene, _In_ EnvironmentMap *pEnvMap, _Out_ std::vector<Material *> &MaterialList, _Out_ Scene **, _Out_ Camera **);
 void InitEnvironmentMap(_In_ Renderer *pRenderer, char *CubeMapName, char *irradMapName, _Out_ EnvironmentMap **ppEnviromentMap);
 HRESULT InitWindow( HINSTANCE hInstance, int nCmdShow );
 LRESULT CALLBACK    WndProc( HWND, UINT, WPARAM, LPARAM );
@@ -155,11 +162,16 @@ HRESULT CALLBACK OnDeviceCreated(_In_ ID3D11Device* pd3dDevice, _In_ const DXGI_
 	g_GUI.Init(&g_DialogResourceManager);
 
 	g_GUI.SetCallback(OnGUIEvent); int iY = 10;
-	const INT BUTTON_HEIGHT = 22;
-	g_GUI.AddButton(CMD_CHANGE_RENDERER, L"Change renderer (space)", 0, iY, 170, BUTTON_HEIGHT, VK_SPACE);
+	const INT BUTTON_HEIGHT = 26;
+	hr = g_GUI.AddButton(CMD_CHANGE_RENDERER, L"Change renderer (space)", 0, iY, 170, BUTTON_HEIGHT, VK_SPACE);
+	assert(SUCCEEDED(hr));
 
 	iY += BUTTON_HEIGHT;
-	g_GUI.AddStatic(ROUGHNESS_TEXT, L"Roughness: 0.0", 0, iY, 170, BUTTON_HEIGHT, false, &g_RoughnessDisplay);
+	g_GUI.AddStatic(ROUGHNESS_TEXT, L"Roughness", 0, iY, 170, BUTTON_HEIGHT);
+
+	iY += BUTTON_HEIGHT;
+	hr = g_GUI.AddSlider(ROGUHNESS_SLIDER, 50, iY, 100, BUTTON_HEIGHT, 0, MAX_SLIDER_VALUE, 0, false, &g_RoughnessSlider);
+	assert(SUCCEEDED(hr));
 
 	FAIL_CHK(FAILED(hr), "Failed to create DXUT dialog manager");
 
@@ -183,8 +195,9 @@ HRESULT CALLBACK OnDeviceCreated(_In_ ID3D11Device* pd3dDevice, _In_ const DXGI_
 
 		g_pRenderer[i]->SetCanvas(g_pCanvas);
 		InitEnvironmentMap(g_pRenderer[i], "Assets\\EnvironmentMap\\Uffizi\\Uffizi", "Assets\\EnvironmentMap\\Uffizi\\irrad", &g_pEnvironmentMap[i]);
-		InitSceneAndCamera(g_pRenderer[i], *pAssimpScene, g_pEnvironmentMap[i], & g_pScene[i], &g_pCamera[i]);
+		InitSceneAndCamera(g_pRenderer[i], *pAssimpScene, g_pEnvironmentMap[i], g_MaterialList[i], &g_pScene[i], &g_pCamera[i]);
 	}
+
 	return	S_OK;
 }
 
@@ -235,12 +248,12 @@ void InitEnvironmentMap(_In_ Renderer *pRenderer, char *CubeMapName, char* irrad
 	*ppEnviromentMap = pRenderer->CreateEnvironmentMap(&EnvMapDescriptor);
 }
 
-void InitSceneAndCamera(_In_ Renderer *pRenderer, _In_ const aiScene &assimpScene, _In_ EnvironmentMap *pEnvMap, _Out_ Scene **ppScene, _Out_ Camera **ppCamera)
+void InitSceneAndCamera(_In_ Renderer *pRenderer, _In_ const aiScene &assimpScene, _In_ EnvironmentMap *pEnvMap, _Out_ std::vector<Material *> &MaterialList, _Out_ Scene **ppScene, _Out_ Camera **ppCamera)
 {
 	*ppScene = pRenderer->CreateScene(pEnvMap);
 	Scene *pScene = *ppScene;
 
-	std::vector<Material *> materialList(assimpScene.mNumMaterials);
+	MaterialList = std::vector<Material *>(assimpScene.mNumMaterials);
 	for (UINT i = 0; i < assimpScene.mNumMaterials; i++)
 	{
 		aiMaterial *pMat = assimpScene.mMaterials[i];
@@ -265,7 +278,7 @@ void InitSceneAndCamera(_In_ Renderer *pRenderer, _In_ const aiScene &assimpScen
 		CreateMaterialDescriptor.m_Reflectivity = reflectivity;
 		CreateMaterialDescriptor.m_Roughness = sqrt(2.0 / (shininess + 2.0f));
 
-		materialList[i] = pRenderer->CreateMaterial(&CreateMaterialDescriptor);
+		MaterialList[i] = pRenderer->CreateMaterial(&CreateMaterialDescriptor);
 	}
 
 	{
@@ -305,7 +318,7 @@ void InitSceneAndCamera(_In_ Renderer *pRenderer, _In_ const aiScene &assimpScen
 			geometryDescriptor.m_NumVertices = numVerts;
 			geometryDescriptor.m_pIndices = &indexList[0];
 			geometryDescriptor.m_NumIndices = numIndices;
-			geometryDescriptor.m_pMaterial = materialList[pMesh->mMaterialIndex];
+			geometryDescriptor.m_pMaterial = MaterialList[pMesh->mMaterialIndex];
 			Geometry *pGeometry = pRenderer->CreateGeometry(&geometryDescriptor);
 			pScene->AddGeometry(pGeometry);
 		}
@@ -382,8 +395,7 @@ void CALLBACK OnFrameRender(_In_ ID3D11Device* pd3dDevice, _In_ ID3D11DeviceCont
 	float fps = 1.0f / fElapsedTime;
 	RenderText(fps);
 
-	hr = g_pSwapChain->Present(0, 0);
-	FAIL_CHK(FAILED(hr), "Failed to present");
+
 }
 
 HRESULT CALLBACK OnResizedSwapChain(ID3D11Device* pd3dDevice, IDXGISwapChain* pSwapChain, const DXGI_SURFACE_DESC* pBackBufferSurfaceDesc, void* pUserContext)
@@ -413,12 +425,26 @@ LRESULT CALLBACK MsgProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam,
 	return 0;
 }
 
+void SetRoughnessOnSelectedGeometry(float Roughness)
+{
+	if (g_SelectedMaterialIndex != NO_MATERIAL_SELECTED)
+	{
+		for (UINT i = 0; i < NUM_RENDERER_TYPES; i++)
+		{
+			g_MaterialList[i][g_SelectedMaterialIndex]->SetRoughness(Roughness);
+		}
+	}
+}
+
 void CALLBACK OnGUIEvent(UINT nEvent, int nControlID, CDXUTControl* pControl, void* pUserContext)
 {
 	switch (nControlID)
 	{
 	case CMD_CHANGE_RENDERER:
 		g_ActiveRenderer = (RENDERER_TYPE)((g_ActiveRenderer + 1) % NUM_RENDERER_TYPES);
+		break;
+	case ROGUHNESS_SLIDER:
+		SetRoughnessOnSelectedGeometry(g_RoughnessSlider->GetValue() / (float)MAX_SLIDER_VALUE);
 		break;
 	}
 }
@@ -532,17 +558,23 @@ void CALLBACK OnMouseMove(_In_ bool bLeftButtonDown, _In_ bool bRightButtonDown,
 			const UINT RendererIndex = RAYTRACER; // Not implemented in D3D11 renderer
 			Geometry *pGeometry = g_pRenderer[RendererIndex]->GetGeometryAtPixel(g_pCamera[RendererIndex], g_pScene[RendererIndex], Vec2(xPos, yPos));
 
-			WCHAR RoughnessDisplayString[256];
 			if (pGeometry)
 			{
-				StringCbPrintf(RoughnessDisplayString, sizeof(RoughnessDisplayString), L"Roughness: %f", pGeometry->GetMaterial()->GetRoughness());
+				for (UINT i = 0; i < g_MaterialList[RAYTRACER].size(); i++)
+				{
+					if (g_MaterialList[RAYTRACER][i] == pGeometry->GetMaterial())
+					{
+						g_SelectedMaterialIndex = i;
+						g_RoughnessSlider->SetValue((float)MAX_SLIDER_VALUE * pGeometry->GetMaterial()->GetRoughness());
+						break;
+					}
+				}
 			}
 			else
 			{
-				StringCbPrintf(RoughnessDisplayString, sizeof(RoughnessDisplayString), L"Roughness: Nothing selected");
+				g_SelectedMaterialIndex = NO_MATERIAL_SELECTED;
+				g_RoughnessSlider->SetValue(0);
 			}
-
-			g_RoughnessDisplay->SetText(RoughnessDisplayString);
 		}
 	}
 }

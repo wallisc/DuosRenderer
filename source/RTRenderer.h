@@ -54,6 +54,9 @@ public:
 	glm::vec3 GetColor(glm::vec2 uv);
 	float GetReflectivity() const { return m_Reflectivity; }
 	float GetRoughness() const { return m_Roughness; }
+
+	void SetRoughness(float Roughness) { m_Roughness = Roughness; }
+	void SetReflectivity(float Reflectivity) { m_Reflectivity = Reflectivity; }
 private:
 	glm::vec3 m_Diffuse;
 	float m_Reflectivity;
