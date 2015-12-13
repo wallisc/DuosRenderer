@@ -135,7 +135,7 @@ int WINAPI wWinMain( _In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 	DXUTSetCallbackKeyboard(OnKeyPress);
 	DXUTSetCallbackMouse(OnMouseMove, true, nullptr);
 
-
+	g_GUI.Init(&g_DialogResourceManager);
 
 	DXUTInit(true, true, nullptr); // Parse the command line, show msgboxes on error, no extra command line params
 	DXUTSetCursorSettings(true, true); // Show the cursor and clip it when in full screen
@@ -159,7 +159,6 @@ HRESULT CALLBACK OnDeviceCreated(_In_ ID3D11Device* pd3dDevice, _In_ const DXGI_
 
 	HRESULT hr = g_DialogResourceManager.OnD3D11CreateDevice(pd3dDevice, g_pImmediateContext);
 	g_pTextWriter = new CDXUTTextHelper(pd3dDevice, g_pImmediateContext, &g_DialogResourceManager, 15);
-	g_GUI.Init(&g_DialogResourceManager);
 
 	g_GUI.SetCallback(OnGUIEvent); int iY = 10;
 	const INT BUTTON_HEIGHT = 26;
