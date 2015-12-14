@@ -49,6 +49,8 @@ public:
 	void SetRoughness(float Roughness);
 	void SetReflectivity(float Reflectivity);
 private:
+	void UpdateMaterialProperty(float value, unsigned int index);
+
 	void UpdateMaterialBuffer();
 	ID3D11DeviceContext *m_pContext;
 	CBMaterial m_CBMaterial;

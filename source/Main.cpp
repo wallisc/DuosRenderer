@@ -33,7 +33,7 @@ enum
 	CMD_CHANGE_RENDERER = 0,
 	CMD_CAMERA_MODE,
 	ROUGHNESS_TEXT,
-	ROGUHNESS_SLIDER,
+	ROUGHNESS_SLIDER,
 	REFLECTIVITY_TEXT,
 	REFLECTIVITY_SLIDER,
 	NUM_GUI_ITEMS
@@ -79,8 +79,6 @@ CDXUTDialog  g_GUI;
 CDXUTTextHelper* g_pTextWriter = nullptr;
 
 const INT MAX_SLIDER_VALUE = 100;
-CDXUTSlider *g_RoughnessSlider;
-CDXUTSlider *g_ReflectivitySlider;
 
 ID3D11Device *g_pDevice;
 ID3D11DeviceContext *g_pImmediateContext;
@@ -173,21 +171,21 @@ HRESULT CALLBACK OnDeviceCreated(_In_ ID3D11Device* pd3dDevice, _In_ const DXGI_
 	assert(SUCCEEDED(hr));
 
 	iY += BUTTON_HEIGHT;
-	hr = g_GUI.AddButton(CMD_CAMERA_MODE, L"Toggle camera moves (enter)", 0, iY, 170, BUTTON_HEIGHT, 'T');
+	hr = g_GUI.AddButton(CMD_CAMERA_MODE, L"Toggle camera moves (T)", 0, iY, 170, BUTTON_HEIGHT, 'T');
 	assert(SUCCEEDED(hr));
 
 	iY += BUTTON_HEIGHT;
 	g_GUI.AddStatic(ROUGHNESS_TEXT, L"Roughness", 0, iY, 170, BUTTON_HEIGHT);
 
 	iY += BUTTON_HEIGHT;
-	hr = g_GUI.AddSlider(ROGUHNESS_SLIDER, 50, iY, 100, BUTTON_HEIGHT, 0, MAX_SLIDER_VALUE, 0, false, &g_RoughnessSlider);
+	hr = g_GUI.AddSlider(ROUGHNESS_SLIDER, 50, iY, 100, BUTTON_HEIGHT, 0, MAX_SLIDER_VALUE, 0);
 	assert(SUCCEEDED(hr));
 
 	iY += BUTTON_HEIGHT;
 	g_GUI.AddStatic(REFLECTIVITY_TEXT, L"Reflectivity", 0, iY, 170, BUTTON_HEIGHT);
 
 	iY += BUTTON_HEIGHT;
-	hr = g_GUI.AddSlider(REFLECTIVITY_SLIDER, 50, iY, 100, BUTTON_HEIGHT, 0, MAX_SLIDER_VALUE, 0, false, &g_ReflectivitySlider);
+	hr = g_GUI.AddSlider(REFLECTIVITY_SLIDER, 50, iY, 100, BUTTON_HEIGHT, 0, MAX_SLIDER_VALUE, 0);
 	assert(SUCCEEDED(hr));
 
 	FAIL_CHK(FAILED(hr), "Failed to create DXUT dialog manager");
@@ -442,13 +440,24 @@ LRESULT CALLBACK MsgProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam,
 	return 0;
 }
 
-void SetRoughnessOnSelectedGeometry(float Roughness)
+void SetMaterialProperty(UINT ControlID)
 {
 	if (g_SelectedMaterialIndex != NO_MATERIAL_SELECTED)
 	{
+		float Value = ((CDXUTSlider*)g_GUI.GetControl(ControlID))->GetValue() / (float)MAX_SLIDER_VALUE;
+
 		for (UINT i = 0; i < NUM_RENDERER_TYPES; i++)
 		{
-			g_MaterialList[i][g_SelectedMaterialIndex]->SetRoughness(Roughness);
+			Material *pMaterial = g_MaterialList[i][g_SelectedMaterialIndex];
+			switch (ControlID)
+			{
+			case ROUGHNESS_SLIDER:
+				pMaterial->SetRoughness(Value);
+				break;
+			case REFLECTIVITY_SLIDER:
+				pMaterial->SetReflectivity(Value);
+				break;
+			}
 		}
 	}
 }
@@ -474,11 +483,10 @@ void CALLBACK OnGUIEvent(UINT nEvent, int nControlID, CDXUTControl* pControl, vo
 	case CMD_CAMERA_MODE:
 		g_CameraModeEnabled = !g_CameraModeEnabled;
 		break;
-	case ROGUHNESS_SLIDER:
-		SetRoughnessOnSelectedGeometry(g_RoughnessSlider->GetValue() / (float)MAX_SLIDER_VALUE);
-		break;
+	case ROUGHNESS_SLIDER:
 	case REFLECTIVITY_SLIDER:
-		SetReflectivityOnSelectedGeometry(g_ReflectivitySlider->GetValue() / (float)MAX_SLIDER_VALUE);
+		SetMaterialProperty(nControlID);
+		break;
 	}
 }
 
@@ -579,6 +587,20 @@ bool IsOverGUI(UINT x, UINT y)
 	return g_GUI.GetControlAtPoint(MouseCoord) != nullptr;
 }
 
+void SetSliderValue(UINT ControlID, float value)
+{
+	((CDXUTSlider*)g_GUI.GetControl(ControlID))->SetValue(value * MAX_SLIDER_VALUE);
+}
+
+void SetGUISliders(Material *pMaterial)
+{
+	const float roughness = pMaterial ? pMaterial->GetRoughness() : 0.0f;
+	const float reflectivity = pMaterial ? pMaterial->GetReflectivity() : 0.0f;
+
+	SetSliderValue(ROUGHNESS_SLIDER, roughness);
+	SetSliderValue(REFLECTIVITY_SLIDER, reflectivity);
+}
+
 void CALLBACK OnMouseMove(_In_ bool bLeftButtonDown, _In_ bool bRightButtonDown, _In_ bool bMiddleButtonDown,
 	_In_ bool bSideButton1Down, _In_ bool bSideButton2Down, _In_ int nMouseWheelDelta,
 	_In_ int xPos, _In_ int yPos, _In_opt_ void* pUserContext)
@@ -608,7 +630,9 @@ void CALLBACK OnMouseMove(_In_ bool bLeftButtonDown, _In_ bool bRightButtonDown,
 		{
 			const UINT RendererIndex = RAYTRACER; // Not implemented in D3D11 renderer
 			Geometry *pGeometry = g_pRenderer[RendererIndex]->GetGeometryAtPixel(g_pCamera[RendererIndex], g_pScene[RendererIndex], Vec2(xPos, yPos));
+			SetGUISliders(pGeometry ? pGeometry->GetMaterial() : nullptr);
 
+			g_SelectedMaterialIndex = NO_MATERIAL_SELECTED;
 			if (pGeometry)
 			{
 				for (UINT i = 0; i < g_MaterialList[RAYTRACER].size(); i++)
@@ -616,17 +640,9 @@ void CALLBACK OnMouseMove(_In_ bool bLeftButtonDown, _In_ bool bRightButtonDown,
 					if (g_MaterialList[RAYTRACER][i] == pGeometry->GetMaterial())
 					{
 						g_SelectedMaterialIndex = i;
-						g_RoughnessSlider->SetValue((float)MAX_SLIDER_VALUE * pGeometry->GetMaterial()->GetRoughness());
-						g_ReflectivitySlider->SetValue((float)MAX_SLIDER_VALUE * pGeometry->GetMaterial()->GetReflectivity());
 						break;
 					}
 				}
-			}
-			else
-			{
-				g_SelectedMaterialIndex = NO_MATERIAL_SELECTED;
-				g_RoughnessSlider->SetValue(0);
-				g_ReflectivitySlider->SetValue(0);
 			}
 		}
 	}
