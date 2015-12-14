@@ -30,10 +30,14 @@ using namespace Assimp;
 
 enum
 {
-	CMD_CHANGE_RENDERER,
+	CMD_CHANGE_RENDERER = 0,
+	CMD_CAMERA_MODE,
 	ROUGHNESS_TEXT,
-	ROGUHNESS_SLIDER
-};
+	ROGUHNESS_SLIDER,
+	REFLECTIVITY_TEXT,
+	REFLECTIVITY_SLIDER,
+	NUM_GUI_ITEMS
+} GUI_ID;
 
 //--------------------------------------------------------------------------------------
 // Global Variables
@@ -68,12 +72,15 @@ int g_MouseY;
 const unsigned int NO_MATERIAL_SELECTED = (unsigned int)-1;
 unsigned int g_SelectedMaterialIndex = NO_MATERIAL_SELECTED;
 
+bool g_CameraModeEnabled = false;
+
 CDXUTDialogResourceManager  g_DialogResourceManager; // manager for shared resources of dialogs
 CDXUTDialog  g_GUI;
 CDXUTTextHelper* g_pTextWriter = nullptr;
 
 const INT MAX_SLIDER_VALUE = 100;
 CDXUTSlider *g_RoughnessSlider;
+CDXUTSlider *g_ReflectivitySlider;
 
 ID3D11Device *g_pDevice;
 ID3D11DeviceContext *g_pImmediateContext;
@@ -166,10 +173,21 @@ HRESULT CALLBACK OnDeviceCreated(_In_ ID3D11Device* pd3dDevice, _In_ const DXGI_
 	assert(SUCCEEDED(hr));
 
 	iY += BUTTON_HEIGHT;
+	hr = g_GUI.AddButton(CMD_CAMERA_MODE, L"Toggle camera moves (enter)", 0, iY, 170, BUTTON_HEIGHT, 'T');
+	assert(SUCCEEDED(hr));
+
+	iY += BUTTON_HEIGHT;
 	g_GUI.AddStatic(ROUGHNESS_TEXT, L"Roughness", 0, iY, 170, BUTTON_HEIGHT);
 
 	iY += BUTTON_HEIGHT;
 	hr = g_GUI.AddSlider(ROGUHNESS_SLIDER, 50, iY, 100, BUTTON_HEIGHT, 0, MAX_SLIDER_VALUE, 0, false, &g_RoughnessSlider);
+	assert(SUCCEEDED(hr));
+
+	iY += BUTTON_HEIGHT;
+	g_GUI.AddStatic(REFLECTIVITY_TEXT, L"Reflectivity", 0, iY, 170, BUTTON_HEIGHT);
+
+	iY += BUTTON_HEIGHT;
+	hr = g_GUI.AddSlider(REFLECTIVITY_SLIDER, 50, iY, 100, BUTTON_HEIGHT, 0, MAX_SLIDER_VALUE, 0, false, &g_ReflectivitySlider);
 	assert(SUCCEEDED(hr));
 
 	FAIL_CHK(FAILED(hr), "Failed to create DXUT dialog manager");
@@ -435,6 +453,17 @@ void SetRoughnessOnSelectedGeometry(float Roughness)
 	}
 }
 
+void SetReflectivityOnSelectedGeometry(float Reflectivity)
+{
+	if (g_SelectedMaterialIndex != NO_MATERIAL_SELECTED)
+	{
+		for (UINT i = 0; i < NUM_RENDERER_TYPES; i++)
+		{
+			g_MaterialList[i][g_SelectedMaterialIndex]->SetReflectivity(Reflectivity);
+		}
+	}
+}
+
 void CALLBACK OnGUIEvent(UINT nEvent, int nControlID, CDXUTControl* pControl, void* pUserContext)
 {
 	switch (nControlID)
@@ -442,9 +471,14 @@ void CALLBACK OnGUIEvent(UINT nEvent, int nControlID, CDXUTControl* pControl, vo
 	case CMD_CHANGE_RENDERER:
 		g_ActiveRenderer = (RENDERER_TYPE)((g_ActiveRenderer + 1) % NUM_RENDERER_TYPES);
 		break;
+	case CMD_CAMERA_MODE:
+		g_CameraModeEnabled = !g_CameraModeEnabled;
+		break;
 	case ROGUHNESS_SLIDER:
 		SetRoughnessOnSelectedGeometry(g_RoughnessSlider->GetValue() / (float)MAX_SLIDER_VALUE);
 		break;
+	case REFLECTIVITY_SLIDER:
+		SetReflectivityOnSelectedGeometry(g_ReflectivitySlider->GetValue() / (float)MAX_SLIDER_VALUE);
 	}
 }
 
@@ -488,46 +522,61 @@ void CALLBACK OnKeyPress(_In_ UINT nChar, _In_ bool bKeyDown, _In_ bool bAltDown
 
 void UpdateCamera()
 {
-	static bool firstTimeQuery = true;
-	static LARGE_INTEGER lastTime;
-	static LARGE_INTEGER performanceFrequency;
-	if (firstTimeQuery)
+	if (g_CameraModeEnabled)
 	{
-		firstTimeQuery = false;
-		QueryPerformanceCounter(&lastTime);
-		QueryPerformanceFrequency(&performanceFrequency);
+		static bool firstTimeQuery = true;
+		static LARGE_INTEGER lastTime;
+		static LARGE_INTEGER performanceFrequency;
+		if (firstTimeQuery)
+		{
+			firstTimeQuery = false;
+			QueryPerformanceCounter(&lastTime);
+			QueryPerformanceFrequency(&performanceFrequency);
+		}
+		else
+		{
+			LARGE_INTEGER newTime;
+			QueryPerformanceCounter(&newTime);
+			float deltaTime = (float)(newTime.QuadPart - lastTime.QuadPart) / (float)performanceFrequency.QuadPart;
+			lastTime = newTime;
+
+			float deltaX = 0, deltaY = 0;
+			if (g_MouseX < 100)
+			{
+				deltaX += 1;
+			}
+			else if (g_MouseX > WIDTH - 100)
+			{
+				deltaX -= 1;
+			}
+
+			if (g_MouseY < 100)
+			{
+				deltaY += 1;
+			}
+			else if (g_MouseY > HEIGHT - 100)
+			{
+				deltaY -= 1;
+			}
+
+			for (UINT i = 0; i < RENDERER_TYPE::NUM_RENDERER_TYPES; i++)
+			{
+				g_pCamera[i]->Rotate(0.0f, -CAMERA_SIDE_SCREEN_ROTATION_SPEED * deltaX * deltaTime, CAMERA_SIDE_SCREEN_ROTATION_SPEED * deltaY * deltaTime);
+			}
+		}
 	}
-	else
-	{
-		LARGE_INTEGER newTime;
-		QueryPerformanceCounter(&newTime);
-		float deltaTime = (float)(newTime.QuadPart - lastTime.QuadPart) / (float)performanceFrequency.QuadPart;
-		lastTime = newTime;
+}
 
-		float deltaX = 0, deltaY = 0;
-		if (g_MouseX < 100)
-		{
-			deltaX += 1;
-		}
-		else if (g_MouseX > WIDTH - 100)
-		{
-			deltaX -= 1;
-		}
+bool IsOverGUI(UINT x, UINT y)
+{
+	// GetControlAtPoint is relative to g_GUI's coordinate space, so 
+	// the mouse coordinates need to be transformed first
+	POINT MouseCoord;
+	g_GUI.GetLocation(MouseCoord);
+	MouseCoord.x = x - MouseCoord.x;
+	MouseCoord.y = y - MouseCoord.y;
 
-		if (g_MouseY < 100)
-		{
-			deltaY += 1;
-		}
-		else if (g_MouseY > HEIGHT - 100)
-		{
-			deltaY -= 1;
-		}
-
-		for (UINT i = 0; i < RENDERER_TYPE::NUM_RENDERER_TYPES; i++)
-		{
-			g_pCamera[i]->Rotate(0.0f, -CAMERA_SIDE_SCREEN_ROTATION_SPEED * deltaX * deltaTime, CAMERA_SIDE_SCREEN_ROTATION_SPEED * deltaY * deltaTime);
-		}
-	}
+	return g_GUI.GetControlAtPoint(MouseCoord) != nullptr;
 }
 
 void CALLBACK OnMouseMove(_In_ bool bLeftButtonDown, _In_ bool bRightButtonDown, _In_ bool bMiddleButtonDown,
@@ -542,17 +591,20 @@ void CALLBACK OnMouseMove(_In_ bool bLeftButtonDown, _In_ bool bRightButtonDown,
 	}
 	else
 	{
-		int deltaX = g_MouseX - xPos;
-		int deltaY = g_MouseY - yPos;
+		if (g_CameraModeEnabled)
+		{
+			int deltaX = g_MouseX - xPos;
+			int deltaY = g_MouseY - yPos;
+			
+			for (UINT i = 0; i < RENDERER_TYPE::NUM_RENDERER_TYPES; i++)
+			{
+				g_pCamera[i]->Rotate(0.0f, -CAMERA_ROTATION_SPEED * deltaX, CAMERA_ROTATION_SPEED * deltaY);
+			}
+		}
 		g_MouseX = xPos;
 		g_MouseY = yPos;
 
-		for (UINT i = 0; i < RENDERER_TYPE::NUM_RENDERER_TYPES; i++)
-		{
-			g_pCamera[i]->Rotate(0.0f, -CAMERA_ROTATION_SPEED * deltaX, CAMERA_ROTATION_SPEED * deltaY);
-		}
-
-		if (bLeftButtonDown)
+		if (bLeftButtonDown && !IsOverGUI(xPos, yPos))
 		{
 			const UINT RendererIndex = RAYTRACER; // Not implemented in D3D11 renderer
 			Geometry *pGeometry = g_pRenderer[RendererIndex]->GetGeometryAtPixel(g_pCamera[RendererIndex], g_pScene[RendererIndex], Vec2(xPos, yPos));
@@ -565,6 +617,7 @@ void CALLBACK OnMouseMove(_In_ bool bLeftButtonDown, _In_ bool bRightButtonDown,
 					{
 						g_SelectedMaterialIndex = i;
 						g_RoughnessSlider->SetValue((float)MAX_SLIDER_VALUE * pGeometry->GetMaterial()->GetRoughness());
+						g_ReflectivitySlider->SetValue((float)MAX_SLIDER_VALUE * pGeometry->GetMaterial()->GetReflectivity());
 						break;
 					}
 				}
@@ -573,6 +626,7 @@ void CALLBACK OnMouseMove(_In_ bool bLeftButtonDown, _In_ bool bRightButtonDown,
 			{
 				g_SelectedMaterialIndex = NO_MATERIAL_SELECTED;
 				g_RoughnessSlider->SetValue(0);
+				g_ReflectivitySlider->SetValue(0);
 			}
 		}
 	}

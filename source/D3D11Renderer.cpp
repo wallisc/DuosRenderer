@@ -356,13 +356,13 @@ D3D11Material::D3D11Material(_In_ ID3D11Device *pDevice, ID3D11DeviceContext *pC
 
 void D3D11Material::SetRoughness(float Roughness)
 {
-	XMVectorSetByIndex(m_CBMaterial.m_MaterialProperties, Roughness, CBMaterial::ROUGHNESS_INDEX);
+	m_CBMaterial.m_MaterialProperties = XMVectorSetByIndex(m_CBMaterial.m_MaterialProperties, Roughness, CBMaterial::ROUGHNESS_INDEX);
 	UpdateMaterialBuffer();
 }
 
 void D3D11Material::SetReflectivity(float Reflectivity)
 {
-	XMVectorSetByIndex(m_CBMaterial.m_MaterialProperties, Reflectivity, CBMaterial::REFLECTIVITY_INDEX);
+	m_CBMaterial.m_MaterialProperties = XMVectorSetByIndex(m_CBMaterial.m_MaterialProperties, Reflectivity, CBMaterial::REFLECTIVITY_INDEX);
 	UpdateMaterialBuffer();
 }
 
