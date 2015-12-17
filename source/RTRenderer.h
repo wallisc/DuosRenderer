@@ -17,6 +17,7 @@
 #include <math.h>
 
 #define EPSILON 0.0001f
+#define MAX_RAY_RECURSION 2
 #define RT_MULTITHREAD 1
 class RTImage
 {
@@ -382,7 +383,18 @@ public:
 
 	void RenderPixelRange(PixelRange *pRange, RTCamera *pCamera, RTScene *pScene);
 private:
-	glm::vec3 ShadePixel(RTScene *pScene, unsigned int primID, RTGeometry *pGeometry, glm::vec3 baryocentricCoord, glm::vec3 ViewVector);
+
+	struct ShadePixelRecursionInfo
+	{
+		ShadePixelRecursionInfo(UINT NumRecursions = 1, float TotalContribution = 1.0f) :
+			m_NumRecursions(NumRecursions), m_TotalContribution(TotalContribution)
+		{}
+
+		UINT m_NumRecursions;
+		float m_TotalContribution;
+	};
+
+	glm::vec3 ShadePixel(RTScene *pScene, unsigned int primID, RTGeometry *pGeometry, glm::vec3 baryocentricCoord, glm::vec3 ViewVector, ShadePixelRecursionInfo &RecursionInfo);
 
 	PTP_POOL m_ThreadPool;
 	PTP_CLEANUP_GROUP m_ThreadPoolCleanupGroup;

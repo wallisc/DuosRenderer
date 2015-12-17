@@ -463,7 +463,7 @@ void RTRenderer::RenderPixelRange(PixelRange *pRange, RTCamera *pCamera, RTScene
 					RTGeometry *pGeometry = meshID == RTC_INVALID_GEOMETRY_ID ? nullptr : pScene->GetRTGeometry(meshID);
 					glm::vec3 baryocentricCoord = batch.GetBaryocentricCoordinate(rayIndex);
 
-					glm::vec3 color = ShadePixel(pScene, primID, pGeometry, baryocentricCoord, -RayDirections[rayIndex]);
+					glm::vec3 color = ShadePixel(pScene, primID, pGeometry, baryocentricCoord, -RayDirections[rayIndex], ShadePixelRecursionInfo());
 					m_pCanvas->WritePixel(x, y, GlmVec3ToRealArray(color));
 					rayIndex++;
 				}
@@ -473,7 +473,7 @@ void RTRenderer::RenderPixelRange(PixelRange *pRange, RTCamera *pCamera, RTScene
 	}
 }
 
-glm::vec3 RTRenderer::ShadePixel(RTScene *pScene, unsigned int primID, RTGeometry *pGeometry, glm::vec3 baryocentricCoord, glm::vec3 ViewVector)
+glm::vec3 RTRenderer::ShadePixel(RTScene *pScene, unsigned int primID, RTGeometry *pGeometry, glm::vec3 baryocentricCoord, glm::vec3 ViewVector, ShadePixelRecursionInfo &RecursionInfo)
 {
 	if (pGeometry)
 	{
@@ -523,10 +523,32 @@ glm::vec3 RTRenderer::ShadePixel(RTScene *pScene, unsigned int primID, RTGeometr
 		{
 			glm::vec3 ReflectionVector = glm::reflect(-ViewVector, Norm);
 			float fresnel;
-			TotalSpecular += pScene->GetEnvironmentMap()->GetColor(ReflectionVector) * CookTorrance().BRDF(ViewVector, Norm, ReflectionVector, Roughness, reflectivity, fresnel);
-			TotalFresnel += fresnel;
-		}
 
+			float BRDFValue = CookTorrance().BRDF(ViewVector, Norm, ReflectionVector, Roughness, reflectivity, fresnel);
+			
+			glm::vec3 ReflectionColor = glm::vec3(0.0f);
+			if (RecursionInfo.m_TotalContribution * BRDFValue > EPSILON && RecursionInfo.m_NumRecursions < MAX_RAY_RECURSION)
+			{
+				RayBatch ReflRayJob(pScene->GetRTCScene(), &intersectPos, &ReflectionVector, 1);
+				if (ReflRayJob.GetGeometryID(0) == RTC_INVALID_GEOMETRY_ID)
+				{
+					ReflectionColor = pScene->GetEnvironmentMap()->GetColor(ReflectionVector);
+				}
+				else
+				{
+					ShadePixelRecursionInfo ReflectionRecursionInfo(++RecursionInfo.m_NumRecursions, RecursionInfo.m_TotalContribution * BRDFValue);
+					const unsigned int RayIndex = 0;
+					ReflectionColor = ShadePixel(pScene,
+						ReflRayJob.GetPrimID(RayIndex),
+						pScene->GetRTGeometry(ReflRayJob.GetGeometryID(RayIndex)),
+						ReflRayJob.GetBaryocentricCoordinate(RayIndex),
+						ReflectionVector,
+						ReflectionRecursionInfo);
+				}
+			}
+			TotalSpecular += ReflectionColor * BRDFValue;
+			TotalFresnel += fresnel;
+		} 
 
 		TotalSpecular /= 2.0f;
 		TotalFresnel /= 2.0f;
