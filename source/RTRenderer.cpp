@@ -450,7 +450,7 @@ void RTRenderer::RenderPixelRange(PixelRange *pRange, RTCamera *pCamera, RTScene
 				}
 			}
 
-			Trace(pScene, LensPoints, RayDirections, Colors, BlockSize);
+			Trace(pScene, LensPoints, RayDirections, Colors, BlockSize, ShadePixelRecursionInfo());
 
 			rayIndex = 0;
 			for (UINT xOffset = 0; xOffset < BlockWidth; xOffset++)
@@ -468,16 +468,18 @@ void RTRenderer::RenderPixelRange(PixelRange *pRange, RTCamera *pCamera, RTScene
 	}
 }
 
-void RTRenderer::Trace(_In_ RTScene *pScene, _In_reads_(NumRays) const glm::vec3 *pRayOrigins, _In_reads_(NumRays) const glm::vec3 *pRayDirs, _Out_ glm::vec3 *pColors, UINT NumRays)
+void RTRenderer::Trace(_In_ RTScene *pScene, _In_reads_(NumRays) const glm::vec3 *pRayOrigins, _In_reads_(NumRays) const glm::vec3 *pRayDirs, _Out_ glm::vec3 *pColors, UINT NumRays, ShadePixelRecursionInfo &RecursionInfo)
 {
-	const UINT NumBatches = NumRays / RAYS_PER_INTERSECT_BATCH;
-	for (UINT RayBatchIndex = 0; RayBatchIndex < NumRays / RAYS_PER_INTERSECT_BATCH; RayBatchIndex++)
+	const UINT NumBatches = (NumRays - 1)/ RAYS_PER_INTERSECT_BATCH + 1;
+	for (UINT RayBatchIndex = 0; RayBatchIndex < NumBatches; RayBatchIndex++)
 	{
 		const UINT BatchSize = (RayBatchIndex < NumBatches - 1 || NumRays % RAYS_PER_INTERSECT_BATCH == 0) ? RAYS_PER_INTERSECT_BATCH : NumRays % RAYS_PER_INTERSECT_BATCH;
-		assert(BatchSize % 2 == 0);
+		
+		// Intersections only support these batch sizes
+		assert(BatchSize ==  1 || BatchSize == 2 || BatchSize == 4 || BatchSize == 8 || BatchSize == 16); 
 
 		RayBatch RayBatch(pScene->GetRTCScene(), &pRayOrigins[RayBatchIndex * RAYS_PER_INTERSECT_BATCH], &pRayDirs[RayBatchIndex * RAYS_PER_INTERSECT_BATCH], BatchSize);
-		for (UINT RayIndex = 0; RayIndex < RAYS_PER_INTERSECT_BATCH; RayIndex++)
+		for (UINT RayIndex = 0; RayIndex < BatchSize; RayIndex++)
 		{
 			pColors[RayIndex] = ShadePixel(
 				pScene,
@@ -485,7 +487,7 @@ void RTRenderer::Trace(_In_ RTScene *pScene, _In_reads_(NumRays) const glm::vec3
 				pScene->GetRTGeometry(RayBatch.GetGeometryID(RayIndex)),
 				RayBatch.GetBaryocentricCoordinate(RayIndex),
 				-pRayDirs[RayBatchIndex * RAYS_PER_INTERSECT_BATCH + RayIndex],
-				ShadePixelRecursionInfo());
+				RecursionInfo);
 		}
 	}
 }
@@ -542,37 +544,16 @@ glm::vec3 RTRenderer::ShadePixel(RTScene *pScene, unsigned int primID, RTGeometr
 			float fresnel;
 
 			float BRDFValue = CookTorrance().BRDF(ViewVector, Norm, ReflectionVector, Roughness, reflectivity, fresnel);
-			
 			glm::vec3 ReflectionColor = glm::vec3(0.0f);
-			if (RecursionInfo.m_TotalContribution * BRDFValue > EPSILON)
+			if (RecursionInfo.m_TotalContribution * BRDFValue > MEDIUM_EPSILON)
 			{
-				bool bGetReflectionFromEnvironmentMap = RecursionInfo.m_NumRecursions >= MAX_RAY_RECURSION;
-				if (!bGetReflectionFromEnvironmentMap)
+				bool bGetReflectionFromEnvironmentMap = RecursionInfo.m_NumRecursions < MAX_RAY_RECURSION;
+				glm::vec3 ReflOrigin = intersectPos + Norm * LARGE_EPSILON; //Offset a small amount to avoid self-intersection
+				if (bGetReflectionFromEnvironmentMap)
 				{
-					glm::vec3 ReflOrigin = intersectPos + Norm * LARGE_EPSILON; //Offset a small amount to avoid self-intersection
-					RayBatch ReflRayJob(pScene->GetRTCScene(), &ReflOrigin, &ReflectionVector, 1);
-					if (ReflRayJob.GetGeometryID(0) != RTC_INVALID_GEOMETRY_ID)
-					{
-						ShadePixelRecursionInfo ReflectionRecursionInfo(++RecursionInfo.m_NumRecursions, RecursionInfo.m_TotalContribution * BRDFValue);
-						const unsigned int RayIndex = 0;
-#if 1
-						ReflectionColor = ShadePixel(pScene,
-							ReflRayJob.GetPrimID(RayIndex),
-							pScene->GetRTGeometry(ReflRayJob.GetGeometryID(RayIndex)),
-							ReflRayJob.GetBaryocentricCoordinate(RayIndex),
-							-ReflectionVector,
-							ReflectionRecursionInfo);
-#else
-						ReflectionColor = pScene->GetRTGeometry(ReflRayJob.GetGeometryID(RayIndex))->GetRTMaterial()->GetColor(glm::vec2(ReflRayJob.GetBaryocentricCoordinate(RayIndex)));
-#endif
-					}
-					else
-					{
-						bGetReflectionFromEnvironmentMap = true;
-					}
+					Trace(pScene, &ReflOrigin, &ReflectionVector, &ReflectionColor, 1, ShadePixelRecursionInfo(RecursionInfo.m_NumRecursions + 1, RecursionInfo.m_TotalContribution * BRDFValue));
 				}
-
-				if(bGetReflectionFromEnvironmentMap)
+				else
 				{
 					ReflectionColor = pScene->GetEnvironmentMap()->GetColor(ReflectionVector);
 				}
