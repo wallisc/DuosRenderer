@@ -527,23 +527,37 @@ glm::vec3 RTRenderer::ShadePixel(RTScene *pScene, unsigned int primID, RTGeometr
 			float BRDFValue = CookTorrance().BRDF(ViewVector, Norm, ReflectionVector, Roughness, reflectivity, fresnel);
 			
 			glm::vec3 ReflectionColor = glm::vec3(0.0f);
-			if (RecursionInfo.m_TotalContribution * BRDFValue > EPSILON && RecursionInfo.m_NumRecursions < MAX_RAY_RECURSION)
+			if (RecursionInfo.m_TotalContribution * BRDFValue > EPSILON)
 			{
-				RayBatch ReflRayJob(pScene->GetRTCScene(), &intersectPos, &ReflectionVector, 1);
-				if (ReflRayJob.GetGeometryID(0) == RTC_INVALID_GEOMETRY_ID)
+				bool bGetReflectionFromEnvironmentMap = RecursionInfo.m_NumRecursions >= MAX_RAY_RECURSION;
+				if (!bGetReflectionFromEnvironmentMap)
+				{
+					glm::vec3 ReflOrigin = intersectPos + Norm * LARGE_EPSILON; //Offset a small amount to avoid self-intersection
+					RayBatch ReflRayJob(pScene->GetRTCScene(), &ReflOrigin, &ReflectionVector, 1);
+					if (ReflRayJob.GetGeometryID(0) != RTC_INVALID_GEOMETRY_ID)
+					{
+						ShadePixelRecursionInfo ReflectionRecursionInfo(++RecursionInfo.m_NumRecursions, RecursionInfo.m_TotalContribution * BRDFValue);
+						const unsigned int RayIndex = 0;
+#if 1
+						ReflectionColor = ShadePixel(pScene,
+							ReflRayJob.GetPrimID(RayIndex),
+							pScene->GetRTGeometry(ReflRayJob.GetGeometryID(RayIndex)),
+							ReflRayJob.GetBaryocentricCoordinate(RayIndex),
+							-ReflectionVector,
+							ReflectionRecursionInfo);
+#else
+						ReflectionColor = pScene->GetRTGeometry(ReflRayJob.GetGeometryID(RayIndex))->GetRTMaterial()->GetColor(glm::vec2(ReflRayJob.GetBaryocentricCoordinate(RayIndex)));
+#endif
+					}
+					else
+					{
+						bGetReflectionFromEnvironmentMap = true;
+					}
+				}
+
+				if(bGetReflectionFromEnvironmentMap)
 				{
 					ReflectionColor = pScene->GetEnvironmentMap()->GetColor(ReflectionVector);
-				}
-				else
-				{
-					ShadePixelRecursionInfo ReflectionRecursionInfo(++RecursionInfo.m_NumRecursions, RecursionInfo.m_TotalContribution * BRDFValue);
-					const unsigned int RayIndex = 0;
-					ReflectionColor = ShadePixel(pScene,
-						ReflRayJob.GetPrimID(RayIndex),
-						pScene->GetRTGeometry(ReflRayJob.GetGeometryID(RayIndex)),
-						ReflRayJob.GetBaryocentricCoordinate(RayIndex),
-						ReflectionVector,
-						ReflectionRecursionInfo);
 				}
 			}
 			TotalSpecular += ReflectionColor * BRDFValue;

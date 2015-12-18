@@ -390,6 +390,7 @@ void RenderText(float fps)
 	g_pTextWriter->SetForegroundColor(Colors::Yellow);
 	g_pTextWriter->DrawTextLine(g_ActiveRenderer == D3D11 ? L"Rasterizer" : L"Raytracer");
 	g_pTextWriter->DrawFormattedTextLine(L"%f", fps);
+	g_pTextWriter->DrawFormattedTextLine(L"Mouse coord: %d, %d", g_MouseX, g_MouseY);
 	g_pTextWriter->End();
 }
 

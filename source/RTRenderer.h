@@ -17,6 +17,7 @@
 #include <math.h>
 
 #define EPSILON 0.0001f
+#define LARGE_EPSILON 0.1f
 #define MAX_RAY_RECURSION 2
 #define RT_MULTITHREAD 1
 class RTImage
