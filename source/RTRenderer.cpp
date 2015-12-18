@@ -410,8 +410,9 @@ void RTRenderer::RenderPixelRange(PixelRange *pRange, RTCamera *pCamera, RTScene
 	assert(pRange->m_Width > 0 && pRange->m_X + pRange->m_Width <= pCamera->GetWidth());
 	assert(pRange->m_Height > 0 && pRange->m_Y + pRange->m_Height <= pCamera->GetHeight());
 
-	const UINT INTERSECT_BLOCK_SIZE = 2;
-	const UINT RAYS_PER_BLOCK = INTERSECT_BLOCK_SIZE * INTERSECT_BLOCK_SIZE;
+	const UINT INTERSECT_BLOCK_WIDTH = 2;
+	const UINT INTERSECT_BLOCK_HEIGHT = 2;
+	const UINT RAYS_PER_BLOCK = INTERSECT_BLOCK_HEIGHT * INTERSECT_BLOCK_WIDTH;
 
 	const unsigned int Width = pCamera->GetWidth();
 	const unsigned int Height = pCamera->GetHeight();
@@ -420,17 +421,18 @@ void RTRenderer::RenderPixelRange(PixelRange *pRange, RTCamera *pCamera, RTScene
 	const float PixelHeight = pCamera->GetLensHeight() / Height;
 	const glm::vec3 right = pCamera->GetRight();
 
-
-	for (UINT topLeftX = pRange->m_X; topLeftX < pRange->m_X + pRange->m_Width; topLeftX += INTERSECT_BLOCK_SIZE)
+	for (UINT topLeftX = pRange->m_X; topLeftX < pRange->m_X + pRange->m_Width; topLeftX += INTERSECT_BLOCK_WIDTH)
 	{
-		for (UINT topLeftY = pRange->m_Y; topLeftY < pRange->m_Y + pRange->m_Height; topLeftY += INTERSECT_BLOCK_SIZE)
+		for (UINT topLeftY = pRange->m_Y; topLeftY < pRange->m_Y + pRange->m_Height; topLeftY += INTERSECT_BLOCK_HEIGHT)
 		{
 			glm::vec3 LensPoints[RAYS_PER_BLOCK];
 			glm::vec3 RayDirections[RAYS_PER_BLOCK];
+			glm::vec3 Colors[RAYS_PER_BLOCK];
 
 			UINT rayIndex = 0;
-			const UINT BlockWidth = min(INTERSECT_BLOCK_SIZE, (pRange->m_X + pRange->m_Width) - topLeftX);
-			const UINT BlockHeight = min(INTERSECT_BLOCK_SIZE, (pRange->m_Y + pRange->m_Height) - topLeftY);
+			const UINT BlockWidth = min(INTERSECT_BLOCK_WIDTH, (pRange->m_X + pRange->m_Width) - topLeftX);
+			const UINT BlockHeight = min(INTERSECT_BLOCK_HEIGHT, (pRange->m_Y + pRange->m_Height) - topLeftY);
+			const UINT BlockSize = BlockWidth * BlockHeight;
 			for (UINT xOffset = 0; xOffset < BlockWidth; xOffset++)
 			{
 				for (UINT yOffset = 0; yOffset < BlockHeight; yOffset++)
@@ -448,7 +450,7 @@ void RTRenderer::RenderPixelRange(PixelRange *pRange, RTCamera *pCamera, RTScene
 				}
 			}
 
-			RayBatch batch(pScene->GetRTCScene(), &LensPoints[0], &RayDirections[0], rayIndex);
+			Trace(pScene, LensPoints, RayDirections, Colors, BlockSize);
 
 			rayIndex = 0;
 			for (UINT xOffset = 0; xOffset < BlockWidth; xOffset++)
@@ -458,17 +460,32 @@ void RTRenderer::RenderPixelRange(PixelRange *pRange, RTCamera *pCamera, RTScene
 					UINT x = topLeftX + xOffset;
 					UINT y = topLeftY + yOffset;
 
-					unsigned int meshID = batch.GetGeometryID(rayIndex);
-					unsigned int primID = batch.GetPrimID(rayIndex);
-					RTGeometry *pGeometry = meshID == RTC_INVALID_GEOMETRY_ID ? nullptr : pScene->GetRTGeometry(meshID);
-					glm::vec3 baryocentricCoord = batch.GetBaryocentricCoordinate(rayIndex);
-
-					glm::vec3 color = ShadePixel(pScene, primID, pGeometry, baryocentricCoord, -RayDirections[rayIndex], ShadePixelRecursionInfo());
-					m_pCanvas->WritePixel(x, y, GlmVec3ToRealArray(color));
+					m_pCanvas->WritePixel(x, y, GlmVec3ToRealArray(Colors[rayIndex]));
 					rayIndex++;
 				}
 			}
+		}
+	}
+}
 
+void RTRenderer::Trace(_In_ RTScene *pScene, _In_reads_(NumRays) const glm::vec3 *pRayOrigins, _In_reads_(NumRays) const glm::vec3 *pRayDirs, _Out_ glm::vec3 *pColors, UINT NumRays)
+{
+	const UINT NumBatches = NumRays / RAYS_PER_INTERSECT_BATCH;
+	for (UINT RayBatchIndex = 0; RayBatchIndex < NumRays / RAYS_PER_INTERSECT_BATCH; RayBatchIndex++)
+	{
+		const UINT BatchSize = (RayBatchIndex < NumBatches - 1 || NumRays % RAYS_PER_INTERSECT_BATCH == 0) ? RAYS_PER_INTERSECT_BATCH : NumRays % RAYS_PER_INTERSECT_BATCH;
+		assert(BatchSize % 2 == 0);
+
+		RayBatch RayBatch(pScene->GetRTCScene(), &pRayOrigins[RayBatchIndex * RAYS_PER_INTERSECT_BATCH], &pRayDirs[RayBatchIndex * RAYS_PER_INTERSECT_BATCH], BatchSize);
+		for (UINT RayIndex = 0; RayIndex < RAYS_PER_INTERSECT_BATCH; RayIndex++)
+		{
+			pColors[RayIndex] = ShadePixel(
+				pScene,
+				RayBatch.GetPrimID(RayIndex),
+				pScene->GetRTGeometry(RayBatch.GetGeometryID(RayIndex)),
+				RayBatch.GetBaryocentricCoordinate(RayIndex),
+				-pRayDirs[RayBatchIndex * RAYS_PER_INTERSECT_BATCH + RayIndex],
+				ShadePixelRecursionInfo());
 		}
 	}
 }

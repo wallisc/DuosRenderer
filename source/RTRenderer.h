@@ -19,6 +19,8 @@
 #define EPSILON 0.0001f
 #define LARGE_EPSILON 0.1f
 #define MAX_RAY_RECURSION 2
+#define RAY_EMISSION_COUNT 256
+#define RAYS_PER_INTERSECT_BATCH 4
 #define RT_MULTITHREAD 1
 class RTImage
 {
@@ -395,6 +397,7 @@ private:
 		float m_TotalContribution;
 	};
 
+	void Trace(_In_ RTScene *pScene, _In_reads_(NumRays) const glm::vec3 *pRayOrigins, _In_reads_(NumRays) const glm::vec3 *pRayDirs, _Out_ glm::vec3 *pColors, UINT NumRays);
 	glm::vec3 ShadePixel(RTScene *pScene, unsigned int primID, RTGeometry *pGeometry, glm::vec3 baryocentricCoord, glm::vec3 ViewVector, ShadePixelRecursionInfo &RecursionInfo);
 
 	PTP_POOL m_ThreadPool;
@@ -408,6 +411,8 @@ private:
 	LONG m_RunningThreadCounter;
 	std::vector<RayTraceThreadArgs> m_ThreadArgs;
 	HANDLE m_TracingFinishedEvent;
+
+	const bool m_bEnableMultiRayEmission = true;
 };
 
 class BRDFShader
