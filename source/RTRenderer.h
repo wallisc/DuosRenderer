@@ -15,7 +15,7 @@
 
 #define _USE_MATH_DEFINES
 #include <math.h>
-
+ 
 #define EPSILON 0.0001f
 #define MEDIUM_EPSILON 0.05f
 #define LARGE_EPSILON 0.1f
