@@ -20,9 +20,65 @@
 #define MEDIUM_EPSILON 0.05f
 #define LARGE_EPSILON 0.1f
 #define MAX_RAY_RECURSION 3
-#define RAY_EMISSION_COUNT 256
+#define RAY_EMISSION_COUNT 64
 #define RAYS_PER_INTERSECT_BATCH 4
 #define RT_MULTITHREAD 1
+#define RT_AVOID_RENDERING_REDUNDANT_FRAMES 1
+
+
+class VersionedObject
+{
+public:
+	typedef UINT VersionID;
+	VersionID GetVersionID() { return m_VersionID; }
+	void NotifyChanged() 
+	{
+		m_VersionID++;
+	}
+private:
+	VersionID m_VersionID;
+};
+
+class Observer
+{
+public:
+	virtual void Notify() = 0;
+};
+
+class Observable
+{
+public:
+	void RegisterObserver(Observer *pObserver)
+	{
+		m_ObserverList.push_back(pObserver);
+	}
+
+	void UnregisterObserver(Observer *pObserver)
+	{
+		bool bObserverFound = false;
+		for (auto Iterator = m_ObserverList.begin(); Iterator != m_ObserverList.end(); Iterator++)
+		{
+			if (*Iterator == pObserver)
+			{
+				m_ObserverList.erase(Iterator);
+				bObserverFound = true;
+				break;
+			}
+		}
+		assert(bObserverFound);
+	}
+
+	void NotifyChanged()
+	{
+		for (auto pObserver : m_ObserverList)
+		{
+			pObserver->Notify();
+		}
+	}
+private:
+	std::vector<Observer *> m_ObserverList;
+};
+
 class RTImage
 {
 public:
@@ -51,7 +107,7 @@ private:
 	RTImage m_pImages[TEXTURES_PER_CUBE];
 };
 
-class RTMaterial : public Material
+class RTMaterial : public Material, public Observable
 {
 public:
 	RTMaterial(CreateMaterialDescriptor *pCreateMaterialDescriptor);
@@ -60,8 +116,8 @@ public:
 	float GetReflectivity() const { return m_Reflectivity; }
 	float GetRoughness() const { return m_Roughness; }
 
-	void SetRoughness(float Roughness) { m_Roughness = Roughness; }
-	void SetReflectivity(float Reflectivity) { m_Reflectivity = Reflectivity; }
+	void SetRoughness(float Roughness) { m_Roughness = Roughness; NotifyChanged(); }
+	void SetReflectivity(float Reflectivity) { m_Reflectivity = Reflectivity; NotifyChanged(); }
 private:
 	glm::vec3 m_Diffuse;
 	float m_Reflectivity;
@@ -125,7 +181,7 @@ public:
 	}
 };
 
-class RTGeometry : public Geometry
+class RTGeometry : public Geometry, public Observable
 {
 public:
 	RTGeometry(_In_ CreateGeometryDescriptor *pCreateGeometryDescriptor);
@@ -158,7 +214,7 @@ private:
 	RTMaterial *m_pMaterial;
 };
 
-class RTLight : public Light
+class RTLight : public Light, public Observable
 {
 public:
 	virtual glm::vec3 GetLightDirection(glm::vec3 Position) const = 0;
@@ -178,7 +234,7 @@ private:
 	glm::vec3 m_Color;
 };
 
-class RTCamera : public Camera
+class RTCamera : public Camera, public VersionedObject
 {
 public:
 	RTCamera(CreateCameraDescriptor *pCreateCameraDescriptor);
@@ -245,7 +301,7 @@ struct PixelRange
 	unsigned int m_X, m_Y, m_Width, m_Height;
 };
 
-class RTScene : public Scene
+class RTScene : public Scene, public VersionedObject, public Observer
 {
 public:
 	RTScene(RTCDevice, RTEnvironmentMap *pEnvironmentMap);
@@ -259,10 +315,13 @@ public:
 
 	RTCScene GetRTCScene() { return m_scene; }
 	RTGeometry *GetRTGeometry(unsigned int meshID) { return m_meshIDToRTGeometry[meshID]; }
-	void PreDraw();
 	RTEnvironmentMap *GetEnvironmentMap() { return m_pEnvironmentMap; }
+	void Notify() { NotifyChanged(); }
+
+	void PreDraw();
 private:
 	bool m_bSceneCommitted;
+	
 	RTEnvironmentMap *m_pEnvironmentMap;
 	std::vector<RTGeometry *> m_GeometryList;
 	std::vector<RTLight *> m_LightList;
@@ -387,7 +446,6 @@ public:
 
 	void RenderPixelRange(PixelRange *pRange, RTCamera *pCamera, RTScene *pScene);
 private:
-
 	struct ShadePixelRecursionInfo
 	{
 		ShadePixelRecursionInfo(UINT NumRecursions = 1, float TotalContribution = 1.0f) :
@@ -413,7 +471,9 @@ private:
 	std::vector<RayTraceThreadArgs> m_ThreadArgs;
 	HANDLE m_TracingFinishedEvent;
 
-	const bool m_bEnableMultiRayEmission = true;
+	const bool m_bEnableMultiRayEmission = false;
+	VersionedObject::VersionID m_LastCameraVersionID;
+	VersionedObject::VersionID m_LastSceneID;
 };
 
 class BRDFShader

@@ -25,8 +25,8 @@
 using namespace DirectX;
 using namespace Assimp;
 
-#define WIDTH 800
-#define HEIGHT 600
+#define WIDTH 400
+#define HEIGHT 300
 
 enum
 {

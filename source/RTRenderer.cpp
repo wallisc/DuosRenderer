@@ -539,28 +539,77 @@ glm::vec3 RTRenderer::ShadePixel(RTScene *pScene, unsigned int primID, RTGeometr
 			}
 		}
 
+		float fresnel;
+		glm::vec3 ReflectionColor = glm::vec3(0.0f);
+		bool bGetReflectionFromEnvironmentMap = RecursionInfo.m_NumRecursions < MAX_RAY_RECURSION;
+		glm::vec3 ReflOrigin = intersectPos + Norm * LARGE_EPSILON; //Offset a small amount to avoid self-intersection
+		glm::vec3 ReflectionVector = glm::reflect(-ViewVector, Norm);
+		if (bGetReflectionFromEnvironmentMap)
 		{
-			glm::vec3 ReflectionVector = glm::reflect(-ViewVector, Norm);
-			float fresnel;
-
-			float BRDFValue = CookTorrance().BRDF(ViewVector, Norm, ReflectionVector, Roughness, reflectivity, fresnel);
-			glm::vec3 ReflectionColor = glm::vec3(0.0f);
-			if (RecursionInfo.m_TotalContribution * BRDFValue > MEDIUM_EPSILON)
+			if (m_bEnableMultiRayEmission)
 			{
-				bool bGetReflectionFromEnvironmentMap = RecursionInfo.m_NumRecursions < MAX_RAY_RECURSION;
-				glm::vec3 ReflOrigin = intersectPos + Norm * LARGE_EPSILON; //Offset a small amount to avoid self-intersection
-				if (bGetReflectionFromEnvironmentMap)
+				glm::vec3 Colors[RAYS_PER_INTERSECT_BATCH];
+				float BRDFValues[RAYS_PER_INTERSECT_BATCH];
+				glm::vec3 ReflectionVectors[RAYS_PER_INTERSECT_BATCH];
+				glm::vec3 ReflectionOrigins[RAYS_PER_INTERSECT_BATCH];
+				const UINT NumBatches = (RAYS_PER_INTERSECT_BATCH - 1) / RAY_EMISSION_COUNT + 1;
+
+				std::fill(ReflectionOrigins, ReflectionOrigins + RAYS_PER_INTERSECT_BATCH, ReflOrigin);
+						
+				const UINT ThetaSlices = (UINT)sqrt(RAY_EMISSION_COUNT);
+				const UINT PhiSlices = ThetaSlices;
+				UINT NumRaysBatched = 0;
+				for (UINT ThetaIndex = 0; ThetaIndex < ThetaSlices; ThetaIndex++)
+				{
+					for (UINT PhiIndex = 0; PhiIndex < PhiSlices; PhiIndex++)
+					{
+						float Theta = M_PI * ThetaIndex / (float)ThetaSlices;
+						float Phi = M_PI * PhiIndex / (float)PhiSlices;
+						ReflectionVectors[NumRaysBatched] = glm::vec3(
+							sin(Theta) * cos(Phi),
+							sin(Theta) * sin(Phi),
+							cos(Theta));
+
+						// Make sure the reflection vector is tested
+						if (ThetaIndex == 0 && PhiIndex == 0)
+						{
+							ReflectionVectors[NumRaysBatched] = ReflectionVector;
+						}
+
+						const float BRDFValue = CookTorrance().BRDF(ViewVector, Norm, ReflectionVectors[NumRaysBatched], Roughness, reflectivity, fresnel);
+						if (RecursionInfo.m_TotalContribution * BRDFValue > MEDIUM_EPSILON)
+						{
+							BRDFValues[NumRaysBatched] = BRDFValue;
+							NumRaysBatched++;
+							if (NumRaysBatched == RAYS_PER_INTERSECT_BATCH)
+							{
+								Trace(pScene, ReflectionOrigins, ReflectionVectors, Colors, 1, ShadePixelRecursionInfo(RecursionInfo.m_NumRecursions + 1, RecursionInfo.m_TotalContribution * BRDFValue));
+								for (UINT ColorIndex = 0; ColorIndex < RAYS_PER_INTERSECT_BATCH; ColorIndex++)
+								{
+									ReflectionColor += Colors[ColorIndex] * BRDFValues[ColorIndex];
+								}
+								NumRaysBatched = 0;
+							}
+						}
+					}
+				}
+			}
+			else
+			{
+				float BRDFValue = CookTorrance().BRDF(ViewVector, Norm, ReflectionVector, Roughness, reflectivity, fresnel);
+				if (RecursionInfo.m_TotalContribution * BRDFValue > MEDIUM_EPSILON)
 				{
 					Trace(pScene, &ReflOrigin, &ReflectionVector, &ReflectionColor, 1, ShadePixelRecursionInfo(RecursionInfo.m_NumRecursions + 1, RecursionInfo.m_TotalContribution * BRDFValue));
 				}
-				else
-				{
-					ReflectionColor = pScene->GetEnvironmentMap()->GetColor(ReflectionVector);
-				}
+				ReflectionColor *= BRDFValue;
 			}
-			TotalSpecular += ReflectionColor * BRDFValue;
-			TotalFresnel += fresnel;
-		} 
+		}
+		else
+		{
+			ReflectionColor = pScene->GetEnvironmentMap()->GetColor(ReflectionVector);
+		}
+		TotalSpecular += ReflectionColor;
+		TotalFresnel += fresnel;
 
 		TotalSpecular /= 2.0f;
 		TotalFresnel /= 2.0f;
@@ -604,6 +653,18 @@ void RTRenderer::DrawScene(Camera *pCamera, Scene *pScene)
 {
 	RTScene *pRTScene = RT_RENDERER_CAST<RTScene*>(pScene);
 	RTCamera *pRTCamera = RT_RENDERER_CAST<RTCamera*>(pCamera);
+
+#if RT_AVOID_RENDERING_REDUNDANT_FRAMES
+	// TODO: Also need to ensure the canvas hasn't changed
+	// If both the camera and scene haven't changed, don't re-render the scene
+	if (pRTScene->GetVersionID() == m_LastSceneID && pRTCamera->GetVersionID() == m_LastCameraVersionID)
+	{
+		return;
+	}
+#endif
+
+	m_LastSceneID = pRTScene->GetVersionID();
+	m_LastCameraVersionID = pRTCamera->GetVersionID();
 
 	pRTScene->PreDraw();
 
@@ -748,7 +809,6 @@ void RTScene::PreDraw()
 void RTScene::AddGeometry(_In_ Geometry *pGeometry)
 {
 	RTGeometry *pRTGeometry = RT_RENDERER_CAST<RTGeometry*>(pGeometry);
-
 	UINT triangleMesh = rtcNewTriangleMesh(m_scene, cGeometryFlag, pRTGeometry->GetNumTriangles(), pRTGeometry->GetNumVertices());
 
 	RTCVertex*pVertexBuffer = (RTCVertex*)rtcMapBuffer(m_scene, triangleMesh, RTC_VERTEX_BUFFER);
@@ -760,12 +820,19 @@ void RTScene::AddGeometry(_In_ Geometry *pGeometry)
 	rtcUnmapBuffer(m_scene, triangleMesh, RTC_INDEX_BUFFER);
 	
 	m_meshIDToRTGeometry[triangleMesh] = pRTGeometry;
+
+	pRTGeometry->RegisterObserver(this);
+	pRTGeometry->GetRTMaterial()->RegisterObserver(this);
+	NotifyChanged();
 }
 
 void RTScene::AddLight(_In_ Light *pLight)
 {
 	RTLight *pRTLight = static_cast<RTLight*>(pLight);
 	m_LightList.push_back(pRTLight);
+
+	pRTLight->RegisterObserver(this);
+	NotifyChanged();
 }
 
 glm::vec3 RTGeometry::GetColor(unsigned int primID, float alpha, float beta)
@@ -888,6 +955,8 @@ void RTCamera::Translate(_In_ const Vec3 &translationVector)
 
 	m_FocalPoint += delta;
 	m_LookAt += delta;
+
+	NotifyChanged();
 }
 
 void RTCamera::Rotate(float row, float yaw, float pitch)
@@ -910,6 +979,7 @@ void RTCamera::Rotate(float row, float yaw, float pitch)
 	}
 
 	m_LookAt = m_FocalPoint + glm::vec3(lookDir) * glm::length(m_LookAt - m_FocalPoint);
+	NotifyChanged();
 }
 
 float CookTorrance::BRDF(_In_ const glm::vec3 &ViewVector, _In_ const glm::vec3 &Normal, _In_ const glm::vec3 &IncomingRadianceVector, _In_ float Roughness, _In_ float BaseReflectivity, _Out_ float &FresnelFactor)
