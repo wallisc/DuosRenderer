@@ -149,6 +149,8 @@ glm::vec3 RTTextureCube::Sample(glm::vec3 dir)
 		uv = glm::vec2((dir.x / dir.z + 1.0f) * 0.5,
 			(dir.y / dir.z + 1.0f) * 0.5);
 		break;
+	default:
+		assert(false);
 	}
 	assert(uv.x >= -EPSILON && uv.x <= 1.0f + EPSILON);
 	assert(uv.y >= -EPSILON && uv.y <= 1.0f + EPSILON);
@@ -474,9 +476,7 @@ void RTRenderer::Trace(_In_ RTScene *pScene, _In_reads_(NumRays) const glm::vec3
 	for (UINT RayBatchIndex = 0; RayBatchIndex < NumBatches; RayBatchIndex++)
 	{
 		const UINT BatchSize = (RayBatchIndex < NumBatches - 1 || NumRays % RAYS_PER_INTERSECT_BATCH == 0) ? RAYS_PER_INTERSECT_BATCH : NumRays % RAYS_PER_INTERSECT_BATCH;
-		
-		// Intersections only support these batch sizes
-		assert(BatchSize ==  1 || BatchSize == 2 || BatchSize == 4 || BatchSize == 8 || BatchSize == 16); 
+		assert(IsIntersectCountEmbreeCompatible(BatchSize)); 
 
 		RayBatch RayBatch(pScene->GetRTCScene(), &pRayOrigins[RayBatchIndex * RAYS_PER_INTERSECT_BATCH], &pRayDirs[RayBatchIndex * RAYS_PER_INTERSECT_BATCH], BatchSize);
 		for (UINT RayIndex = 0; RayIndex < BatchSize; RayIndex++)
@@ -491,6 +491,31 @@ void RTRenderer::Trace(_In_ RTScene *pScene, _In_reads_(NumRays) const glm::vec3
 		}
 	}
 }
+
+float FltRand()
+{
+	return rand() / (float)RAND_MAX;
+}
+
+glm::vec3 cosineWeightedSample(glm::vec3 normal, float rand1, float rand2) {
+   float theta = acos(sqrt(rand2)); 
+   float phi = M_PI * 2.0f * rand1; 
+
+   float xs = sin(theta) * cos(phi), ys = cos(theta), zs = sin(theta) * sin(phi);  
+
+   glm::vec3 y(normal); 
+   glm::vec3 h(normal); 
+   if (abs(h.x) <= abs(h.y) && abs(h.x) <= abs(h.z)) h.x = 1.0f; 
+   else if (abs(h.y) <= abs(h.x) && abs(h.y) <= abs(h.z)) h.y = 1.0f; 
+   else h.z = 1.0f; 
+
+   glm::vec3 x = glm::normalize(glm::cross(h, y));
+   glm::vec3 z = glm::normalize(glm::cross(x, y));
+   glm::vec3 dir = xs * x + ys * y + zs * z; 
+    
+   return glm::normalize(dir); 
+} 
+
 
 glm::vec3 RTRenderer::ShadePixel(RTScene *pScene, unsigned int primID, RTGeometry *pGeometry, glm::vec3 baryocentricCoord, glm::vec3 ViewVector, ShadePixelRecursionInfo &RecursionInfo)
 {
@@ -539,14 +564,13 @@ glm::vec3 RTRenderer::ShadePixel(RTScene *pScene, unsigned int primID, RTGeometr
 			}
 		}
 
-		float fresnel;
 		glm::vec3 ReflectionColor = glm::vec3(0.0f);
 		bool bGetReflectionFromEnvironmentMap = RecursionInfo.m_NumRecursions < MAX_RAY_RECURSION;
 		glm::vec3 ReflOrigin = intersectPos + Norm * LARGE_EPSILON; //Offset a small amount to avoid self-intersection
 		glm::vec3 ReflectionVector = glm::reflect(-ViewVector, Norm);
 		if (bGetReflectionFromEnvironmentMap)
 		{
-			if (m_bEnableMultiRayEmission)
+			if (m_bEnableMultiRayEmission && RecursionInfo.m_NumRecursions < 2)
 			{
 				glm::vec3 Colors[RAYS_PER_INTERSECT_BATCH];
 				float BRDFValues[RAYS_PER_INTERSECT_BATCH];
@@ -556,65 +580,59 @@ glm::vec3 RTRenderer::ShadePixel(RTScene *pScene, unsigned int primID, RTGeometr
 
 				std::fill(ReflectionOrigins, ReflectionOrigins + RAYS_PER_INTERSECT_BATCH, ReflOrigin);
 						
-				const UINT ThetaSlices = (UINT)sqrt(RAY_EMISSION_COUNT);
-				const UINT PhiSlices = ThetaSlices;
 				UINT NumRaysBatched = 0;
-				for (UINT ThetaIndex = 0; ThetaIndex < ThetaSlices; ThetaIndex++)
+				UINT NumSamplesTaken = 0;
+				for (UINT RayIndex = 0; RayIndex < RAY_EMISSION_COUNT; RayIndex++)
 				{
-					for (UINT PhiIndex = 0; PhiIndex < PhiSlices; PhiIndex++)
+					// Make sure the reflection vector is tested
+					ReflectionVectors[NumRaysBatched] = (RayIndex == 0) ? ReflectionVector : cosineWeightedSample(Norm, FltRand(), FltRand());
+					float fresnel;
+					const float BRDFValue = CookTorrance().BRDF(ViewVector, Norm, ReflectionVectors[NumRaysBatched], Roughness, reflectivity, fresnel);
+					if (RecursionInfo.m_TotalContribution * BRDFValue > MEDIUM_EPSILON)
 					{
-						float Theta = M_PI * ThetaIndex / (float)ThetaSlices;
-						float Phi = M_PI * PhiIndex / (float)PhiSlices;
-						ReflectionVectors[NumRaysBatched] = glm::vec3(
-							sin(Theta) * cos(Phi),
-							sin(Theta) * sin(Phi),
-							cos(Theta));
-
-						// Make sure the reflection vector is tested
-						if (ThetaIndex == 0 && PhiIndex == 0)
+						BRDFValues[NumRaysBatched] = BRDFValue;
+						NumRaysBatched++;
+						if (NumRaysBatched == RAYS_PER_INTERSECT_BATCH || RayIndex == RAY_EMISSION_COUNT - 1)
 						{
-							ReflectionVectors[NumRaysBatched] = ReflectionVector;
-						}
-
-						const float BRDFValue = CookTorrance().BRDF(ViewVector, Norm, ReflectionVectors[NumRaysBatched], Roughness, reflectivity, fresnel);
-						if (RecursionInfo.m_TotalContribution * BRDFValue > MEDIUM_EPSILON)
-						{
-							BRDFValues[NumRaysBatched] = BRDFValue;
-							NumRaysBatched++;
-							if (NumRaysBatched == RAYS_PER_INTERSECT_BATCH)
+							NumRaysBatched = TruncateToCompatibleEmbreeCompatible(NumRaysBatched);
+							Trace(pScene, ReflectionOrigins, ReflectionVectors, Colors, NumRaysBatched, ShadePixelRecursionInfo(RecursionInfo.m_NumRecursions + 1, RecursionInfo.m_TotalContribution * BRDFValue));
+							for (UINT ColorIndex = 0; ColorIndex < NumRaysBatched; ColorIndex++)
 							{
-								Trace(pScene, ReflectionOrigins, ReflectionVectors, Colors, 1, ShadePixelRecursionInfo(RecursionInfo.m_NumRecursions + 1, RecursionInfo.m_TotalContribution * BRDFValue));
-								for (UINT ColorIndex = 0; ColorIndex < RAYS_PER_INTERSECT_BATCH; ColorIndex++)
-								{
-									ReflectionColor += Colors[ColorIndex] * BRDFValues[ColorIndex];
-								}
-								NumRaysBatched = 0;
+								ReflectionColor += Colors[ColorIndex] * BRDFValues[ColorIndex];
 							}
+							NumRaysBatched = 0;
 						}
+						TotalFresnel += fresnel;
+						NumSamplesTaken++;
 					}
 				}
+
+				TotalFresnel /= NumSamplesTaken + 1;
+				ReflectionColor /= NumSamplesTaken + 1;
 			}
 			else
 			{
+				float fresnel;
 				float BRDFValue = CookTorrance().BRDF(ViewVector, Norm, ReflectionVector, Roughness, reflectivity, fresnel);
 				if (RecursionInfo.m_TotalContribution * BRDFValue > MEDIUM_EPSILON)
 				{
 					Trace(pScene, &ReflOrigin, &ReflectionVector, &ReflectionColor, 1, ShadePixelRecursionInfo(RecursionInfo.m_NumRecursions + 1, RecursionInfo.m_TotalContribution * BRDFValue));
 				}
 				ReflectionColor *= BRDFValue;
+				TotalFresnel += fresnel;
+				TotalFresnel /= 2.0f;
 			}
 		}
 		else
 		{
 			ReflectionColor = pScene->GetEnvironmentMap()->GetColor(ReflectionVector);
 		}
+		
 		TotalSpecular += ReflectionColor;
-		TotalFresnel += fresnel;
 
-		TotalSpecular /= 2.0f;
-		TotalFresnel /= 2.0f;
 
 		return glm::clamp(TotalDiffuse * (1.0f - TotalFresnel) + TotalSpecular, glm::vec3(0.0f), glm::vec3(1.0f));
+		//return glm::clamp(TotalFresnel * TotalSpecular, glm::vec3(0.0f), glm::vec3(1.0f));
 	}
 	else
 	{

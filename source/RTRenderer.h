@@ -17,10 +17,10 @@
 #include <math.h>
  
 #define EPSILON 0.0001f
-#define MEDIUM_EPSILON 0.05f
+#define MEDIUM_EPSILON 0.01f
 #define LARGE_EPSILON 0.1f
 #define MAX_RAY_RECURSION 3
-#define RAY_EMISSION_COUNT 64
+#define RAY_EMISSION_COUNT 128
 #define RAYS_PER_INTERSECT_BATCH 4
 #define RT_MULTITHREAD 1
 #define RT_AVOID_RENDERING_REDUNDANT_FRAMES 1
@@ -314,7 +314,7 @@ public:
 	std::vector<RTLight *> &GetLightList() { return m_LightList; }
 
 	RTCScene GetRTCScene() { return m_scene; }
-	RTGeometry *GetRTGeometry(unsigned int meshID) { return m_meshIDToRTGeometry[meshID]; }
+	RTGeometry *GetRTGeometry(unsigned int meshID) { return meshID != RTC_INVALID_GEOMETRY_ID ? m_meshIDToRTGeometry[meshID] : nullptr; }
 	RTEnvironmentMap *GetEnvironmentMap() { return m_pEnvironmentMap; }
 	void Notify() { NotifyChanged(); }
 
@@ -527,6 +527,28 @@ private:
 	const DistributionFunction D = Distribution_GGX;
 	const GeometryAttenuationFunction G = GeometricAttenuation_Schlick;
 };
+
+
+const UINT g_EmbreeCompatibleIntersectCountInDescendingOrder[] = { 8, 4, 2, 1 };
+inline bool IsIntersectCountEmbreeCompatible(UINT num)
+{
+	for (UINT count : g_EmbreeCompatibleIntersectCountInDescendingOrder)
+	{
+		if (count == num) return true;
+	}
+	return false;
+}
+
+inline UINT TruncateToCompatibleEmbreeCompatible(UINT num)
+{
+	assert(num != 0);
+	for (UINT count : g_EmbreeCompatibleIntersectCountInDescendingOrder)
+	{
+		if (num >= count) return count;
+	}
+}
+
+
 
 
 #define RT_RENDERER_CAST reinterpret_cast
