@@ -25,8 +25,8 @@
 using namespace DirectX;
 using namespace Assimp;
 
-#define WIDTH 400
-#define HEIGHT 300
+#define WIDTH 800
+#define HEIGHT 600
 
 enum
 {
@@ -479,8 +479,14 @@ void CALLBACK OnGUIEvent(UINT nEvent, int nControlID, CDXUTControl* pControl, vo
 	switch (nControlID)
 	{
 	case CMD_CHANGE_RENDERER:
+	{
 		g_ActiveRenderer = (RENDERER_TYPE)((g_ActiveRenderer + 1) % NUM_RENDERER_TYPES);
+
+		// TODO: Hack to force the raytracer to re-render
+		auto pMaterial = g_MaterialList[RAYTRACER][0];
+		pMaterial->SetRoughness(pMaterial->GetRoughness());
 		break;
+	}
 	case CMD_CAMERA_MODE:
 		g_CameraModeEnabled = !g_CameraModeEnabled;
 		break;

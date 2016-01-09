@@ -518,6 +518,9 @@
     <ClInclude Include="embree\inc\rtcore_scene.h">
       <Filter>Embree</Filter>
     </ClInclude>
+    <ClInclude Include="PostProcess.h">
+      <Filter>Shaders</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="Geometry_PS.hlsl">
@@ -530,6 +533,12 @@
       <Filter>Shaders</Filter>
     </FxCompile>
     <FxCompile Include="EnvironmentShader.fx">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="GammaCorrect_PS.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="PostProcess_VS.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
   </ItemGroup>

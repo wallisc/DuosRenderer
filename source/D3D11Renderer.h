@@ -4,6 +4,7 @@
 #include <directxmath.h>
 #include "D3D11Canvas.h"
 #include <unordered_map>
+#include <memory>
 
 struct CBCamera
 {
@@ -305,6 +306,19 @@ protected:
 	}
 };
 
+class ReadWriteTexture
+{
+public:
+	ReadWriteTexture(ID3D11Device *pDevice, UINT Width, UINT Height, DXGI_FORMAT Format);
+
+	ID3D11ShaderResourceView *GetShaderResourceView() { return m_pShaderResourceView; }
+	ID3D11RenderTargetView *GetRenderTargetView() { return m_pRenderTargetView; }
+private:
+	ID3D11ShaderResourceView *m_pShaderResourceView;
+	ID3D11RenderTargetView *m_pRenderTargetView;
+	ID3D11Texture2D *m_pResource;
+};
+
 class D3D11Renderer : public Renderer
 {
 public:
@@ -341,7 +355,7 @@ private:
 	void SetDefaultState();
 	void CompileShaders();
 	void InitializeSwapchain(HWND WindowHandle, unsigned int width, unsigned int height);
-
+	void PostProcess(ReadWriteTexture *pInput, ID3D11RenderTargetView *pOutput);
 
 	ID3D11Device *m_pDevice;
 	ID3D11Device1 *m_pDevice1;
@@ -349,6 +363,7 @@ private:
 
 	D3D11Canvas *m_pCanvas;
 
+	std::unique_ptr<ReadWriteTexture> m_pBasePassTexture;
 	ID3D11RenderTargetView* m_pSwapchainRenderTargetView;
 	ID3D11DepthStencilView* m_pDepthBuffer;
 
@@ -361,6 +376,9 @@ private:
 	ID3D11InputLayout* m_pForwardInputLayout;
 
 	ID3D11SamplerState *m_pSamplerState;
+
+	ID3D11PixelShader* m_pGammaCorrectPS;
+	ID3D11VertexShader *m_pPostProcessVS;
 };
 
 #define D3D11_RENDERER_CAST reinterpret_cast

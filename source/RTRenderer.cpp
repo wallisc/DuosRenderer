@@ -406,6 +406,11 @@ glm::vec3 RayBatch::GetBaryocentricCoordinate(unsigned int RayIndex)
 	return glm::vec3(u, v, 1.0 - u - v);
 }
 
+void GammaCorrect(glm::vec3 &Color)
+{
+	const float gammaCurve = 1.0 / 2.2;
+	Color = glm::pow(Color, glm::vec3(gammaCurve, gammaCurve, gammaCurve));
+}
 
 void RTRenderer::RenderPixelRange(PixelRange *pRange, RTCamera *pCamera, RTScene *pScene)
 {
@@ -461,7 +466,7 @@ void RTRenderer::RenderPixelRange(PixelRange *pRange, RTCamera *pCamera, RTScene
 				{
 					UINT x = topLeftX + xOffset;
 					UINT y = topLeftY + yOffset;
-
+					GammaCorrect(Colors[rayIndex]);
 					m_pCanvas->WritePixel(x, y, GlmVec3ToRealArray(Colors[rayIndex]));
 					rayIndex++;
 				}
@@ -585,7 +590,7 @@ glm::vec3 RTRenderer::ShadePixel(RTScene *pScene, unsigned int primID, RTGeometr
 				for (UINT RayIndex = 0; RayIndex < RAY_EMISSION_COUNT; RayIndex++)
 				{
 					// Make sure the reflection vector is tested
-					ReflectionVectors[NumRaysBatched] = (RayIndex == 0) ? ReflectionVector : cosineWeightedSample(Norm, FltRand(), FltRand());
+					ReflectionVectors[NumRaysBatched] = (RayIndex == 0) ? ReflectionVector : cosineWeightedSample(ReflectionVector, FltRand(), FltRand());
 					float fresnel;
 					const float BRDFValue = CookTorrance().BRDF(ViewVector, Norm, ReflectionVectors[NumRaysBatched], Roughness, reflectivity, fresnel);
 					if (RecursionInfo.m_TotalContribution * BRDFValue > MEDIUM_EPSILON)

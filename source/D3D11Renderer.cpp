@@ -69,7 +69,7 @@ HRESULT CompileShaderHelper(WCHAR* szFileName, LPCSTR szEntryPoint, LPCSTR szSha
 #endif
 
 	ID3DBlob* pErrorBlob = nullptr;
-	hr = D3DCompileFromFile(szFileName, pDefines, nullptr, szEntryPoint, szShaderModel,
+	hr = D3DCompileFromFile(szFileName, pDefines, D3D_COMPILE_STANDARD_FILE_INCLUDE, szEntryPoint, szShaderModel,
 		dwShaderFlags, 0, ppBlobOut, &pErrorBlob);
 	if (FAILED(hr))
 	{
@@ -85,6 +85,32 @@ HRESULT CompileShaderHelper(WCHAR* szFileName, LPCSTR szEntryPoint, LPCSTR szSha
 	return S_OK;
 }
 
+ReadWriteTexture::ReadWriteTexture(ID3D11Device *pDevice, UINT Width, UINT Height, DXGI_FORMAT Format)
+{
+	D3D11_TEXTURE2D_DESC ResourceDesc;
+	ZeroMemory(&ResourceDesc, sizeof(ResourceDesc));
+	ResourceDesc.Width = Width;
+	ResourceDesc.Height = Height;
+	ResourceDesc.MipLevels = 1;
+	ResourceDesc.ArraySize = 1;
+	ResourceDesc.Format = Format;
+	ResourceDesc.SampleDesc.Count = 1;
+	ResourceDesc.SampleDesc.Quality = 0;
+	ResourceDesc.Usage = D3D11_USAGE_DEFAULT;
+	ResourceDesc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+	ResourceDesc.CPUAccessFlags = 0;
+	ResourceDesc.MiscFlags = 0;
+	HRESULT hr = pDevice->CreateTexture2D(&ResourceDesc, nullptr, &m_pResource);
+	FAIL_CHK(FAILED(hr), "Failed creating a ReadWriteTexture");
+
+	hr = pDevice->CreateRenderTargetView(m_pResource, nullptr, &m_pRenderTargetView);
+	FAIL_CHK(FAILED(hr), "Failed to create RTV for ReadWriteTexture");
+
+	hr = pDevice->CreateShaderResourceView(m_pResource, nullptr, &m_pShaderResourceView);
+	FAIL_CHK(FAILED(hr), "Failed to create SRV for ReadWriteTexture");
+}
+
+
 D3D11Renderer::D3D11Renderer(HWND WindowHandle, unsigned int width, unsigned int height)
 {
 	UINT CeateDeviceFlags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
@@ -98,6 +124,8 @@ D3D11Renderer::D3D11Renderer(HWND WindowHandle, unsigned int width, unsigned int
 
 	hr = m_pDevice->QueryInterface(__uuidof(ID3D11Device1), (void**)&m_pDevice1);
 	FAIL_CHK(FAILED(hr), "Failed query for ID3D11Device1");
+
+	m_pBasePassTexture = std::unique_ptr<ReadWriteTexture>(new ReadWriteTexture(m_pDevice, width, height, DXGI_FORMAT_R8G8B8A8_UNORM));
 
 	InitializeSwapchain(WindowHandle, width, height);
 
@@ -142,6 +170,13 @@ void D3D11Renderer::CompileShaders()
 		hr = m_pDevice->CreateInputLayout(layout, numElements, pVSBlob->GetBufferPointer(),
 			pVSBlob->GetBufferSize(), &m_pForwardInputLayout);
 
+		pVSBlob = nullptr;
+		hr = CompileShaderHelper(L"PostProcess_VS.hlsl", "VS", "vs_5_0", nullptr, &pVSBlob);
+		FAIL_CHK(FAILED(hr), "The FX file cannot be compiled.  Please run this executable from the directory that contains the FX file.");
+
+		hr = m_pDevice->CreateVertexShader(pVSBlob->GetBufferPointer(), pVSBlob->GetBufferSize(), nullptr, &m_pPostProcessVS);
+		FAIL_CHK(FAILED(hr), "Failed to CreateVertexShader");
+
 		D3D_SHADER_MACRO macros[2] = {};
 		macros[0].Name = "USE_TEXTURE";
 		macros[0].Definition = "1";
@@ -161,6 +196,13 @@ void D3D11Renderer::CompileShaders()
 		FAIL_CHK(FAILED(hr), "The FX file cannot be compiled.  Please run this executable from the directory that contains the FX file.");
 
 		hr = m_pDevice->CreatePixelShader(pPSBlob->GetBufferPointer(), pPSBlob->GetBufferSize(), nullptr, &m_pForwardMattePixelShader);
+		FAIL_CHK(FAILED(hr), "Failed to CreatePixelShader");
+
+		pPSBlob = nullptr;
+		hr = CompileShaderHelper(L"GammaCorrect_PS.hlsl", "PS", "ps_5_0", nullptr, &pPSBlob);
+		FAIL_CHK(FAILED(hr), "The FX file cannot be compiled.  Please run this executable from the directory that contains the FX file.");
+
+		hr = m_pDevice->CreatePixelShader(pPSBlob->GetBufferPointer(), pPSBlob->GetBufferSize(), nullptr, &m_pGammaCorrectPS);
 		FAIL_CHK(FAILED(hr), "Failed to CreatePixelShader");
 	}
 }
@@ -573,6 +615,7 @@ class D3D11Pass
 {
 public:
 	virtual void SetBindings(ID3D11DeviceContext *pContext) = 0;
+	virtual void UndoBindings(ID3D11DeviceContext *pContext) = 0;
 };
 
 class D3D11ShadowPass : public D3D11Pass
@@ -585,6 +628,11 @@ public:
 	{
 		pContext->VSSetConstantBuffers(1, 1, &m_pViewProjBuffer);
 		pContext->OMSetRenderTargets(0, nullptr, m_pDepthBuffer);
+	}
+
+	virtual void UndoBindings(ID3D11DeviceContext *pContext)
+	{
+		pContext->OMSetRenderTargets(0, nullptr, nullptr);
 	}
 
 private:
@@ -622,6 +670,15 @@ public:
 		pContext->PSSetShaderResources(3, 1, &m_pIrradianceMap);
 	}
 
+	virtual void UndoBindings(ID3D11DeviceContext *pContext)
+	{
+		ID3D11ShaderResourceView *pNullSRV = nullptr;
+		pContext->OMSetRenderTargets(0, nullptr, nullptr);
+		pContext->PSSetShaderResources(1, 1, &pNullSRV);
+		pContext->PSSetShaderResources(2, 1, &pNullSRV);
+		pContext->PSSetShaderResources(3, 1, &pNullSRV);
+	}
+
 private:
 	ID3D11Buffer *m_pViewProjBuffer;
 	ID3D11Buffer *m_pLightViewProjBuffer;
@@ -642,7 +699,7 @@ void D3D11Renderer::DrawScene(Camera *pCamera, Scene *pScene)
 		pLight->UpdateLight(m_pImmediateContext, pD3D11Camera->GetInvTransViewMatrix());
 	}
 
-	pD3D11Scene->GetEnvironmentMap()->DrawEnvironmentMap(m_pImmediateContext, pD3D11Camera, m_pSwapchainRenderTargetView);
+	pD3D11Scene->GetEnvironmentMap()->DrawEnvironmentMap(m_pImmediateContext, pD3D11Camera, m_pBasePassTexture->GetRenderTargetView());
 	m_pImmediateContext->ClearDepthStencilView(m_pDepthBuffer, D3D11_CLEAR_DEPTH, 1.0f, 0);
 	m_pImmediateContext->ClearDepthStencilView(m_pShadowDepthBuffer, D3D11_CLEAR_DEPTH, 1.0f, 0);
 
@@ -671,7 +728,7 @@ void D3D11Renderer::DrawScene(Camera *pCamera, Scene *pScene)
 		m_pShadowResourceView, 
 		pD3D11Scene->GetEnvironmentMap()->GetEnvironmentMapSRV(),
 		pD3D11Scene->GetEnvironmentMap()->GetIrradianceMapSRV(),
-		m_pSwapchainRenderTargetView, m_pDepthBuffer);
+		m_pBasePassTexture->GetRenderTargetView(), m_pDepthBuffer);
 	Passes.push_back(&BasePass);
 	for (D3D11Pass *pPass : Passes)
 	{
@@ -707,12 +764,76 @@ void D3D11Renderer::DrawScene(Camera *pCamera, Scene *pScene)
 				m_pImmediateContext->Draw(pGeometry->GetVertexCount(), 0);
 			}
 		}
+		pPass->UndoBindings(m_pImmediateContext);
 	}
 	
 
 	ID3D11ShaderResourceView *NullViews[4] = {};
 	m_pImmediateContext->PSSetShaderResources(0, ARRAYSIZE(NullViews), NullViews);
+
+	PostProcess(m_pBasePassTexture.get(), m_pSwapchainRenderTargetView);
 	m_pImmediateContext->Flush();
+}
+
+class PostProcessPass : public D3D11Pass
+{
+public:
+	PostProcessPass(ID3D11PixelShader *pPixelShader, ID3D11VertexShader *pVertexShader,
+		UINT NumInputs, _In_reads_(NumInputs) ID3D11ShaderResourceView **pInputViews,
+		UINT NumOutputs, _In_reads_(NumOutputs) ID3D11RenderTargetView **pOutputViews) :
+		m_pPixelShader(pPixelShader), m_pVertexShader(pVertexShader)
+	{
+		for (UINT i = 0; i < NumInputs; i++)
+		{
+			m_pInputs.push_back(pInputViews[i]);
+		}
+
+		for (UINT i = 0; i < NumOutputs; i++)
+		{
+			m_pOutputs.push_back(pOutputViews[i]);
+		}
+	}
+
+	void SetBindings(ID3D11DeviceContext *pContext)
+	{
+		pContext->PSSetShader(m_pPixelShader, nullptr, 0);
+		pContext->VSSetShader(m_pVertexShader, nullptr, 0);
+
+		pContext->PSSetShaderResources(0, m_pInputs.size(), &m_pInputs[0]);
+		pContext->OMSetRenderTargets(m_pOutputs.size(), &m_pOutputs[0], nullptr);
+	}
+
+	void UndoBindings(ID3D11DeviceContext *pContext)
+	{
+		static ID3D11ShaderResourceView *pNullSRVs[128] = {};
+		pContext->PSSetShaderResources(0, m_pInputs.size(), pNullSRVs);
+		pContext->OMSetRenderTargets(0, nullptr, nullptr);
+	}
+
+private:
+	ID3D11PixelShader *m_pPixelShader;
+	ID3D11VertexShader *m_pVertexShader;
+	std::vector<ID3D11ShaderResourceView*> m_pInputs;
+	std::vector<ID3D11RenderTargetView*> m_pOutputs;
+};
+
+void D3D11Renderer::PostProcess(ReadWriteTexture *pInput, ID3D11RenderTargetView *pOutput)
+{
+	std::vector<D3D11Pass *> PostProcessPasses;
+
+	ID3D11ShaderResourceView *pSRVs = pInput->GetShaderResourceView();
+	PostProcessPass GammaCorrectionPass(m_pGammaCorrectPS, m_pPostProcessVS, 1, &pSRVs, 1, &pOutput);
+	PostProcessPasses.push_back(&GammaCorrectionPass);
+
+	m_pImmediateContext->IASetVertexBuffers(0, 0, nullptr, nullptr, nullptr);
+	m_pImmediateContext->IASetInputLayout(nullptr);
+	for (auto pPass : PostProcessPasses)
+	{
+		pPass->SetBindings(m_pImmediateContext);
+		m_pImmediateContext->Draw(3, 0);
+		pPass->UndoBindings(m_pImmediateContext);
+	}
+
 }
 
 D3D11Transformable::D3D11Transformable(_In_ ID3D11Device *pDevice, ID3D11DeviceContext *pImmediateContext) :

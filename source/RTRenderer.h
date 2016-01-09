@@ -471,7 +471,7 @@ private:
 	std::vector<RayTraceThreadArgs> m_ThreadArgs;
 	HANDLE m_TracingFinishedEvent;
 
-	const bool m_bEnableMultiRayEmission = false;
+	const bool m_bEnableMultiRayEmission = true;
 	VersionedObject::VersionID m_LastCameraVersionID;
 	VersionedObject::VersionID m_LastSceneID;
 };
