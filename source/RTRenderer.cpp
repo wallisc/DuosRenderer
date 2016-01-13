@@ -346,6 +346,11 @@ m_NumRays(NumRays)
 		InitRayStruct(Ray4, RayOrigins, RayDirections, NumRays);
 		rtcIntersect4(&ValidMask, Scene, Ray4);
 	}
+	else if (NumRays <= 8)
+	{
+		InitRayStruct(Ray8, RayOrigins, RayDirections, NumRays);
+		rtcIntersect8(&ValidMask, Scene, Ray8);
+	}
 	else
 	{
 		InitRayStruct(Ray16, RayOrigins, RayDirections, NumRays);
@@ -364,6 +369,10 @@ unsigned int RayBatch::GetGeometryID(unsigned int RayIndex)
 	{
 		return GetGeometryIDInternal(Ray4, RayIndex);
 	}
+	else if (m_NumRays <= 8)
+	{
+		return GetGeometryIDInternal(Ray8, RayIndex);
+	}
 	else
 	{
 		return GetGeometryIDInternal(Ray16, RayIndex);
@@ -380,6 +389,10 @@ unsigned int RayBatch::GetPrimID(unsigned int RayIndex)
 	else if (m_NumRays <= 4)
 	{
 		return GetPrimIDInternal(Ray4, RayIndex);
+	}
+	else if (m_NumRays <= 8)
+	{
+		return GetPrimIDInternal(Ray8, RayIndex);
 	}
 	else
 	{
@@ -399,6 +412,10 @@ glm::vec3 RayBatch::GetBaryocentricCoordinate(unsigned int RayIndex)
 	else if (m_NumRays <= 4)
 	{
 		GetBaryocentricCoordinateInternal(Ray4, RayIndex, u, v);
+	}
+	else if (m_NumRays <= 8)
+	{
+		GetBaryocentricCoordinateInternal(Ray8, RayIndex, u, v);
 	}
 	else
 	{
@@ -819,7 +836,7 @@ RTScene::RTScene(RTCDevice device, RTEnvironmentMap *pEnvironmentMap) :
 	m_bSceneCommitted(false),
 	m_pEnvironmentMap(pEnvironmentMap)
 {
-	m_scene = rtcDeviceNewScene(device, cSceneFlags, RTC_INTERSECT1 | RTC_INTERSECT4 | RTC_INTERSECT16);
+	m_scene = rtcDeviceNewScene(device, cSceneFlags, RTC_INTERSECT1 | RTC_INTERSECT4 | RTC_INTERSECT8 | RTC_INTERSECT16);
 }
 
 RTScene::~RTScene()

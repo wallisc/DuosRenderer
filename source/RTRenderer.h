@@ -21,7 +21,7 @@
 #define LARGE_EPSILON 0.1f
 #define MAX_RAY_RECURSION 3
 #define RAY_EMISSION_COUNT 128
-#define RAYS_PER_INTERSECT_BATCH 4
+#define RAYS_PER_INTERSECT_BATCH 16
 #define RT_MULTITHREAD 1
 #define RT_AVOID_RENDERING_REDUNDANT_FRAMES 1
 
@@ -415,6 +415,7 @@ private:
 	{
 		RTCRay Ray;
 		__declspec(align(16)) RTCRay4 Ray4;
+		__declspec(align(16)) RTCRay8 Ray8;
 		__declspec(align(64)) RTCRay16 Ray16;
 	};
 };
