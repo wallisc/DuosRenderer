@@ -36,6 +36,7 @@ enum
 	ROUGHNESS_SLIDER,
 	REFLECTIVITY_TEXT,
 	REFLECTIVITY_SLIDER,
+	GAMMA_CORRECTION_CHECK_BOX,
 	NUM_GUI_ITEMS
 } GUI_ID;
 
@@ -61,6 +62,7 @@ Camera *g_pCamera[NUM_RENDERER_TYPES];
 std::vector<Material *> g_MaterialList[NUM_RENDERER_TYPES];
 
 EnvironmentMap *g_pEnvironmentMap[NUM_RENDERER_TYPES];
+RenderSettings g_RenderSettings = DefaultRenderSettings;
 RENDERER_TYPE g_ActiveRenderer = D3D11;
 D3D11Canvas *g_pCanvas;
 Assimp::Importer g_importer;
@@ -186,6 +188,10 @@ HRESULT CALLBACK OnDeviceCreated(_In_ ID3D11Device* pd3dDevice, _In_ const DXGI_
 
 	iY += BUTTON_HEIGHT;
 	hr = g_GUI.AddSlider(REFLECTIVITY_SLIDER, 50, iY, 100, BUTTON_HEIGHT, 0, MAX_SLIDER_VALUE, 0);
+	assert(SUCCEEDED(hr));
+
+	iY += BUTTON_HEIGHT;
+	hr = g_GUI.AddCheckBox(GAMMA_CORRECTION_CHECK_BOX, L"Gamma Correct", 0, iY, 100, BUTTON_HEIGHT, g_RenderSettings.m_GammaCorrection);
 	assert(SUCCEEDED(hr));
 
 	FAIL_CHK(FAILED(hr), "Failed to create DXUT dialog manager");
@@ -397,7 +403,7 @@ void RenderText(float fps)
 void CALLBACK OnFrameRender(_In_ ID3D11Device* pd3dDevice, _In_ ID3D11DeviceContext* pd3dImmediateContext, _In_ double fTime, _In_ float fElapsedTime, _In_opt_ void* pUserContext)
 {
 	UpdateCamera();
-	g_pRenderer[g_ActiveRenderer]->DrawScene(g_pCamera[g_ActiveRenderer], g_pScene[g_ActiveRenderer]);
+	g_pRenderer[g_ActiveRenderer]->DrawScene(g_pCamera[g_ActiveRenderer], g_pScene[g_ActiveRenderer], g_RenderSettings);
 
 	ID3D11Texture2D* pBackBuffer = nullptr;
 	HRESULT hr = g_pSwapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), reinterpret_cast<void**>(&pBackBuffer));
@@ -493,6 +499,9 @@ void CALLBACK OnGUIEvent(UINT nEvent, int nControlID, CDXUTControl* pControl, vo
 	case ROUGHNESS_SLIDER:
 	case REFLECTIVITY_SLIDER:
 		SetMaterialProperty(nControlID);
+		break;
+	case GAMMA_CORRECTION_CHECK_BOX:
+		g_RenderSettings.m_GammaCorrection = !g_RenderSettings.m_GammaCorrection;
 		break;
 	}
 }

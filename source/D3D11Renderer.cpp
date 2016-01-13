@@ -204,6 +204,13 @@ void D3D11Renderer::CompileShaders()
 
 		hr = m_pDevice->CreatePixelShader(pPSBlob->GetBufferPointer(), pPSBlob->GetBufferSize(), nullptr, &m_pGammaCorrectPS);
 		FAIL_CHK(FAILED(hr), "Failed to CreatePixelShader");
+
+		pPSBlob = nullptr;
+		hr = CompileShaderHelper(L"PassThrough_PS.hlsl", "PS", "ps_5_0", nullptr, &pPSBlob);
+		FAIL_CHK(FAILED(hr), "The FX file cannot be compiled.  Please run this executable from the directory that contains the FX file.");
+
+		hr = m_pDevice->CreatePixelShader(pPSBlob->GetBufferPointer(), pPSBlob->GetBufferSize(), nullptr, &m_pPassThroughPS);
+		FAIL_CHK(FAILED(hr), "Failed to CreatePixelShader");
 	}
 }
 
@@ -689,7 +696,7 @@ private:
 	ID3D11ShaderResourceView *m_pIrradianceMap;
 };
 
-void D3D11Renderer::DrawScene(Camera *pCamera, Scene *pScene)
+void D3D11Renderer::DrawScene(Camera *pCamera, Scene *pScene, const RenderSettings &RenderFlags)
 {
 	D3D11Scene *pD3D11Scene = D3D11_RENDERER_CAST<D3D11Scene*>(pScene);
 	D3D11Camera *pD3D11Camera = D3D11_RENDERER_CAST<D3D11Camera*>(pCamera);
@@ -771,7 +778,7 @@ void D3D11Renderer::DrawScene(Camera *pCamera, Scene *pScene)
 	ID3D11ShaderResourceView *NullViews[4] = {};
 	m_pImmediateContext->PSSetShaderResources(0, ARRAYSIZE(NullViews), NullViews);
 
-	PostProcess(m_pBasePassTexture.get(), m_pSwapchainRenderTargetView);
+	PostProcess(m_pBasePassTexture.get(), m_pSwapchainRenderTargetView, RenderFlags);
 	m_pImmediateContext->Flush();
 }
 
@@ -817,13 +824,21 @@ private:
 	std::vector<ID3D11RenderTargetView*> m_pOutputs;
 };
 
-void D3D11Renderer::PostProcess(ReadWriteTexture *pInput, ID3D11RenderTargetView *pOutput)
+void D3D11Renderer::PostProcess(ReadWriteTexture *pInput, ID3D11RenderTargetView *pOutput, const RenderSettings &RenderFlags)
 {
 	std::vector<D3D11Pass *> PostProcessPasses;
 
 	ID3D11ShaderResourceView *pSRVs = pInput->GetShaderResourceView();
 	PostProcessPass GammaCorrectionPass(m_pGammaCorrectPS, m_pPostProcessVS, 1, &pSRVs, 1, &pOutput);
-	PostProcessPasses.push_back(&GammaCorrectionPass);
+	PostProcessPass PassThroughPass(m_pPassThroughPS, m_pPostProcessVS, 1, &pSRVs, 1, &pOutput);
+	if (RenderFlags.m_GammaCorrection)
+	{
+		PostProcessPasses.push_back(&GammaCorrectionPass);
+	}
+	else
+	{
+		PostProcessPasses.push_back(&PassThroughPass);
+	}
 
 	m_pImmediateContext->IASetVertexBuffers(0, 0, nullptr, nullptr, nullptr);
 	m_pImmediateContext->IASetInputLayout(nullptr);

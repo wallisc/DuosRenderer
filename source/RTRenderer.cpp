@@ -231,7 +231,8 @@ void RTRenderer::DestroyEnviromentMap(EnvironmentMap *pEnvironmentMap)
 	delete pEnvironmentMap;
 }
 
-RTRenderer::RTRenderer(unsigned int width, unsigned int height)
+RTRenderer::RTRenderer(unsigned int width, unsigned int height) :
+	m_LastRenderSettings(DefaultRenderSettings)
 {
 	m_device = rtcNewDevice();
 	rtcDeviceSetErrorFunction(m_device, error_handler);
@@ -412,7 +413,7 @@ void GammaCorrect(glm::vec3 &Color)
 	Color = glm::pow(Color, glm::vec3(gammaCurve, gammaCurve, gammaCurve));
 }
 
-void RTRenderer::RenderPixelRange(PixelRange *pRange, RTCamera *pCamera, RTScene *pScene)
+void RTRenderer::RenderPixelRange(PixelRange *pRange, RTCamera *pCamera, RTScene *pScene, const RenderSettings &RenderFlags)
 {
 	assert(pRange->m_Width > 0 && pRange->m_X + pRange->m_Width <= pCamera->GetWidth());
 	assert(pRange->m_Height > 0 && pRange->m_Y + pRange->m_Height <= pCamera->GetHeight());
@@ -466,7 +467,10 @@ void RTRenderer::RenderPixelRange(PixelRange *pRange, RTCamera *pCamera, RTScene
 				{
 					UINT x = topLeftX + xOffset;
 					UINT y = topLeftY + yOffset;
-					GammaCorrect(Colors[rayIndex]);
+					if (RenderFlags.m_GammaCorrection)
+					{
+						GammaCorrect(Colors[rayIndex]);
+					}
 					m_pCanvas->WritePixel(x, y, GlmVec3ToRealArray(Colors[rayIndex]));
 					rayIndex++;
 				}
@@ -672,7 +676,7 @@ Geometry *RTRenderer::GetGeometryAtPixel(Camera *pCamera, Scene *pScene, Vec2 Pi
 
 
 
-void RTRenderer::DrawScene(Camera *pCamera, Scene *pScene)
+void RTRenderer::DrawScene(Camera *pCamera, Scene *pScene, const RenderSettings &RenderFlags)
 {
 	RTScene *pRTScene = RT_RENDERER_CAST<RTScene*>(pScene);
 	RTCamera *pRTCamera = RT_RENDERER_CAST<RTCamera*>(pCamera);
@@ -680,7 +684,7 @@ void RTRenderer::DrawScene(Camera *pCamera, Scene *pScene)
 #if RT_AVOID_RENDERING_REDUNDANT_FRAMES
 	// TODO: Also need to ensure the canvas hasn't changed
 	// If both the camera and scene haven't changed, don't re-render the scene
-	if (pRTScene->GetVersionID() == m_LastSceneID && pRTCamera->GetVersionID() == m_LastCameraVersionID)
+	if (pRTScene->GetVersionID() == m_LastSceneID && pRTCamera->GetVersionID() == m_LastCameraVersionID && m_LastRenderSettings == RenderFlags)
 	{
 		return;
 	}
@@ -688,6 +692,7 @@ void RTRenderer::DrawScene(Camera *pCamera, Scene *pScene)
 
 	m_LastSceneID = pRTScene->GetVersionID();
 	m_LastCameraVersionID = pRTCamera->GetVersionID();
+	m_LastRenderSettings = RenderFlags;
 
 	pRTScene->PreDraw();
 
@@ -712,6 +717,7 @@ void RTRenderer::DrawScene(Camera *pCamera, Scene *pScene)
 					this, 
 					pRTScene, 
 					pRTCamera, 
+					RenderFlags,
 					PixelRange(x, y, min(Width - x, THREAD_BLOCK_SIZE), min(Height - y, THREAD_BLOCK_SIZE)),
 					&m_RunningThreadCounter,
 					m_TracingFinishedEvent));
@@ -730,7 +736,8 @@ void RTRenderer::DrawScene(Camera *pCamera, Scene *pScene)
 		pArgs->m_pRenderer->RenderPixelRange(
 			&pArgs->m_PixelRange,
 			pArgs->m_pCamera,
-			pArgs->m_pScene);
+			pArgs->m_pScene,
+			pArgs->m_RenderFlags);
 		if (InterlockedDecrement(pArgs->m_pOngoingThreadCounter) == 0)
 		{
 			SetEvent(pArgs->m_TracingFinishedEvent);

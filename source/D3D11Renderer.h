@@ -344,7 +344,7 @@ public:
 	Scene *CreateScene(EnvironmentMap *pEnvironmentMap);
 	void DestroyScene(Scene *pScene);
 
-	void DrawScene(Camera *pCamera, Scene *pScene);
+	void DrawScene(Camera *pCamera, Scene *pScene, const RenderSettings &RenderFlags);
 	Geometry *GetGeometryAtPixel(Camera *pCamera, Scene *pScene, Vec2 PixelCoord) {
 		assert(false);
 		return nullptr;
@@ -355,7 +355,7 @@ private:
 	void SetDefaultState();
 	void CompileShaders();
 	void InitializeSwapchain(HWND WindowHandle, unsigned int width, unsigned int height);
-	void PostProcess(ReadWriteTexture *pInput, ID3D11RenderTargetView *pOutput);
+	void PostProcess(ReadWriteTexture *pInput, ID3D11RenderTargetView *pOutput, const RenderSettings &RenderFlags);
 
 	ID3D11Device *m_pDevice;
 	ID3D11Device1 *m_pDevice1;
@@ -378,6 +378,7 @@ private:
 	ID3D11SamplerState *m_pSamplerState;
 
 	ID3D11PixelShader* m_pGammaCorrectPS;
+	ID3D11PixelShader* m_pPassThroughPS;
 	ID3D11VertexShader *m_pPostProcessVS;
 };
 

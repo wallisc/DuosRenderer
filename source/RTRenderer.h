@@ -333,14 +333,16 @@ private:
 class RTRenderer;
 struct RayTraceThreadArgs
 {
-	RayTraceThreadArgs() {}
-	RayTraceThreadArgs(RTRenderer *pRenderer, RTScene *pScene, RTCamera *pCamera, PixelRange range, LONG *pOngoingThreadCounter, HANDLE TracingFinishedEvent) :
+	RayTraceThreadArgs() : m_RenderFlags(nullptr) {}
+	RayTraceThreadArgs(RTRenderer *pRenderer, RTScene *pScene, RTCamera *pCamera, const RenderSettings &RenderFlags, PixelRange range, LONG *pOngoingThreadCounter, HANDLE TracingFinishedEvent) :
 		m_pRenderer(pRenderer), 
 		m_pScene(pScene), 
 		m_pCamera(pCamera), 
 		m_PixelRange(range), 
 		m_pOngoingThreadCounter(pOngoingThreadCounter),
-		m_TracingFinishedEvent(TracingFinishedEvent) {}
+		m_TracingFinishedEvent(TracingFinishedEvent),
+		m_RenderFlags(RenderFlags)
+		{}
 
 	PixelRange m_PixelRange;
 	RTRenderer *m_pRenderer;
@@ -348,6 +350,7 @@ struct RayTraceThreadArgs
 	RTCamera *m_pCamera;
 	LONG *m_pOngoingThreadCounter;
 	HANDLE m_TracingFinishedEvent;
+	const RenderSettings &m_RenderFlags;
 };
 
 class RayBatch
@@ -441,10 +444,10 @@ public:
 	Scene *CreateScene(EnvironmentMap *pEnvironmentMap);
 	void DestroyScene(Scene *pScene);
 
-	void DrawScene(Camera *pCamera, Scene *pScene);
+	void DrawScene(Camera *pCamera, Scene *pScene, const RenderSettings &RenderFlags);
 	Geometry *GetGeometryAtPixel(Camera *pCamera, Scene *pScene, Vec2 PixelCoord);
 
-	void RenderPixelRange(PixelRange *pRange, RTCamera *pCamera, RTScene *pScene);
+	void RenderPixelRange(PixelRange *pRange, RTCamera *pCamera, RTScene *pScene, const RenderSettings &RenderFlags);
 private:
 	struct ShadePixelRecursionInfo
 	{
@@ -474,6 +477,7 @@ private:
 	const bool m_bEnableMultiRayEmission = true;
 	VersionedObject::VersionID m_LastCameraVersionID;
 	VersionedObject::VersionID m_LastSceneID;
+	RenderSettings m_LastRenderSettings;
 };
 
 class BRDFShader

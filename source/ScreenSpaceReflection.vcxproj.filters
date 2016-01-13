@@ -541,6 +541,9 @@
     <FxCompile Include="PostProcess_VS.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
+    <FxCompile Include="PassThrough_PS.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="ScreenSpaceReflection.rc">

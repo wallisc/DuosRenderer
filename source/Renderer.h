@@ -190,12 +190,22 @@ public:
 	virtual void AddLight(_In_ Light *pLight) = 0;
 };
 
+struct RenderSettings
+{
+	RenderSettings(bool GammaCorrection) : m_GammaCorrection(GammaCorrection) {}
+	bool operator==(const RenderSettings &RenderFlags) { return m_GammaCorrection == RenderFlags.m_GammaCorrection; }
+
+	bool m_GammaCorrection;
+};
+
+const RenderSettings DefaultRenderSettings(true);
+
 class Renderer
 {
 public:
 	virtual void SetCanvas(Canvas *pCanvas) = 0;
 
-	virtual void DrawScene(Camera *pCamera, Scene *pScene) = 0;
+	virtual void DrawScene(Camera *pCamera, Scene *pScene, const RenderSettings &RenderFlags) = 0;
 	virtual Geometry *GetGeometryAtPixel(Camera *pCamera, Scene *pScene, Vec2 PixelCoord) = 0;
 
 	virtual Geometry *CreateGeometry(_In_ CreateGeometryDescriptor *pCreateGeometryDescriptor) = 0;
