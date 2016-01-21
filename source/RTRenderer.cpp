@@ -523,11 +523,53 @@ float FltRand()
 	return rand() / (float)RAND_MAX;
 }
 
-glm::vec3 cosineWeightedSample(glm::vec3 normal, float rand1, float rand2) {
-   float theta = acos(sqrt(rand2)); 
-   float phi = M_PI * 2.0f * rand1; 
+inline float fast_acos(float x) 
+{
+    return (-0.69813170079773212 * x * x - 0.87266462599716477) * x + 1.5707963267948966;
+}
 
-   float xs = sin(theta) * cos(phi), ys = cos(theta), zs = sin(theta) * sin(phi);  
+// Fast sine and cosine algorithms taken from 
+// http://web.archive.org/web/20110925033606/http://lab.polygonal.de/2007/07/18/fast-and-accurate-sinecosine-approximation/
+inline float fast_sin(float x)
+{
+    //always wrap input angle to -PI..PI
+    if (x < -3.14159265)
+        x += 6.28318531;
+    else
+        if (x >  3.14159265)
+            x -= 6.28318531;
+
+    //compute sine
+    if (x < 0)
+        return 1.27323954 * x + .405284735 * x * x;
+    else
+        return 1.27323954 * x - 0.405284735 * x * x;
+
+}
+
+inline float fast_cos(float x)
+{
+    //compute cosine: sin(x + PI/2) = cos(x)
+    x += 1.57079632;
+    if (x >  3.14159265)
+        x -= 6.28318531;
+
+    if (x < 0)
+        return 1.27323954 * x + 0.405284735 * x * x;
+    else
+        return 1.27323954 * x - 0.405284735 * x * x;
+}
+
+glm::vec3 cosineWeightedSample(glm::vec3 normal, float rand1, float rand2) {
+   float theta = fast_acos(sqrt(rand2));
+   float phi = M_PI * 2.0f * rand1;
+
+   const float sinTheta = fast_sin(theta);
+   const float sinPhi = fast_sin(phi);
+   const float cosPhi = fast_cos(phi);
+   const float cosTheta = fast_cos(theta);
+
+   float xs = sinTheta * cosPhi, ys = cosTheta, zs = sinTheta * sinPhi;
 
    glm::vec3 y(normal); 
    glm::vec3 h(normal); 

@@ -519,7 +519,9 @@ static float Distribution_GGX(const glm::vec3 &Normal, const glm::vec3 &HalfwayV
 	float nDotH = saturate(glm::dot(Normal, HalfwayVector));
 	float nDotHSquared = nDotH * nDotH;
 	float roughnessSquared = Roughness * Roughness;
-	return roughnessSquared / (M_PI * pow(nDotHSquared * (roughnessSquared - 1) + 1, 2.0));
+
+    float Quotient = nDotHSquared * (roughnessSquared - 1) + 1;
+	return roughnessSquared / (M_PI * Quotient * Quotient);
 }
 
 class CookTorrance : public BRDFShader
