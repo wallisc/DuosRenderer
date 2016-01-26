@@ -6,6 +6,7 @@
 
 #include "glm/vec3.hpp"
 #include "glm/gtx/transform.hpp"
+#include "glm/gtx/fast_square_root.inl"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image/stb_image.h"
@@ -577,11 +578,11 @@ glm::vec3 cosineWeightedSample(glm::vec3 normal, float rand1, float rand2) {
    else if (abs(h.y) <= abs(h.x) && abs(h.y) <= abs(h.z)) h.y = 1.0f; 
    else h.z = 1.0f; 
 
-   glm::vec3 x = glm::normalize(glm::cross(h, y));
-   glm::vec3 z = glm::normalize(glm::cross(x, y));
+   glm::vec3 x = glm::fastNormalize(glm::cross(h, y));
+   glm::vec3 z = glm::fastNormalize(glm::cross(x, y));
    glm::vec3 dir = xs * x + ys * y + zs * z; 
     
-   return glm::normalize(dir); 
+   return glm::fastNormalize(dir);
 } 
 
 

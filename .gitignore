@@ -63,3 +63,5 @@ x86
 !embree.lib
 !assimp.lib
 DuosRenderer.VC.opendb
+*.vspx
+DuosRenderer160125.vsp
