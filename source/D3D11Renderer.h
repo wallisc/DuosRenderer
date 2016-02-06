@@ -39,11 +39,11 @@ class D3D11Material : public Material
 {
 public:
     D3D11Material(_In_ ID3D11Device *pDevice, ID3D11DeviceContext *pContext, CreateMaterialDescriptor *pCreateMaterialDescriptor);
-    ID3D11ShaderResourceView *GetShaderResourceView() const { return pTextureResourceView; }
-    ID3D11ShaderResourceView *GetNormalMap() const { return pNormalMap; }
+    ID3D11ShaderResourceView *GetDiffuseTexture() const { return m_pDiffuseTexture; }
+    ID3D11ShaderResourceView *GetNormalMap() const { return m_pNormalMap; }
 
-    bool HasTexture() { return pTextureResourceView != nullptr; }
-    bool HasNormalMap() { return pNormalMap != nullptr; }
+    bool HasDiffuseTexture() { return m_pDiffuseTexture != nullptr; }
+    bool HasNormalMap() { return m_pNormalMap != nullptr; }
     ID3D11Buffer *GetMaterialBuffer() { return m_pMaterialBuffer; }
 
     float GetRoughness() const { return DirectX::XMVectorGetByIndex(m_CBMaterial.m_MaterialProperties, CBMaterial::ROUGHNESS_INDEX); }
@@ -58,8 +58,8 @@ private:
     ID3D11DeviceContext *m_pContext;
     CBMaterial m_CBMaterial;
     ID3D11Buffer *m_pMaterialBuffer;
-    ID3D11ShaderResourceView *pTextureResourceView;
-    ID3D11ShaderResourceView *pNormalMap;
+    ID3D11ShaderResourceView *m_pDiffuseTexture;
+    ID3D11ShaderResourceView *m_pNormalMap;
 };
 
 class D3D11Transformable : public Transformable

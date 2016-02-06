@@ -386,8 +386,8 @@ void D3D11Renderer::DestroyCamera(Camera *pCamera)
 
 D3D11Material::D3D11Material(_In_ ID3D11Device *pDevice, ID3D11DeviceContext *pContext, CreateMaterialDescriptor *pCreateMaterialDescriptor) :
     m_pContext(pContext),
-    pTextureResourceView(nullptr),
-    pNormalMap(nullptr)
+    m_pDiffuseTexture(nullptr),
+    m_pNormalMap(nullptr)
 {
     HRESULT result = S_OK;
     if (pCreateMaterialDescriptor->m_TextureName && strlen(pCreateMaterialDescriptor->m_TextureName))
@@ -396,7 +396,7 @@ D3D11Material::D3D11Material(_In_ ID3D11Device *pDevice, ID3D11DeviceContext *pC
         result = CreateWICTextureFromFile(pDevice,
             WideTextureName,
             nullptr,
-            &pTextureResourceView,
+            &m_pDiffuseTexture,
             20 * 1024 * 1024);
         FAIL_CHK(FAILED(result), "Failed to create SRV for texture");
     }
@@ -407,7 +407,7 @@ D3D11Material::D3D11Material(_In_ ID3D11Device *pDevice, ID3D11DeviceContext *pC
         result = CreateWICTextureFromFile(pDevice,
             WideTextureName,
             nullptr,
-            &pNormalMap,
+            &m_pNormalMap,
             20 * 1024 * 1024);
         FAIL_CHK(FAILED(result), "Failed to create SRV for texture");
     }
@@ -776,9 +776,9 @@ void D3D11Renderer::DrawScene(Camera *pCamera, Scene *pScene, const RenderSettin
             m_pImmediateContext->IASetIndexBuffer(pIndexBuffer, DXGI_FORMAT_R32_UINT, 0);
             m_pImmediateContext->PSSetConstantBuffers(4, 1, &pMaterialBuffer);
 
-            if (pGeometry->GetD3D11Material()->HasTexture())
+            if (pGeometry->GetD3D11Material()->HasDiffuseTexture())
             {
-                ID3D11ShaderResourceView *pDiffuseTexture = pGeometry->GetD3D11Material()->GetShaderResourceView();
+                ID3D11ShaderResourceView *pDiffuseTexture = pGeometry->GetD3D11Material()->GetDiffuseTexture();
                 m_pImmediateContext->PSSetShaderResources(0, 1, &pDiffuseTexture);
                 if (!pGeometry->GetD3D11Material()->HasNormalMap())
                 {
