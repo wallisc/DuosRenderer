@@ -171,7 +171,7 @@ FORCEINLINE glm::vec2 RealArrayToGlmVec2(_In_ Vec2 Vector)
 
 FORCEINLINE RTVertexData RendererVertexToRTVertex(Vertex &Vertex)
 {
-    return RTVertexData(RealArrayToGlmVec2(Vertex.m_Tex), RealArrayToGlmVec3(Vertex.m_Normal));
+    return RTVertexData(RealArrayToGlmVec2(Vertex.m_Tex), RealArrayToGlmVec3(Vertex.m_Normal), RealArrayToGlmVec3(Vertex.m_Tangent));
 }
 
 FORCEINLINE glm::vec3 RTCVertexToRendererVertex(RTCVertex Vertex)
@@ -179,9 +179,10 @@ FORCEINLINE glm::vec3 RTCVertexToRendererVertex(RTCVertex Vertex)
     return glm::vec3(Vertex.m_x, Vertex.m_y, Vertex.m_z);
 }
 
-RTMaterial::RTMaterial(CreateMaterialDescriptor *pCreateMaterialDescriptor)
+RTMaterial::RTMaterial(CreateMaterialDescriptor *pCreateMaterialDescriptor) :
+    m_Image(pCreateMaterialDescriptor->m_TextureName),
+    m_NormalMap(pCreateMaterialDescriptor->m_NormalMapName)
 {
-    m_Image = RTImage(pCreateMaterialDescriptor->m_TextureName);
     m_Diffuse = RealArrayToGlmVec3(pCreateMaterialDescriptor->m_DiffuseColor);
     m_Reflectivity = pCreateMaterialDescriptor->m_Reflectivity;
     m_Roughness = pCreateMaterialDescriptor->m_Roughness;
@@ -198,6 +199,16 @@ glm::vec3 RTMaterial::GetColor(glm::vec2 uv)
         return m_Diffuse;
     }
 }
+
+glm::vec3 RTMaterial::GetNormal(glm::vec2 uv)
+{
+    assert(m_NormalMap.HasValidTexture());
+    glm::vec3 bumpMapResult = m_NormalMap.Sample(uv);
+    glm::vec2 bump2d = BUMP_FACTOR * (2.0f * glm::vec2(bumpMapResult.x, bumpMapResult.y) - glm::vec2(1.0f));
+    assert(glm::dot(bump2d, bump2d) <= 1.0f);
+    return glm::vec3(bump2d.x, bump2d.y, sqrt(1.0f - glm::dot(bump2d, bump2d)));
+}
+
 
 Material *RTRenderer::CreateMaterial(_In_ CreateMaterialDescriptor *pCreateMaterialDescriptor)
 {
@@ -639,7 +650,8 @@ glm::vec3 RTRenderer::ShadePixel(RTScene *pScene, unsigned int primID, RTGeometr
         glm::vec3 ReflectionVector = glm::reflect(-ViewVector, Norm);
         if (bGetReflectionFromEnvironmentMap)
         {
-            if (m_bEnableMultiRayEmission && RecursionInfo.m_NumRecursions < 2)
+            //if (m_bEnableMultiRayEmission && RecursionInfo.m_NumRecursions < 2)
+            if (false)
             {
                 glm::vec3 Colors[RAYS_PER_INTERSECT_BATCH];
                 float BRDFValues[RAYS_PER_INTERSECT_BATCH];
@@ -701,7 +713,6 @@ glm::vec3 RTRenderer::ShadePixel(RTScene *pScene, unsigned int primID, RTGeometr
 
 
         return glm::clamp(TotalDiffuse * (1.0f - TotalFresnel) + TotalSpecular, glm::vec3(0.0f), glm::vec3(1.0f));
-        //return glm::clamp(TotalFresnel * TotalSpecular, glm::vec3(0.0f), glm::vec3(1.0f));
     }
     else
     {
@@ -970,9 +981,31 @@ glm::vec3 RTGeometry::GetNormal(unsigned int primID, float alpha, float beta)
 
     assert(alpha + beta <= 1.0f);
     float gamma = 1.0f - alpha - beta;
-    return glm::normalize(m_vertexData[i0].m_norm * gamma +
+    const glm::vec3 normal = glm::normalize(m_vertexData[i0].m_norm * gamma +
         m_vertexData[i1].m_norm * alpha +
         m_vertexData[i2].m_norm * beta);
+
+    if (GetRTMaterial()->HasNormalMap())
+    {
+        const glm::vec3 tangent = glm::normalize(m_vertexData[i0].m_tangent * gamma +
+            m_vertexData[i1].m_tangent * alpha +
+            m_vertexData[i2].m_tangent * beta);
+
+        const glm::vec3 binormal = glm::normalize(m_vertexData[i0].m_binormal * gamma +
+            m_vertexData[i1].m_binormal * alpha +
+            m_vertexData[i2].m_binormal * beta);
+
+        glm::vec3 normalMapVector = GetRTMaterial()->GetNormal(GetUV(primID, alpha, beta));
+        // TODO: Is this normalize necessary?
+        glm::vec3 result = glm::normalize(normalMapVector.x * tangent + normalMapVector.y * binormal + normalMapVector.z * normal);
+        assert(!isnan(result.x) && !isnan(result.y) && !isnan(result.z));
+        return result;
+    }
+    else
+    {
+        return normal;
+    }
+
 }
 
 

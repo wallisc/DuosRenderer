@@ -113,12 +113,12 @@ ReadWriteTexture::ReadWriteTexture(ID3D11Device *pDevice, UINT Width, UINT Heigh
 
 D3D11Renderer::D3D11Renderer(HWND WindowHandle, unsigned int width, unsigned int height)
 {
-    UINT CeateDeviceFlags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
+    UINT CreateDeviceFlags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
 #ifdef DEBUG
-    CeateDeviceFlags |= D3D11_CREATE_DEVICE_DEBUG;
+    CreateDeviceFlags |= D3D11_CREATE_DEVICE_DEBUG;
 #endif
     D3D_FEATURE_LEVEL FeatureLevels = D3D_FEATURE_LEVEL_11_1;
-    HRESULT hr = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, CeateDeviceFlags, &FeatureLevels, 1,
+    HRESULT hr = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, CreateDeviceFlags, &FeatureLevels, 1,
         D3D11_SDK_VERSION, &m_pDevice, nullptr, &m_pImmediateContext);
     FAIL_CHK(FAILED(hr), "Failed D3D11CreateDevice");
 
@@ -161,9 +161,10 @@ void D3D11Renderer::CompileShaders()
         // Define the input layout
         D3D11_INPUT_ELEMENT_DESC layout[] =
         {
-            { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
-            { "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0 },
-            { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 24, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+            { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+            { "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+            { "NORMAL", 1, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+            { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
         };
         UINT numElements = ARRAYSIZE(layout);
 
@@ -177,9 +178,11 @@ void D3D11Renderer::CompileShaders()
         hr = m_pDevice->CreateVertexShader(pVSBlob->GetBufferPointer(), pVSBlob->GetBufferSize(), nullptr, &m_pPostProcessVS);
         FAIL_CHK(FAILED(hr), "Failed to CreateVertexShader");
 
-        D3D_SHADER_MACRO macros[2] = {};
+        D3D_SHADER_MACRO macros[3] = {};
         macros[0].Name = "USE_TEXTURE";
         macros[0].Definition = "1";
+        macros[1].Name = "USE_NORMAL_MAP";
+        macros[1].Definition = "0";
 
         CComPtr<ID3DBlob> pPSBlob = nullptr;
         hr = CompileShaderHelper(L"GeometryRender.fx", "PS", "ps_4_0", macros, &pPSBlob);
@@ -188,7 +191,20 @@ void D3D11Renderer::CompileShaders()
         hr = m_pDevice->CreatePixelShader(pPSBlob->GetBufferPointer(), pPSBlob->GetBufferSize(), nullptr, &m_pForwardTexturedPixelShader);
         FAIL_CHK(FAILED(hr), "Failed to CreatePixelShader");
 
+        ZeroMemory(macros, sizeof(macros));
+        macros[0].Name = "USE_TEXTURE";
+        macros[0].Definition = "1";
+        macros[1].Name = "USE_NORMAL_MAP";
+        macros[1].Definition = "1";
+        pPSBlob = nullptr;
 
+        hr = CompileShaderHelper(L"GeometryRender.fx", "PS", "ps_4_0", macros, &pPSBlob);
+        FAIL_CHK(FAILED(hr), "The FX file cannot be compiled.  Please run this executable from the directory that contains the FX file.");
+
+        hr = m_pDevice->CreatePixelShader(pPSBlob->GetBufferPointer(), pPSBlob->GetBufferSize(), nullptr, &m_pForwardTexturedBumpPixelShader);
+        FAIL_CHK(FAILED(hr), "Failed to CreatePixelShader");
+
+        ZeroMemory(macros, sizeof(macros));
         macros[0].Name = "USE_TEXTURE";
         macros[0].Definition = "0";
         pPSBlob = nullptr;
@@ -369,7 +385,9 @@ void D3D11Renderer::DestroyCamera(Camera *pCamera)
 }
 
 D3D11Material::D3D11Material(_In_ ID3D11Device *pDevice, ID3D11DeviceContext *pContext, CreateMaterialDescriptor *pCreateMaterialDescriptor) :
-    m_pContext(pContext)
+    m_pContext(pContext),
+    pTextureResourceView(nullptr),
+    pNormalMap(nullptr)
 {
     HRESULT result = S_OK;
     if (pCreateMaterialDescriptor->m_TextureName && strlen(pCreateMaterialDescriptor->m_TextureName))
@@ -382,9 +400,16 @@ D3D11Material::D3D11Material(_In_ ID3D11Device *pDevice, ID3D11DeviceContext *pC
             20 * 1024 * 1024);
         FAIL_CHK(FAILED(result), "Failed to create SRV for texture");
     }
-    else
+
+    if (pCreateMaterialDescriptor->m_NormalMapName && strlen(pCreateMaterialDescriptor->m_NormalMapName))
     {
-        pTextureResourceView = nullptr;
+        CA2WEX<MAX_ALLOWED_STR_LENGTH> WideTextureName(pCreateMaterialDescriptor->m_NormalMapName);
+        result = CreateWICTextureFromFile(pDevice,
+            WideTextureName,
+            nullptr,
+            &pNormalMap,
+            20 * 1024 * 1024);
+        FAIL_CHK(FAILED(result), "Failed to create SRV for texture");
     }
     auto &diffuse = pCreateMaterialDescriptor->m_DiffuseColor;
     m_CBMaterial.m_Diffuse = XMVectorSet(diffuse.x, diffuse.y, diffuse.z, 1.0f);
@@ -755,7 +780,17 @@ void D3D11Renderer::DrawScene(Camera *pCamera, Scene *pScene, const RenderSettin
             {
                 ID3D11ShaderResourceView *pDiffuseTexture = pGeometry->GetD3D11Material()->GetShaderResourceView();
                 m_pImmediateContext->PSSetShaderResources(0, 1, &pDiffuseTexture);
-                m_pImmediateContext->PSSetShader(m_pForwardTexturedPixelShader, NULL, 0);
+                if (!pGeometry->GetD3D11Material()->HasNormalMap())
+                {
+                    m_pImmediateContext->PSSetShader(m_pForwardTexturedPixelShader, NULL, 0);
+                    m_pImmediateContext->PSSetShaderResources(0, 1, &pDiffuseTexture);
+                }
+                else
+                {
+                    ID3D11ShaderResourceView *pNormalMap = pGeometry->GetD3D11Material()->GetNormalMap();
+                    m_pImmediateContext->PSSetShaderResources(4, 1, &pNormalMap);
+                    m_pImmediateContext->PSSetShader(m_pForwardTexturedBumpPixelShader, NULL, 0);
+                }
             }
             else
             {

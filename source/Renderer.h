@@ -39,6 +39,7 @@ struct Vertex
 {
     Vec3 m_Position;
     Vec3 m_Normal;
+    Vec3 m_Tangent;
     Vec2 m_Tex;
 };
 
@@ -58,6 +59,7 @@ struct CreateGeometryDescriptor
 struct CreateMaterialDescriptor
 {
     const char *m_TextureName;
+    const char *m_NormalMapName;
     Vec3 m_DiffuseColor;
     REAL m_Reflectivity;
     REAL m_Roughness;

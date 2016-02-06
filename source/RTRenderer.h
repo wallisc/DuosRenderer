@@ -17,6 +17,7 @@
 #include <math.h>
  
 #define EPSILON 0.0001f
+#define BUMP_FACTOR 0.5f
 #define MEDIUM_EPSILON 0.01f
 #define LARGE_EPSILON 0.1f
 #define MAX_RAY_RECURSION 3
@@ -113,16 +114,19 @@ public:
     RTMaterial(CreateMaterialDescriptor *pCreateMaterialDescriptor);
 
     glm::vec3 GetColor(glm::vec2 uv);
+    glm::vec3 GetNormal(glm::vec2 uv);
     float GetReflectivity() const { return m_Reflectivity; }
     float GetRoughness() const { return m_Roughness; }
 
     void SetRoughness(float Roughness) { m_Roughness = Roughness; NotifyChanged(); }
     void SetReflectivity(float Reflectivity) { m_Reflectivity = Reflectivity; NotifyChanged(); }
+    bool HasNormalMap() { return m_NormalMap.HasValidTexture(); }
 private:
     glm::vec3 m_Diffuse;
     float m_Reflectivity;
     float m_Roughness;
     RTImage m_Image;
+    RTImage m_NormalMap;
 };
 
 class RTRay
@@ -150,11 +154,21 @@ public:
 class RTVertexData
 {
 public:
-    RTVertexData(glm::vec2 tex, glm::vec3 norm) :
-        m_tex(tex), m_norm(norm) {}
+    RTVertexData(const glm::vec2 &tex, const glm::vec3 &norm, const glm::vec3 &tangent) :
+        m_tex(tex), m_norm(norm), m_tangent(tangent)
+    {
+        assert(m_tex.x <= 1.0f + MEDIUM_EPSILON);
+        assert(m_tex.y <= 1.0f + MEDIUM_EPSILON);
+        m_tex.x = min(m_tex.x, 1.0f);
+        m_tex.y = min(m_tex.y, 1.0f);
+
+        m_binormal = glm::normalize(glm::cross(tangent, norm));
+    }
 
     glm::vec2 m_tex;
     glm::vec3 m_norm;
+    glm::vec3 m_tangent;
+    glm::vec3 m_binormal;
 };
 
 class RTTriangleData
@@ -475,7 +489,7 @@ private:
     std::vector<RayTraceThreadArgs> m_ThreadArgs;
     HANDLE m_TracingFinishedEvent;
 
-    const bool m_bEnableMultiRayEmission = true;
+    const bool m_bEnableMultiRayEmission = false;
     VersionedObject::VersionID m_LastCameraVersionID;
     VersionedObject::VersionID m_LastSceneID;
     RenderSettings m_LastRenderSettings;

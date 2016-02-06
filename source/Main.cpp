@@ -289,8 +289,14 @@ void InitSceneAndCamera(_In_ Renderer *pRenderer, _In_ const aiScene &assimpScen
         aiColor3D diffuse;
         pMat->Get(AI_MATKEY_COLOR_DIFFUSE, diffuse);
 
-        CreateMaterialDescriptor CreateMaterialDescriptor;
+        CreateMaterialDescriptor CreateMaterialDescriptor = {};
         CreateMaterialDescriptor.m_TextureName = path.C_Str();
+
+        // TODO: Collada doesn't support bump maps so I'm using this hack to test bump mapping on the sample scene
+        if (strcmp(CreateMaterialDescriptor.m_TextureName, "Assets/sampleScene/crate.png") == 0)
+        {
+            CreateMaterialDescriptor.m_NormalMapName = "Assets/sampleScene/crateBump.jpg";
+        }
 
         CreateMaterialDescriptor.m_DiffuseColor.x = diffuse.r;
         CreateMaterialDescriptor.m_DiffuseColor.y = diffuse.g;
@@ -323,6 +329,7 @@ void InitSceneAndCamera(_In_ Renderer *pRenderer, _In_ const aiScene &assimpScen
                 vertex.m_Position = ConvertVec3(pMesh->mVertices[vertIdx]);
                 vertex.m_Normal = ConvertVec3(pMesh->mNormals[vertIdx]);
                 vertex.m_Tex = ConvertVec2(pMesh->mTextureCoords[0][vertIdx]);
+                vertex.m_Tangent = ConvertVec3(pMesh->mTangents[vertIdx]);
             }
 
             for (UINT i = 0; i < numFaces; i++)

@@ -1,6 +1,8 @@
 #define EPSILON 0.0001
 #define PI 3.14
 #define ENABLE_PBR 1
+#define BUMP_FACTOR 0.5
+
 
 // sqrt(2.0 / PI)
 #define SQRT_2_DIVIDED_BY_PI 0.7978845608
@@ -9,6 +11,7 @@ Texture2D DiffuseTexture : register(t0);
 Texture2D shadowBuffer : register(t1);
 TextureCube EnvironmentMap : register(t2);
 TextureCube IrradianceMap : register(t3);
+Texture2D NormalMap : register(t4);
 
 SamplerState samLinear : register( s0 );
 
@@ -50,6 +53,7 @@ struct VS_INPUT
     float4 Pos : POSITION;
     float4 Norm : NORMAL0;
     float2 Tex : TEXCOORD0;
+    float4 Tangent : NORMAL1;
 };
 
 struct PS_INPUT
@@ -59,8 +63,10 @@ struct PS_INPUT
     float4 WorldPos : POSITION2;
     float2 Tex : TEXCOORD0;
     float4 Norm : NORMAL0;
-    float4 LightPos : NORMAL1;
-    float4 WorldNorm : NORMAL2;
+    float4 Tangent : NORMAL1;
+    float4 Binorm : NORMAL2;
+    float4 LightPos : NORMAL3;
+    float4 WorldNorm : NORMAL4;
 };
 
 struct PS_OUTPUT
@@ -82,7 +88,9 @@ PS_INPUT VS( VS_INPUT input )
     output.Tex = input.Tex;
     output.WorldPos = input.Pos;
     output.WorldNorm = input.Norm;
-    
+    output.Tangent = mul(InvTransView, float4(input.Tangent.xyz, 0.0));
+    output.Binorm = float4(cross(output.Tangent, output.Norm), 0.0);
+
     return output;
 }
 
@@ -123,6 +131,24 @@ float3 BRDF(float3 v, float3 n, float3 l, float roughness, float baseReflectivit
     return radiance * fresnel * D * G / (4 * nDotL * nDotV);
 }
 
+#if USE_NORMAL_MAP
+float3 GetNormal(PS_INPUT input)
+{
+    float3 norm = normalize(input.Norm.xyz);
+    float3 tangent = normalize(input.Tangent.xyz);
+    float3 binorm = normalize(input.Binorm.xyz);
+    float2 NormalMapVec = BUMP_FACTOR * (2.0 * NormalMap.Sample(samLinear, input.Tex.xy).xy - 1.0);
+    float z = sqrt(1.0 - dot(NormalMapVec, NormalMapVec));
+    return normalize(NormalMapVec.x * tangent + NormalMapVec.y * binorm + z * norm);
+}
+#else
+float3 GetNormal(PS_INPUT input)
+{
+    return normalize(input.Norm.xyz);
+}
+#endif
+
+
 //--------------------------------------------------------------------------------------
 // Pixel Shader
 //--------------------------------------------------------------------------------------
@@ -131,7 +157,7 @@ PS_OUTPUT PS( PS_INPUT input) : SV_Target
     PS_OUTPUT output;
 
     // Calculating in pixel shader for precision
-    float3 n = normalize(input.Norm.xyz);
+    float3 n = GetNormal(input);
     float3 v = normalize(-input.ViewPos.xyz);
     float R0 = MaterialProperties.r;
     float roughness = MaterialProperties.g;
@@ -168,7 +194,8 @@ PS_OUTPUT PS( PS_INPUT input) : SV_Target
     {
         float3 reflectionRay = reflect(-v, n);
         float3 incomingViewDir = normalize(CamPos.xyz - input.WorldPos.xyz);
-        float3 worldReflectionRay = reflect(-incomingViewDir, normalize(input.WorldNorm.xyz));
+        float3 worldNorm = normalize(mul(View, n));
+        float3 worldReflectionRay = reflect(-incomingViewDir, worldNorm);
 
         float3 reflectionColor = EnvironmentMap.Sample(samLinear, worldReflectionRay);
         float reflectivity;
