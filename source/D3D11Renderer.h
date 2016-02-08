@@ -160,10 +160,14 @@ public:
     const DirectX::XMMATRIX &GetInvTransViewMatrix() { return m_ViewProjCpuData.m_InvTransView; }
     const DirectX::XMVECTOR &GetViewDirection() { return DirectX::XMVector3Normalize(DirectX::XMVectorSubtract(m_LookAt, m_Position)); }
     const DirectX::XMVECTOR &GetUp() { return m_Up; }
+    const DirectX::XMVECTOR &GetPosition() { return m_Position; }
     const DirectX::XMVECTOR &GetRight() { return DirectX::XMVector3Cross(GetViewDirection(), m_Up); }
+    float GetLensHeight() { return 2.0f; }
+    float GetLensWidth() { return 2.0f * GetAspectRatio(); }
     float GetAspectRatio() { return m_Width / m_Height; }
     float GetVerticalFieldOfView() { return m_VerticalFieldOfView; }
     float GetHorizontalFieldOfView() { return m_HorizontalFieldOfView; }
+    float GetFocalLength() { return GetLensHeight() / (2.0f* tan(m_VerticalFieldOfView / 2.0f)); }
 
 private:
     CBCamera m_CameraCpuData;

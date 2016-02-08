@@ -551,46 +551,45 @@ void D3D11EnvironmentTextureCube::DrawEnvironmentMap(_In_ ID3D11DeviceContext *p
     HRESULT hr = pImmediateContext->Map(m_pCameraVertexBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &MappedSubresource);
     FAIL_CHK(FAILED(hr), "Failed to map camera vertex buffer for environment map");
 
-    CameraPlaneVertex *pVertexBuffer = (CameraPlaneVertex *) MappedSubresource.pData;
+    CameraPlaneVertex *pVertexBuffer = (CameraPlaneVertex *)MappedSubresource.pData;
 
     const XMVECTOR viewRight = pCamera->GetRight();
-     XMVECTOR viewUp = pCamera->GetUp();
-     XMVECTOR viewDirection = pCamera->GetViewDirection();
+    XMVECTOR viewUp = pCamera->GetUp();
+    XMVECTOR LensPosition = pCamera->GetPosition();
+    XMVECTOR LensCenterPosition = XMVectorAdd(pCamera->GetPosition(), XMVectorScale(pCamera->GetViewDirection(), pCamera->GetFocalLength()));
+    XMVECTOR viewDirection = pCamera->GetViewDirection();
     float horizontalFOV = pCamera->GetHorizontalFieldOfView();
     float verticalFOV = pCamera->GetVerticalFieldOfView();
 
-    XMVECTOR rotationQuaternion;
-    XMVECTOR transformedViewDirection;
-    
-    rotationQuaternion = XMQuaternionRotationAxis(viewUp, -horizontalFOV / 2.0f);
-    transformedViewDirection = XMVector3Rotate(viewDirection, rotationQuaternion);
-    rotationQuaternion = XMQuaternionRotationAxis(viewRight, verticalFOV / 2.0f);
-    transformedViewDirection = XMVector3Rotate(transformedViewDirection, rotationQuaternion);
-    pVertexBuffer[0].m_ViewVector = XMVectorToRealArray(transformedViewDirection);
-    pVertexBuffer[0].m_Position = Vec3(-1.0, 1.0, 0.0);
+    {
+        XMVECTOR TopLeftLensCorner = XMVectorAdd(LensCenterPosition, XMVectorScale(pCamera->GetRight(), pCamera->GetLensWidth() / 2.0f));
+        TopLeftLensCorner = XMVectorAdd(TopLeftLensCorner, XMVectorScale(pCamera->GetUp(), pCamera->GetLensHeight() / 2.0f));
+        pVertexBuffer[0].m_ViewVector = XMVectorToRealArray(XMVector3Normalize(XMVectorSubtract(TopLeftLensCorner, pCamera->GetPosition())));
+        pVertexBuffer[0].m_Position = Vec3(-1.0, 1.0, 0.0);
+    }
 
-    rotationQuaternion = XMQuaternionRotationAxis(viewUp, horizontalFOV / 2.0);
-    transformedViewDirection = XMVector3Rotate(viewDirection, rotationQuaternion);
-    rotationQuaternion = XMQuaternionRotationAxis(viewRight, verticalFOV / 2.0);
-    transformedViewDirection = XMVector3Rotate(transformedViewDirection, rotationQuaternion);
-    pVertexBuffer[1].m_ViewVector = XMVectorToRealArray(transformedViewDirection);
-    pVertexBuffer[1].m_Position = Vec3(1.0, 1.0, 0.0);
-
-    rotationQuaternion = XMQuaternionRotationAxis(viewUp, -horizontalFOV / 2.0f);
-    transformedViewDirection = XMVector3Rotate(viewDirection, rotationQuaternion);
-    rotationQuaternion = XMQuaternionRotationAxis(viewRight, -verticalFOV / 2.0f);
-    transformedViewDirection = XMVector3Rotate(transformedViewDirection, rotationQuaternion);
-    pVertexBuffer[2].m_ViewVector = XMVectorToRealArray(transformedViewDirection);
-    pVertexBuffer[2].m_Position = Vec3(-1.0, -1.0, 0.0);
+    {
+        XMVECTOR TopRightLensCorner = XMVectorAdd(LensCenterPosition, XMVectorScale(pCamera->GetRight(), -pCamera->GetLensWidth() / 2.0f));
+        TopRightLensCorner = XMVectorAdd(TopRightLensCorner, XMVectorScale(pCamera->GetUp(), pCamera->GetLensHeight() / 2.0f));
+        pVertexBuffer[1].m_ViewVector = XMVectorToRealArray(XMVector3Normalize(XMVectorSubtract(TopRightLensCorner, pCamera->GetPosition())));
+        pVertexBuffer[1].m_Position = Vec3(1.0, 1.0, 0.0);
+    }
+    {
+        XMVECTOR BottomRLeftLensCorner = XMVectorAdd(LensCenterPosition, XMVectorScale(pCamera->GetRight(), pCamera->GetLensWidth() / 2.0f));
+        BottomRLeftLensCorner = XMVectorAdd(BottomRLeftLensCorner, XMVectorScale(pCamera->GetUp(), -pCamera->GetLensHeight() / 2.0f));
+        pVertexBuffer[2].m_ViewVector = XMVectorToRealArray(XMVector3Normalize(XMVectorSubtract(BottomRLeftLensCorner, pCamera->GetPosition())));
+        pVertexBuffer[2].m_Position = Vec3(-1.0, -1.0, 0.0);
+    }
 
     pVertexBuffer[3] = pVertexBuffer[2];
     pVertexBuffer[4] = pVertexBuffer[1];
-    rotationQuaternion = XMQuaternionRotationAxis(viewUp, horizontalFOV / 2.0f);
-    transformedViewDirection = XMVector3Rotate(viewDirection, rotationQuaternion);
-    rotationQuaternion = XMQuaternionRotationAxis(viewRight, -verticalFOV / 2.0f);
-    transformedViewDirection = XMVector3Rotate(transformedViewDirection, rotationQuaternion);
-    pVertexBuffer[5].m_ViewVector = XMVectorToRealArray(transformedViewDirection);
-    pVertexBuffer[5].m_Position = Vec3(1.0, -1.0, 0.0);
+
+    {
+        XMVECTOR BottomRightLensCorner = XMVectorAdd(LensCenterPosition, XMVectorScale(pCamera->GetRight(), -pCamera->GetLensWidth() / 2.0f));
+        BottomRightLensCorner = XMVectorAdd(BottomRightLensCorner, XMVectorScale(pCamera->GetUp(), -pCamera->GetLensHeight() / 2.0f));
+        pVertexBuffer[5].m_ViewVector = XMVectorToRealArray(XMVector3Normalize(XMVectorSubtract(BottomRightLensCorner, pCamera->GetPosition())));
+        pVertexBuffer[5].m_Position = Vec3(1.0, -1.0, 0.0);
+    }
 
     pImmediateContext->Unmap(m_pCameraVertexBuffer, 0);
 
@@ -1098,8 +1097,11 @@ D3D11Camera::D3D11Camera(ID3D11Device *pDevice, ID3D11DeviceContext *pContext, C
     m_Width(pCreateCameraDescriptor->m_Width),
     m_Height(pCreateCameraDescriptor->m_Height)
 {
-    m_HorizontalFieldOfView = 2.0 * atan(tan((double)m_VerticalFieldOfView / 2.0) * (double)GetAspectRatio());
+    const float LensHeight = 2.0f;
+    const float AspectRatio = pCreateCameraDescriptor->m_Width / pCreateCameraDescriptor->m_Height;
+    const float LensWidth = 2.0f * AspectRatio;
 
+    m_HorizontalFieldOfView = 2 * atan(LensWidth / (2.0f * GetFocalLength()));
     m_Position = RealArrayToXMVector(pCreateCameraDescriptor->m_FocalPoint, POSITION);
     m_LookAt = RealArrayToXMVector(pCreateCameraDescriptor->m_LookAt, POSITION);
     m_Up = RealArrayToXMVector(pCreateCameraDescriptor->m_Up, DIRECTION);

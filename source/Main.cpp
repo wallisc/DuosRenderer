@@ -383,6 +383,12 @@ void InitSceneAndCamera(_In_ Renderer *pRenderer, _In_ const aiScene &assimpScen
         camMat.d1, camMat.d2, camMat.d3, camMat.d4);
     position = XMVector4Transform(position, camMatrix);
 
+    const float LensHeight = 2.0f;
+    const float AspectRatio = (float)WIDTH / (float)HEIGHT;
+    const float LensWidth = LensHeight * AspectRatio;
+    const float FocalLength = LensWidth / (2.0f* tan(pCam->mHorizontalFOV / 2.0f));
+    float VerticalFov = 2 * atan(LensHeight / (2.0f * FocalLength));
+
     CreateCameraDescriptor CameraDescriptor = {};
     CameraDescriptor.m_Height = HEIGHT;
     CameraDescriptor.m_Width = WIDTH;
@@ -391,7 +397,7 @@ void InitSceneAndCamera(_In_ Renderer *pRenderer, _In_ const aiScene &assimpScen
     CameraDescriptor.m_Up = ConvertVec3(pCam->mUp);
     CameraDescriptor.m_NearClip = pCam->mClipPlaneNear;
     CameraDescriptor.m_FarClip = pCam->mClipPlaneFar;
-    CameraDescriptor.m_VerticalFieldOfView = pCam->mHorizontalFOV * 2.0f / pCam->mAspect;
+    CameraDescriptor.m_VerticalFieldOfView = VerticalFov;
 
     *ppCamera = pRenderer->CreateCamera(&CameraDescriptor);
 }
