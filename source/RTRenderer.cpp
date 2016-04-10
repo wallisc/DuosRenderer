@@ -127,19 +127,19 @@ glm::vec3 RTTextureCube::Sample(glm::vec3 dir)
     switch (Face)
     {
     case POS_X:
-        uv = glm::vec2((dir.z / dir.x + 1.0f) * 0.5,
+        uv = glm::vec2(1.0f - (dir.z / dir.x + 1.0f) * 0.5,
             1.0f - (dir.y / dir.x + 1.0f) * 0.5);
         break;
     case NEG_X:
-        uv = glm::vec2((dir.z / dir.x + 1.0f) * 0.5,
+        uv = glm::vec2(1.0f - (dir.z / dir.x + 1.0f) * 0.5,
             (dir.y / dir.x + 1.0f) * 0.5);
         break;
     case POS_Y:
-        uv = glm::vec2(1.0f  - (dir.x / dir.y + 1.0f) * 0.5,
+        uv = glm::vec2((dir.x / dir.y + 1.0f) * 0.5,
             (dir.z / dir.y + 1.0f) * 0.5);
         break;
     case NEG_Y:
-        uv = glm::vec2((dir.x / dir.y + 1.0f) * 0.5,
+        uv = glm::vec2(1.0f - (dir.x / dir.y + 1.0f) * 0.5,
             (dir.z / dir.y + 1.0f) * 0.5);
         break;
     case POS_Z:
