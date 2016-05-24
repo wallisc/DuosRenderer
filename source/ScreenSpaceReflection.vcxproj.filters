@@ -521,6 +521,9 @@
     <ClInclude Include="PostProcess.h">
       <Filter>Shaders</Filter>
     </ClInclude>
+    <ClInclude Include="PrecalcBRDF.h">
+      <Filter>Shaders</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="Geometry_PS.hlsl">
@@ -542,6 +545,12 @@
       <Filter>Shaders</Filter>
     </FxCompile>
     <FxCompile Include="PassThrough_PS.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="PrecalcBRDF_PS.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="PrecalcBRDF_VS.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
   </ItemGroup>

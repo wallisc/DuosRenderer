@@ -5,6 +5,7 @@
 #include "D3D11Canvas.h"
 #include <unordered_map>
 #include <memory>
+#include <atlbase.h>
 
 struct CBCamera
 {
@@ -33,6 +34,35 @@ struct CBMaterial
 
     DirectX::XMVECTOR m_Diffuse;
     DirectX::XMVECTOR m_MaterialProperties; // (Reflectivity (R0), Roughness, ,)
+};
+
+struct CameraPlaneVertex
+{
+    Vec3 m_Position;
+    Vec3 m_ViewVector;
+};
+
+class D3D11GeometryHelper
+{
+public:
+    static const UINT cScreenSpacePlaneVertexCount = 6;
+    static void GenerateScreenSpaceVectorPlane(
+        _In_ DirectX::XMVECTOR TopLeftVector,
+        _In_ DirectX::XMVECTOR TopRightVector,
+        _In_ DirectX::XMVECTOR BottomLeftVector,
+        _In_ DirectX::XMVECTOR BottomRightVector,
+        _Out_writes_(6) CameraPlaneVertex *pVertexBufferData);
+};
+
+class D3D11Renderer; // Forward declaration
+
+class D3D11RendererChild
+{
+public:
+    D3D11RendererChild(D3D11Renderer *pRenderer) : m_pRenderer(pRenderer) {}
+    D3D11Renderer *GetParent() { return m_pRenderer; }
+private:
+    D3D11Renderer *m_pRenderer;
 };
 
 class D3D11Material : public Material
@@ -192,9 +222,10 @@ private:
     DirectX::XMVECTOR m_Up;
 };
 
-class D3D11EnvironmentMap : public EnvironmentMap
+class D3D11EnvironmentMap : public EnvironmentMap, public D3D11RendererChild
 {
 public:
+    D3D11EnvironmentMap(D3D11Renderer *pRenderer) : D3D11RendererChild(pRenderer) {}
     virtual void DrawEnvironmentMap(_In_ ID3D11DeviceContext *pImmediateContext, D3D11Camera *pCamera, ID3D11RenderTargetView *pRenderTarget) = 0;
     virtual ID3D11ShaderResourceView *GetEnvironmentMapSRV() = 0;
     virtual ID3D11ShaderResourceView *GetIrradianceMapSRV() = 0;
@@ -203,20 +234,17 @@ public:
 class D3D11EnvironmentTextureCube : public D3D11EnvironmentMap
 {
 public:
-    D3D11EnvironmentTextureCube(_In_ ID3D11Device *pDevice, _In_ ID3D11DeviceContext *pImmediateContext, _In_ const CreateEnvironmentTextureCube *pCreateTextureCube);
+    D3D11EnvironmentTextureCube(_In_ D3D11Renderer *pRenderer, _In_ const CreateEnvironmentTextureCube *pCreateTextureCube);
     void DrawEnvironmentMap(_In_ ID3D11DeviceContext *pImmediateContext, D3D11Camera *pCamera, ID3D11RenderTargetView *pRenderTarget);
     ID3D11ShaderResourceView *GetEnvironmentMapSRV() { return m_pEnvironmentTextureCube; }
     ID3D11ShaderResourceView *GetIrradianceMapSRV() { return m_pIrradianceTextureCube; }
 private:
     static ID3D11ShaderResourceView *CreateTextureCube(_In_ ID3D11Device *pDevice, _In_ ID3D11DeviceContext *pImmediateContext, _In_reads_(TEXTURES_PER_CUBE) char * const *textureNames);
+    ID3D11ShaderResourceView* GenerateBakedReflectionCube(ID3D11ShaderResourceView *pCubeMap, float roughness);
+
     ID3D11ShaderResourceView *m_pEnvironmentTextureCube;
     ID3D11ShaderResourceView *m_pIrradianceTextureCube;
 
-    struct CameraPlaneVertex
-    {
-        Vec3 m_Position;
-        Vec3 m_ViewVector;
-    };
     ID3D11Buffer *m_pCameraVertexBuffer;
     ID3D11PixelShader *m_pEnvironmentPixelShader;
     ID3D11VertexShader *m_pEnvironmentVertexShader;
@@ -227,7 +255,9 @@ private:
 class D3D11EnvironmentColor : public D3D11EnvironmentMap
 {
 public:
-    D3D11EnvironmentColor(_In_ ID3D11Device *pDevice, const CreateEnvironmentColor *pCreateEnvironmnetColor) {
+    D3D11EnvironmentColor(_In_ D3D11Renderer *pRenderer, _In_ const CreateEnvironmentColor *pCreateEnvironmnetColor) :
+        D3D11EnvironmentMap(pRenderer)
+    {
         assert(false);
     }
     ID3D11ShaderResourceView *GetEnvironmentMapSRV() { return nullptr; }
@@ -326,6 +356,34 @@ private:
     ID3D11Texture2D *m_pResource;
 };
 
+enum CUBE_FACES
+{
+    Z_POSITIVE = 0,
+    Z_NEGATIVE,
+    Y_POSITIVE,
+    Y_NEGATIVE,
+    X_POSITIVE,
+    X_NEGATIVE,
+    NUM_CUBE_FACES
+};
+class BRDFPrecomputationResouces : D3D11RendererChild
+{
+public:
+    BRDFPrecomputationResouces(D3D11Renderer *pRenderer);
+
+    ID3D11Buffer* GetCubeMapVertexBuffer(CUBE_FACES cubeFace) const { return m_pCubeMapBuffers[cubeFace]; }
+    UINT GetCubeMapVertexBufferStride() const { return sizeof(CameraPlaneVertex); }
+    ID3D11InputLayout *GetInputLayout() const { return m_pPrecalcBRDFInputLayout; }
+    ID3D11VertexShader* GetVertexShader() const { return m_pPrecalcBRDFVertexShader; }
+    ID3D11PixelShader* GetPixelShader() const { return m_pPrecalcBRDFPixelShader; }
+private:
+    ID3D11Buffer *m_pCubeMapBuffers[NUM_CUBE_FACES];
+
+    ID3D11InputLayout *m_pPrecalcBRDFInputLayout;
+    ID3D11VertexShader *m_pPrecalcBRDFVertexShader;
+    ID3D11PixelShader *m_pPrecalcBRDFPixelShader;
+};
+
 class D3D11Renderer : public Renderer
 {
 public:
@@ -357,12 +415,16 @@ public:
         return nullptr;
     }
 
-
+    ID3D11DeviceContext *GetD3D11Context() { return m_pImmediateContext; }
+    ID3D11Device *GetD3D11Device() { return m_pDevice; }
+    const BRDFPrecomputationResouces &GetBRDFPrecomputedResources() { return *m_pBRDFPrecalculatedResources.get(); }
 private:
     void SetDefaultState();
     void CompileShaders();
     void InitializeSwapchain(HWND WindowHandle, unsigned int width, unsigned int height);
     void PostProcess(ReadWriteTexture *pInput, ID3D11RenderTargetView *pOutput, const RenderSettings &RenderFlags);
+
+    D3D11_VIEWPORT m_viewport;
 
     ID3D11Device *m_pDevice;
     ID3D11Device1 *m_pDevice1;
@@ -388,6 +450,7 @@ private:
     ID3D11PixelShader* m_pGammaCorrectPS;
     ID3D11PixelShader* m_pPassThroughPS;
     ID3D11VertexShader *m_pPostProcessVS;
+    std::unique_ptr<BRDFPrecomputationResouces> m_pBRDFPrecalculatedResources;
 };
 
 #define D3D11_RENDERER_CAST reinterpret_cast

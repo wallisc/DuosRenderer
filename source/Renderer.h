@@ -99,7 +99,7 @@ public:
     REAL m_Height;
 };
 
-// Defines which textures map to which plan for Texture Cubes
+// Defines which textures map to which planes for Texture Cubes
 enum TextureFace
 {
     POS_Z = 0,
