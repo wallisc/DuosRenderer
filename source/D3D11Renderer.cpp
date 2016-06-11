@@ -654,19 +654,19 @@ void D3D11EnvironmentTextureCube::DrawEnvironmentMap(_In_ ID3D11DeviceContext *p
     float horizontalFOV = pCamera->GetHorizontalFieldOfView();
     float verticalFOV = pCamera->GetVerticalFieldOfView();
 
-    XMVECTOR TopLeftLensCorner = XMVectorAdd(LensCenterPosition, XMVectorScale(pCamera->GetRight(), -pCamera->GetLensWidth() / 2.0f));
+    XMVECTOR TopLeftLensCorner = XMVectorAdd(LensCenterPosition, XMVectorScale(pCamera->GetRight(), pCamera->GetLensWidth() / 2.0f));
     TopLeftLensCorner = XMVectorAdd(TopLeftLensCorner, XMVectorScale(pCamera->GetUp(), pCamera->GetLensHeight() / 2.0f));
     XMVECTOR TopLeftViewVector = XMVector3Normalize(XMVectorSubtract(TopLeftLensCorner, pCamera->GetPosition()));
 
-    XMVECTOR TopRightLensCorner = XMVectorAdd(LensCenterPosition, XMVectorScale(pCamera->GetRight(), pCamera->GetLensWidth() / 2.0f));
+    XMVECTOR TopRightLensCorner = XMVectorAdd(LensCenterPosition, XMVectorScale(pCamera->GetRight(), -pCamera->GetLensWidth() / 2.0f));
     TopRightLensCorner = XMVectorAdd(TopRightLensCorner, XMVectorScale(pCamera->GetUp(), pCamera->GetLensHeight() / 2.0f));
     XMVECTOR TopRightViewVector = XMVector3Normalize(XMVectorSubtract(TopRightLensCorner, pCamera->GetPosition()));
      
-    XMVECTOR BottomRLeftLensCorner = XMVectorAdd(LensCenterPosition, XMVectorScale(pCamera->GetRight(), -pCamera->GetLensWidth() / 2.0f));
+    XMVECTOR BottomRLeftLensCorner = XMVectorAdd(LensCenterPosition, XMVectorScale(pCamera->GetRight(), pCamera->GetLensWidth() / 2.0f));
     BottomRLeftLensCorner = XMVectorAdd(BottomRLeftLensCorner, XMVectorScale(pCamera->GetUp(), -pCamera->GetLensHeight() / 2.0f));
     XMVECTOR BottomLeftViewVector = XMVector3Normalize(XMVectorSubtract(BottomRLeftLensCorner, pCamera->GetPosition()));
 
-    XMVECTOR BottomRightLensCorner = XMVectorAdd(LensCenterPosition, XMVectorScale(pCamera->GetRight(), pCamera->GetLensWidth() / 2.0f));
+    XMVECTOR BottomRightLensCorner = XMVectorAdd(LensCenterPosition, XMVectorScale(pCamera->GetRight(), -pCamera->GetLensWidth() / 2.0f));
     BottomRightLensCorner = XMVectorAdd(BottomRightLensCorner, XMVectorScale(pCamera->GetUp(), -pCamera->GetLensHeight() / 2.0f));
     XMVECTOR BottomRightViewVector = XMVector3Normalize(XMVectorSubtract(BottomRightLensCorner, pCamera->GetPosition()));
 

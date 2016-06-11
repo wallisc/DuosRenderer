@@ -645,7 +645,7 @@ glm::vec3 RTRenderer::ShadePixel(RTScene *pScene, unsigned int primID, RTGeometr
         }
 
         glm::vec3 ReflectionColor = glm::vec3(0.0f);
-        bool bGetReflectionFromEnvironmentMap = RecursionInfo.m_NumRecursions < MAX_RAY_RECURSION;
+        bool bGetReflectionFromEnvironmentMap = false;// RecursionInfo.m_NumRecursions < MAX_RAY_RECURSION;
         glm::vec3 ReflOrigin = intersectPos + Norm * LARGE_EPSILON; //Offset a small amount to avoid self-intersection
         glm::vec3 ReflectionVector = glm::reflect(-ViewVector, Norm);
         if (bGetReflectionFromEnvironmentMap)
@@ -706,7 +706,12 @@ glm::vec3 RTRenderer::ShadePixel(RTScene *pScene, unsigned int primID, RTGeometr
         }
         else
         {
+            float fresnel;
+            float BRDFValue = CookTorrance().BRDF(ViewVector, Norm, ReflectionVector, Roughness, reflectivity, fresnel);
             ReflectionColor = pScene->GetEnvironmentMap()->GetColor(ReflectionVector);
+            ReflectionColor *= BRDFValue;
+            TotalFresnel += fresnel;
+            TotalFresnel /= 2.0f;
         }
         
         TotalSpecular += ReflectionColor;

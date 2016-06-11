@@ -194,7 +194,8 @@ PS_OUTPUT PS( PS_INPUT input) : SV_Target
     {
         float3 reflectionRay = reflect(-v, n);
         float3 incomingViewDir = normalize(CamPos.xyz - input.WorldPos.xyz);
-        float3 worldNorm = normalize(mul(View, n));
+        // TODO: This won't work for bump maps
+        float3 worldNorm = normalize(input.WorldNorm.xyz);
         float3 worldReflectionRay = reflect(-incomingViewDir, worldNorm);
 
         float3 reflectionColor = EnvironmentMap.Sample(samLinear, worldReflectionRay);
