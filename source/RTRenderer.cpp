@@ -612,6 +612,8 @@ glm::vec3 RTRenderer::ShadePixel(RTScene *pScene, unsigned int primID, RTGeometr
         float Roughness = pGeometry->GetRTMaterial()->GetRoughness();
         glm::vec3 Norm = pGeometry->GetNormal(primID, baryocentricCoord.x, baryocentricCoord.y);
         glm::vec3 intersectPos = pGeometry->GetPosition(primID, baryocentricCoord.x, baryocentricCoord.y);
+        UINT NumSamplesTaken = 0;
+
         for (RTLight *pLight : pScene->GetLightList())
         {
             glm::vec3 LightColor = pLight->GetLightColor(intersectPos);
@@ -641,6 +643,7 @@ glm::vec3 RTRenderer::ShadePixel(RTScene *pScene, unsigned int primID, RTGeometr
                     TotalSpecular += LightColor * CookTorrance().BRDF(ViewVector, Norm, LightDirection, Roughness, reflectivity, fresnel);
                     TotalFresnel += fresnel;
                 }
+                NumSamplesTaken++;
             }
         }
 
@@ -648,6 +651,7 @@ glm::vec3 RTRenderer::ShadePixel(RTScene *pScene, unsigned int primID, RTGeometr
         bool bGetReflectionFromEnvironmentMap = false;// RecursionInfo.m_NumRecursions < MAX_RAY_RECURSION;
         glm::vec3 ReflOrigin = intersectPos + Norm * LARGE_EPSILON; //Offset a small amount to avoid self-intersection
         glm::vec3 ReflectionVector = glm::reflect(-ViewVector, Norm);
+
         if (bGetReflectionFromEnvironmentMap)
         {
             //if (m_bEnableMultiRayEmission && RecursionInfo.m_NumRecursions < 2)
@@ -662,7 +666,6 @@ glm::vec3 RTRenderer::ShadePixel(RTScene *pScene, unsigned int primID, RTGeometr
                 std::fill(ReflectionOrigins, ReflectionOrigins + RAYS_PER_INTERSECT_BATCH, ReflOrigin);
                         
                 UINT NumRaysBatched = 0;
-                UINT NumSamplesTaken = 0;
                 for (UINT RayIndex = 0; RayIndex < RAY_EMISSION_COUNT; RayIndex++)
                 {
                     // Make sure the reflection vector is tested
@@ -687,9 +690,6 @@ glm::vec3 RTRenderer::ShadePixel(RTScene *pScene, unsigned int primID, RTGeometr
                         NumSamplesTaken++;
                     }
                 }
-
-                TotalFresnel /= NumSamplesTaken + 1;
-                ReflectionColor /= NumSamplesTaken + 1;
             }
             else
             {
@@ -699,9 +699,10 @@ glm::vec3 RTRenderer::ShadePixel(RTScene *pScene, unsigned int primID, RTGeometr
                 {
                     Trace(pScene, &ReflOrigin, &ReflectionVector, &ReflectionColor, 1, ShadePixelRecursionInfo(RecursionInfo.m_NumRecursions + 1, RecursionInfo.m_TotalContribution * BRDFValue));
                 }
+                NumSamplesTaken++;
                 ReflectionColor *= BRDFValue;
                 TotalFresnel += fresnel;
-                TotalFresnel /= 2.0f;
+
             }
         }
         else
@@ -711,11 +712,13 @@ glm::vec3 RTRenderer::ShadePixel(RTScene *pScene, unsigned int primID, RTGeometr
             ReflectionColor = pScene->GetEnvironmentMap()->GetColor(ReflectionVector);
             ReflectionColor *= BRDFValue;
             TotalFresnel += fresnel;
-            TotalFresnel /= 2.0f;
+            NumSamplesTaken++;
         }
-        
+
         TotalSpecular += ReflectionColor;
 
+        TotalFresnel /= NumSamplesTaken;
+        TotalSpecular /= NumSamplesTaken;
 
         return glm::clamp(TotalDiffuse * (1.0f - TotalFresnel) + TotalSpecular, glm::vec3(0.0f), glm::vec3(1.0f));
     }

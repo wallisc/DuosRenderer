@@ -99,7 +99,8 @@ float GGX_Distribution(float3 h, float3 n, float roughness)
     float nDotH = saturate(dot(n, h));
     float nDotHSquared = nDotH * nDotH;
     float roughnessSquared = roughness * roughness;
-    return roughnessSquared / (PI * pow(nDotHSquared * (roughnessSquared - 1) + 1, 2.0));
+    float Quotient = nDotHSquared * (roughnessSquared - 1) + 1;
+    return roughnessSquared / (PI * Quotient * Quotient);
 }
 
 float Schlicks_PartialGeometricAttenuation(float3 n, float3 v, float k)
@@ -119,7 +120,7 @@ float Fresnel(float3 h, float3 n, float reflectivity)
     return (reflectivity + (1.0 - reflectivity) * pow(1 - saturate(dot(h, n)), 5));
 }
 
-float3 BRDF(float3 v, float3 n, float3 l, float roughness, float baseReflectivity, float3 radiance, out float fresnel)
+float BRDF(float3 v, float3 n, float3 l, float roughness, float baseReflectivity, out float fresnel)
 {
     float3 h = normalize(l + v);
     float nDotL = saturate(dot(n, l));
@@ -128,7 +129,7 @@ float3 BRDF(float3 v, float3 n, float3 l, float roughness, float baseReflectivit
     float G = Schlicks_GeometricAttenuation(v, l, n, roughness);
     fresnel = Fresnel(h, n, baseReflectivity);
     float D = GGX_Distribution(h, n, roughness);
-    return radiance * fresnel * D * G / (4 * nDotL * nDotV);
+    return fresnel * D * G / (4 * nDotL * nDotV);
 }
 
 #if USE_NORMAL_MAP
@@ -185,7 +186,7 @@ PS_OUTPUT PS( PS_INPUT input) : SV_Target
 
 #if ENABLE_PBR
         float reflectivity;
-        totalSpecular += BRDF(v, n, LightDirection, roughness, R0, LightColor, reflectivity);
+        totalSpecular += LightColor * BRDF(v, n, LightDirection, roughness, R0, reflectivity);
         totalFresnel += reflectivity;
 #endif
     }
@@ -200,7 +201,7 @@ PS_OUTPUT PS( PS_INPUT input) : SV_Target
 
         float3 reflectionColor = EnvironmentMap.Sample(samLinear, worldReflectionRay);
         float reflectivity;
-        totalSpecular += BRDF(v, n, reflectionRay, roughness, R0, reflectionColor, reflectivity);
+        totalSpecular += reflectionColor * BRDF(v, n, reflectionRay, roughness, R0, reflectivity);
         totalFresnel += reflectivity;
     }
 
