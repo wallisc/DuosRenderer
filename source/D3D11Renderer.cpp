@@ -11,6 +11,8 @@
 
 using namespace DirectX;
 
+const bool g_bGammaCorrectTextures = true;
+
 enum VectorType
 {
     DIRECTION,
@@ -423,11 +425,17 @@ D3D11Material::D3D11Material(_In_ ID3D11Device *pDevice, ID3D11DeviceContext *pC
     if (pCreateMaterialDescriptor->m_TextureName && strlen(pCreateMaterialDescriptor->m_TextureName))
     {
         CA2WEX<MAX_ALLOWED_STR_LENGTH> WideTextureName(pCreateMaterialDescriptor->m_TextureName);
-        result = CreateWICTextureFromFile(pDevice,
-            WideTextureName,
-            nullptr,
-            &m_pDiffuseTexture,
-            20 * 1024 * 1024);
+        result = CreateWICTextureFromFileEx(
+            pDevice, 
+            WideTextureName, 
+            20 * 1024 * 1024, 
+            D3D11_USAGE_DEFAULT, 
+            D3D11_BIND_SHADER_RESOURCE, 
+            0, 
+            0, 
+            g_bGammaCorrectTextures,
+            nullptr, 
+            &m_pDiffuseTexture);
         FAIL_CHK(FAILED(result), "Failed to create SRV for texture");
     }
 
@@ -607,11 +615,19 @@ ID3D11ShaderResourceView *D3D11EnvironmentTextureCube::CreateTextureCube(
     {
         CA2WEX<MAX_ALLOWED_STR_LENGTH> WideTextureName(textureNames[i]);
         ID3D11Resource *pTempResource;
-        HRESULT hr = CreateWICTextureFromFile(pDevice,
+
+        HRESULT hr = CreateWICTextureFromFileEx(
+            pDevice,
             WideTextureName,
+            20 * 1024 * 1024,
+            D3D11_USAGE_DEFAULT,
+            D3D11_BIND_SHADER_RESOURCE,
+            0,
+            0,
+            g_bGammaCorrectTextures,
             &pTempResource,
-            nullptr,
-            20 * 1024 * 1024);
+            nullptr);
+
         FAIL_CHK(FAILED(hr), "Failed to create texture from cube texture name");
 
         if (i == 0)

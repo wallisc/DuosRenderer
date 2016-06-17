@@ -84,11 +84,10 @@ class RTImage
 {
 public:
     RTImage();
-    RTImage(const char *TextureName);
+    RTImage(const char *TextureName, bool IsSRGBFormat);
     glm::vec3 Sample(glm::vec2 uv);
     bool HasValidTexture() { return m_pImage != nullptr; }
 private:
-    float ConvertCharToFloat(unsigned char CharColor) { return (float)CharColor / 256.0f; }
 
     int m_Width, m_Height;
     int m_ComponentCount = 3;
@@ -100,7 +99,7 @@ class RTTextureCube
 {
 public:
     RTTextureCube();
-    RTTextureCube(char **TextureNames);
+    RTTextureCube(char **TextureNames, bool IsSRGBTexture);
     glm::vec3 Sample(glm::vec3 dir);
     bool HasValidTexture() { return m_pImages[0].HasValidTexture(); }
 private:

@@ -14,6 +14,8 @@
 const RTCGeometryFlags cGeometryFlag = RTC_GEOMETRY_STATIC;
 const RTCSceneFlags cSceneFlags = RTC_SCENE_STATIC;
 
+const bool g_bGammaCorrectTextures = true;
+
 void error_handler(const RTCError code, const char* str)
 {
     printf("Embree: ");
@@ -66,15 +68,35 @@ FORCEINLINE Vec3 GlmVec3ToRealArray(_In_ glm::vec3 Vector)
     return Vec3(Vector.x, Vector.y, Vector.z);
 }
 
+float ConvertCharToFloat(unsigned char CharColor) { return (float)CharColor / 255.0f; }
+unsigned char ConvertFloatToChar(float floatColor) { return (unsigned char)(floatColor * 255.0f); }
+
+
 RTImage::RTImage() : m_pImage(nullptr) {}
 
-RTImage::RTImage(const char *TextureName) : m_pImage(nullptr)
+RTImage::RTImage(const char *TextureName, bool IsSRGBTexture) : m_pImage(nullptr)
 {
     const bool ValidTextureString = (TextureName != nullptr && strlen(TextureName) > 0);
     if (ValidTextureString)
     {
         int ComponentCount;
         m_pImage = stbi_load(TextureName, &m_Width, &m_Height, &ComponentCount, STBI_rgb);
+        if (g_bGammaCorrectTextures && IsSRGBTexture)
+        {
+            static float gamma = 2.2f;
+            for (UINT x = 0; x < m_Width * m_Height; x++)
+            {
+                unsigned char *pPixel = &m_pImage[x * m_ComponentCount];
+                for (UINT component = 0; component < m_ComponentCount; component++)
+                {
+                    float color = ConvertCharToFloat(pPixel[component]);
+                    float gammaCorrectedColor = pow(color, gamma);
+                    pPixel[component] = ConvertFloatToChar(gammaCorrectedColor);
+                }
+            }
+        }
+
+
         FAIL_CHK(ComponentCount != 3 && ComponentCount != 4, "Stb_Image returned an unexpected component count");
     }
 }
@@ -92,11 +114,11 @@ glm::vec3 RTImage::Sample(glm::vec2 uv)
 }
 
 RTTextureCube::RTTextureCube() {}
-RTTextureCube::RTTextureCube(char **TextureNames)
+RTTextureCube::RTTextureCube(char **TextureNames, bool IsSRGBTextureCube)
 {
     for (UINT i = 0; i < TEXTURES_PER_CUBE; i++)
     {
-        m_pImages[i] = RTImage(TextureNames[i]);
+        m_pImages[i] = RTImage(TextureNames[i], IsSRGBTextureCube);
     }
 }
 
@@ -180,8 +202,8 @@ FORCEINLINE glm::vec3 RTCVertexToRendererVertex(RTCVertex Vertex)
 }
 
 RTMaterial::RTMaterial(CreateMaterialDescriptor *pCreateMaterialDescriptor) :
-    m_Image(pCreateMaterialDescriptor->m_TextureName),
-    m_NormalMap(pCreateMaterialDescriptor->m_NormalMapName)
+    m_Image(pCreateMaterialDescriptor->m_TextureName, true),
+    m_NormalMap(pCreateMaterialDescriptor->m_NormalMapName, false)
 {
     m_Diffuse = RealArrayToGlmVec3(pCreateMaterialDescriptor->m_DiffuseColor);
     m_Reflectivity = pCreateMaterialDescriptor->m_Reflectivity;
@@ -891,7 +913,7 @@ RTEnvironmentColor::RTEnvironmentColor(CreateEnvironmentColor *pCreateEnvironmen
 
 RTEnvironmentTextureCube::RTEnvironmentTextureCube(CreateEnvironmentTextureCube *pCreateEnvironmentTextureCube)
 {
-    m_TextureCube = RTTextureCube(pCreateEnvironmentTextureCube->m_TextureNames);
+    m_TextureCube = RTTextureCube(pCreateEnvironmentTextureCube->m_TextureNames, true);
 }
 
 RTScene::RTScene(RTCDevice device, RTEnvironmentMap *pEnvironmentMap) :
