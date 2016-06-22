@@ -71,6 +71,79 @@ FORCEINLINE Vec3 GlmVec3ToRealArray(_In_ glm::vec3 Vector)
 float ConvertCharToFloat(unsigned char CharColor) { return (float)CharColor / 255.0f; }
 unsigned char ConvertFloatToChar(float floatColor) { return (unsigned char)(floatColor * 255.0f); }
 
+float FltRand()
+{
+    return rand() / (float)RAND_MAX;
+}
+
+inline float fast_acos(float x)
+{
+    return (-0.69813170079773212 * x * x - 0.87266462599716477) * x + 1.5707963267948966;
+}
+
+// Fast sine and cosine algorithms taken from 
+// http://web.archive.org/web/20110925033606/http://lab.polygonal.de/2007/07/18/fast-and-accurate-sinecosine-approximation/
+inline float fast_sin(float x)
+{
+    //always wrap input angle to -PI..PI
+    if (x < -3.14159265)
+        x += 6.28318531;
+    else
+        if (x >  3.14159265)
+            x -= 6.28318531;
+
+    //compute sine
+    if (x < 0)
+        return 1.27323954 * x + .405284735 * x * x;
+    else
+        return 1.27323954 * x - 0.405284735 * x * x;
+
+}
+
+inline float fast_cos(float x)
+{
+    //compute cosine: sin(x + PI/2) = cos(x)
+    x += 1.57079632;
+    if (x >  3.14159265)
+        x -= 6.28318531;
+
+    if (x < 0)
+        return 1.27323954 * x + 0.405284735 * x * x;
+    else
+        return 1.27323954 * x - 0.405284735 * x * x;
+}
+
+glm::vec3 RTCosineWeightedRayGenerator::GenerateRay()
+{
+    float rand1 = FltRand();
+    float rand2 = FltRand();
+    float theta = fast_acos(sqrt(rand2));
+    float phi = M_PI * 2.0f * rand1;
+
+    const float sinTheta = fast_sin(theta);
+    const float sinPhi = fast_sin(phi);
+    const float cosPhi = fast_cos(phi);
+    const float cosTheta = fast_cos(theta);
+
+    float xs = sinTheta * cosPhi, ys = cosTheta, zs = sinTheta * sinPhi;
+
+    glm::vec3 y(m_normal);
+    glm::vec3 h(m_normal);
+    if (abs(h.x) <= abs(h.y) && abs(h.x) <= abs(h.z)) h.x = 1.0f;
+    else if (abs(h.y) <= abs(h.x) && abs(h.y) <= abs(h.z)) h.y = 1.0f;
+    else h.z = 1.0f;
+
+    glm::vec3 x = glm::fastNormalize(glm::cross(h, y));
+    glm::vec3 z = glm::fastNormalize(glm::cross(x, y));
+    glm::vec3 dir = xs * x + ys * y + zs * z;
+
+    return glm::fastNormalize(dir);
+}
+
+float RTCosineWeightedRayGenerator::PDF(const glm::vec3 &vector)
+{
+    return glm::dot(vector, m_normal) / M_PI;
+}
 
 RTImage::RTImage() : m_pImage(nullptr) {}
 
@@ -552,73 +625,6 @@ void RTRenderer::Trace(_In_ RTScene *pScene, _In_reads_(NumRays) const glm::vec3
     }
 }
 
-float FltRand()
-{
-    return rand() / (float)RAND_MAX;
-}
-
-inline float fast_acos(float x) 
-{
-    return (-0.69813170079773212 * x * x - 0.87266462599716477) * x + 1.5707963267948966;
-}
-
-// Fast sine and cosine algorithms taken from 
-// http://web.archive.org/web/20110925033606/http://lab.polygonal.de/2007/07/18/fast-and-accurate-sinecosine-approximation/
-inline float fast_sin(float x)
-{
-    //always wrap input angle to -PI..PI
-    if (x < -3.14159265)
-        x += 6.28318531;
-    else
-        if (x >  3.14159265)
-            x -= 6.28318531;
-
-    //compute sine
-    if (x < 0)
-        return 1.27323954 * x + .405284735 * x * x;
-    else
-        return 1.27323954 * x - 0.405284735 * x * x;
-
-}
-
-inline float fast_cos(float x)
-{
-    //compute cosine: sin(x + PI/2) = cos(x)
-    x += 1.57079632;
-    if (x >  3.14159265)
-        x -= 6.28318531;
-
-    if (x < 0)
-        return 1.27323954 * x + 0.405284735 * x * x;
-    else
-        return 1.27323954 * x - 0.405284735 * x * x;
-}
-
-glm::vec3 cosineWeightedSample(glm::vec3 normal, float rand1, float rand2) {
-   float theta = fast_acos(sqrt(rand2));
-   float phi = M_PI * 2.0f * rand1;
-
-   const float sinTheta = fast_sin(theta);
-   const float sinPhi = fast_sin(phi);
-   const float cosPhi = fast_cos(phi);
-   const float cosTheta = fast_cos(theta);
-
-   float xs = sinTheta * cosPhi, ys = cosTheta, zs = sinTheta * sinPhi;
-
-   glm::vec3 y(normal); 
-   glm::vec3 h(normal); 
-   if (abs(h.x) <= abs(h.y) && abs(h.x) <= abs(h.z)) h.x = 1.0f; 
-   else if (abs(h.y) <= abs(h.x) && abs(h.y) <= abs(h.z)) h.y = 1.0f; 
-   else h.z = 1.0f; 
-
-   glm::vec3 x = glm::fastNormalize(glm::cross(h, y));
-   glm::vec3 z = glm::fastNormalize(glm::cross(x, y));
-   glm::vec3 dir = xs * x + ys * y + zs * z; 
-    
-   return glm::fastNormalize(dir);
-} 
-
-
 glm::vec3 RTRenderer::ShadePixel(RTScene *pScene, unsigned int primID, RTGeometry *pGeometry, glm::vec3 baryocentricCoord, glm::vec3 ViewVector, ShadePixelRecursionInfo &RecursionInfo)
 {
     if (pGeometry)
@@ -670,14 +676,22 @@ glm::vec3 RTRenderer::ShadePixel(RTScene *pScene, unsigned int primID, RTGeometr
         }
 
         glm::vec3 ReflectionColor = glm::vec3(0.0f);
-        bool bGetReflectionFromEnvironmentMap = false;// RecursionInfo.m_NumRecursions < MAX_RAY_RECURSION;
+        bool bGetReflectionFromEnvironmentMap = RecursionInfo.m_NumRecursions >= MAX_RAY_RECURSION;
         glm::vec3 ReflOrigin = intersectPos + Norm * LARGE_EPSILON; //Offset a small amount to avoid self-intersection
         glm::vec3 ReflectionVector = glm::reflect(-ViewVector, Norm);
 
         if (bGetReflectionFromEnvironmentMap)
         {
-            //if (m_bEnableMultiRayEmission && RecursionInfo.m_NumRecursions < 2)
-            if (false)
+            float fresnel;
+            float BRDFValue = CookTorrance().BRDF(ViewVector, Norm, ReflectionVector, Roughness, reflectivity, fresnel);
+            ReflectionColor = pScene->GetEnvironmentMap()->GetColor(ReflectionVector);
+            ReflectionColor *= BRDFValue;
+            TotalFresnel += fresnel;
+            NumSamplesTaken++;
+        }
+        else
+        {
+            if (m_bEnableMultiRayEmission && RecursionInfo.m_NumRecursions < 2)
             {
                 glm::vec3 Colors[RAYS_PER_INTERSECT_BATCH];
                 float BRDFValues[RAYS_PER_INTERSECT_BATCH];
@@ -685,13 +699,16 @@ glm::vec3 RTRenderer::ShadePixel(RTScene *pScene, unsigned int primID, RTGeometr
                 glm::vec3 ReflectionOrigins[RAYS_PER_INTERSECT_BATCH];
                 const UINT NumBatches = (RAYS_PER_INTERSECT_BATCH - 1) / RAY_EMISSION_COUNT + 1;
 
+                RTCosineWeightedRayGenerator CosineWeightedRayGenerator(ReflectionVector);
+                RTRayGenerator *pRayGenerator = &CosineWeightedRayGenerator;
+
                 std::fill(ReflectionOrigins, ReflectionOrigins + RAYS_PER_INTERSECT_BATCH, ReflOrigin);
                         
                 UINT NumRaysBatched = 0;
                 for (UINT RayIndex = 0; RayIndex < RAY_EMISSION_COUNT; RayIndex++)
                 {
                     // Make sure the reflection vector is tested
-                    ReflectionVectors[NumRaysBatched] = (RayIndex == 0) ? ReflectionVector : cosineWeightedSample(ReflectionVector, FltRand(), FltRand());
+                    ReflectionVectors[NumRaysBatched] = (RayIndex == 0) ? ReflectionVector : pRayGenerator->GenerateRay();
                     float fresnel;
                     const float BRDFValue = CookTorrance().BRDF(ViewVector, Norm, ReflectionVectors[NumRaysBatched], Roughness, reflectivity, fresnel);
                     if (RecursionInfo.m_TotalContribution * BRDFValue > MEDIUM_EPSILON)
@@ -704,7 +721,7 @@ glm::vec3 RTRenderer::ShadePixel(RTScene *pScene, unsigned int primID, RTGeometr
                             Trace(pScene, ReflectionOrigins, ReflectionVectors, Colors, NumRaysBatched, ShadePixelRecursionInfo(RecursionInfo.m_NumRecursions + 1, RecursionInfo.m_TotalContribution * BRDFValue));
                             for (UINT ColorIndex = 0; ColorIndex < NumRaysBatched; ColorIndex++)
                             {
-                                ReflectionColor += Colors[ColorIndex] * BRDFValues[ColorIndex];
+                                ReflectionColor += Colors[ColorIndex] * BRDFValues[ColorIndex] / pRayGenerator->PDF(ReflectionVectors[ColorIndex]);
                             }
                             NumRaysBatched = 0;
                         }
@@ -726,15 +743,6 @@ glm::vec3 RTRenderer::ShadePixel(RTScene *pScene, unsigned int primID, RTGeometr
                 TotalFresnel += fresnel;
 
             }
-        }
-        else
-        {
-            float fresnel;
-            float BRDFValue = CookTorrance().BRDF(ViewVector, Norm, ReflectionVector, Roughness, reflectivity, fresnel);
-            ReflectionColor = pScene->GetEnvironmentMap()->GetColor(ReflectionVector);
-            ReflectionColor *= BRDFValue;
-            TotalFresnel += fresnel;
-            NumSamplesTaken++;
         }
 
         TotalSpecular += ReflectionColor;

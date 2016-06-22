@@ -80,6 +80,23 @@ private:
     std::vector<Observer *> m_ObserverList;
 };
 
+class RTRayGenerator
+{
+public:
+    virtual glm::vec3 GenerateRay() = 0;
+    virtual float PDF(const glm::vec3 &vector) = 0;
+};
+
+class RTCosineWeightedRayGenerator : public RTRayGenerator
+{
+public:
+    RTCosineWeightedRayGenerator(glm::vec3 normal) : m_normal(normal) {}
+    glm::vec3 GenerateRay();
+    float PDF(const glm::vec3 &vector);
+private:
+    glm::vec3 m_normal;
+};
+
 class RTImage
 {
 public:
@@ -488,7 +505,7 @@ private:
     std::vector<RayTraceThreadArgs> m_ThreadArgs;
     HANDLE m_TracingFinishedEvent;
 
-    const bool m_bEnableMultiRayEmission = false;
+    const bool m_bEnableMultiRayEmission = true;
     VersionedObject::VersionID m_LastCameraVersionID;
     VersionedObject::VersionID m_LastSceneID;
     RenderSettings m_LastRenderSettings;
