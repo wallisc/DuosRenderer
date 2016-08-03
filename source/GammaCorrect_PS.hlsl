@@ -1,9 +1,9 @@
-#include "PostProcess.h"
+#include "FullscreenPlane.h"
 
 Texture2D InputTexture : register(t0);
 SamplerState Sampler : register(s0);
 
-float4 PS(POST_PROCESS_VS_OUTPUT input) : SV_Target
+float4 PS(FULLSCREEN_PLANE_VS_OUTPUT input) : SV_Target
 {
     return pow(InputTexture.Sample(Sampler, input.UV), 1.0f / 2.2f);
 }

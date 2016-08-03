@@ -1,3 +1,5 @@
+#include "SharedShaderDefines.h"
+
 #define EPSILON 0.0001
 #define PI 3.14
 #define ENABLE_PBR 1
@@ -9,9 +11,10 @@
 
 Texture2D DiffuseTexture : register(t0);
 Texture2D shadowBuffer : register(t1);
-TextureCube EnvironmentMap : register(t2);
-TextureCube IrradianceMap : register(t3);
+TextureCube EnvironmentMapLowerBound : register(t2);
+TextureCube EnvironmentMapUpperBound : register(t3);
 Texture2D NormalMap : register(t4);
+Texture2D BRDF_LUT: register(t5);
 
 SamplerState samLinear : register( s0 );
 
@@ -191,19 +194,20 @@ PS_OUTPUT PS( PS_INPUT input) : SV_Target
 #endif
     }
 #if ENABLE_PBR
-    if (1)
-    {
-        float3 reflectionRay = reflect(-v, n);
-        float3 incomingViewDir = normalize(CamPos.xyz - input.WorldPos.xyz);
-        // TODO: This won't work for bump maps
-        float3 worldNorm = normalize(input.WorldNorm.xyz);
-        float3 worldReflectionRay = reflect(-incomingViewDir, worldNorm);
+    float3 reflectionRay = reflect(-v, n);
+    float3 incomingViewDir = normalize(CamPos.xyz - input.WorldPos.xyz);
+    // TODO: This won't work for bump maps
+    float3 worldNorm = normalize(input.WorldNorm.xyz);
+    float3 worldReflectionRay = reflect(-incomingViewDir, worldNorm);
 
-        float3 reflectionColor = EnvironmentMap.Sample(samLinear, worldReflectionRay);
-        float reflectivity;
-        totalSpecular += reflectionColor * BRDF(v, n, reflectionRay, roughness, R0, reflectivity);
-        totalFresnel += reflectivity;
-    }
+    float roughnessLowerBoundIndex = floor(roughness / ENVIRONMENT_TEXTURE_ROUGHNESS_INCREMENT);
+    float roughnessLerp = (roughness - roughnessLowerBoundIndex * ENVIRONMENT_TEXTURE_ROUGHNESS_INCREMENT) / ENVIRONMENT_TEXTURE_ROUGHNESS_INCREMENT;
+
+    float3 reflectionColor = lerp(EnvironmentMapUpperBound.Sample(samLinear, worldReflectionRay), EnvironmentMapLowerBound.Sample(samLinear, worldReflectionRay), 1.0f -  roughnessLerp);
+    float reflectivity;
+    float2 brdfValues = BRDF_LUT.Sample(samLinear, float2(nDotV, roughness));
+    totalSpecular += reflectionColor * (brdfValues.x + brdfValues.y);
+    totalFresnel += brdfValues.y;
 
     uint SampleCount = 2;
     totalSpecular /= SampleCount;
@@ -212,6 +216,5 @@ PS_OUTPUT PS( PS_INPUT input) : SV_Target
 #else
     output.Color = float4(totalDiffuse, 1.0);
 #endif
-
     return output;
 }

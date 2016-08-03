@@ -9,6 +9,8 @@
 #include <d3dcompiler.h>
 #include <directxcolors.h>
 
+#define M_PI 3.14
+
 using namespace DirectX;
 
 const bool g_bGammaCorrectTextures = true;
@@ -154,16 +156,39 @@ D3D11Renderer::D3D11Renderer(HWND WindowHandle, unsigned int width, unsigned int
         D3D11_SDK_VERSION, &m_pDevice, nullptr, &m_pImmediateContext);
     FAIL_CHK(FAILED(hr), "Failed D3D11CreateDevice");
 
+#ifdef DEBUG
+    CComPtr<ID3D11Debug> d3dDebug;
+    if (SUCCEEDED(m_pDevice->QueryInterface(&d3dDebug)))
+    {
+        CComPtr<ID3D11InfoQueue> d3dInfoQueue;
+        if (SUCCEEDED(d3dDebug->QueryInterface(&d3dInfoQueue)))
+        {
+            D3D11_MESSAGE_ID hide[] =
+            {
+                D3D11_MESSAGE_ID_DEVICE_DRAW_RENDERTARGETVIEW_NOT_SET,
+                // Add more message IDs here as needed 
+            };
+            D3D11_INFO_QUEUE_FILTER filter;
+            memset(&filter, 0, sizeof(filter));
+            filter.DenyList.NumIDs = _countof(hide);
+            filter.DenyList.pIDList = hide;
+            d3dInfoQueue->AddStorageFilterEntries(&filter);
+        }
+    }
+#endif
+
     hr = m_pDevice->QueryInterface(__uuidof(ID3D11Device1), (void**)&m_pDevice1);
     FAIL_CHK(FAILED(hr), "Failed query for ID3D11Device1");
 
     m_pBasePassTexture = std::unique_ptr<ReadWriteTexture>(new ReadWriteTexture(m_pDevice, width, height, DXGI_FORMAT_R8G8B8A8_UNORM));
 
-    m_pBRDFPrecalculatedResources = std::unique_ptr<BRDFPrecomputationResouces>(new BRDFPrecomputationResouces(this));
 
     InitializeSwapchain(WindowHandle, width, height);
 
     CompileShaders();
+
+    m_pBRDFPrecalculatedResources = std::unique_ptr<BRDFPrecomputationResouces>(new BRDFPrecomputationResouces(this));
+
     SetDefaultState();
 }
 
@@ -206,10 +231,10 @@ void D3D11Renderer::CompileShaders()
             pVSBlob->GetBufferSize(), &m_pForwardInputLayout);
 
         pVSBlob = nullptr;
-        hr = CompileShaderHelper(L"PostProcess_VS.hlsl", "VS", "vs_5_0", nullptr, &pVSBlob);
+        hr = CompileShaderHelper(L"FullscreenPlane_VS.hlsl", "VS", "vs_5_0", nullptr, &pVSBlob);
         FAIL_CHK(FAILED(hr), "The FX file cannot be compiled.  Please run this executable from the directory that contains the FX file.");
 
-        hr = m_pDevice->CreateVertexShader(pVSBlob->GetBufferPointer(), pVSBlob->GetBufferSize(), nullptr, &m_pPostProcessVS);
+        hr = m_pDevice->CreateVertexShader(pVSBlob->GetBufferPointer(), pVSBlob->GetBufferSize(), nullptr, &m_pFullscreenVS);
         FAIL_CHK(FAILED(hr), "Failed to CreateVertexShader");
 
         D3D_SHADER_MACRO macros[3] = {};
@@ -500,7 +525,6 @@ void D3D11Renderer::DestroyMaterial(Material* pMaterial)
     delete pMaterial;
 }
 
-
 D3D11EnvironmentTextureCube::D3D11EnvironmentTextureCube(
     _In_ D3D11Renderer *pRenderer,
     _In_ const CreateEnvironmentTextureCube *pCreateTextureCube) :
@@ -509,7 +533,6 @@ D3D11EnvironmentTextureCube::D3D11EnvironmentTextureCube(
     auto pDevice = GetParent()->GetD3D11Device();
     auto pImmediateContext = GetParent()->GetD3D11Context();
     ID3D11ShaderResourceView *pCubeMap = CreateTextureCube(pDevice, pImmediateContext, pCreateTextureCube->m_TextureNames);
-    m_pIrradianceTextureCube = CreateTextureCube(pDevice, pImmediateContext, pCreateTextureCube->m_IrradianceTextureNames);
 
     D3D11_BUFFER_DESC CameraVertexBufferDesc;
     ZeroMemory(&CameraVertexBufferDesc, sizeof(CameraVertexBufferDesc));
@@ -541,7 +564,12 @@ D3D11EnvironmentTextureCube::D3D11EnvironmentTextureCube(
         FAIL_CHK(FAILED(hr), "Failed to create the input layout for the environment shader");
     }
 
-    m_pEnvironmentTextureCube = pCubeMap;// GenerateBakedReflectionCube(pCubeMap, 1.0f);
+    m_pEnvironmentTextureCube = pCubeMap;
+    m_pPrefilteredTextureCube[0] = m_pEnvironmentTextureCube;
+    for (UINT i = 1; i < cNumberOfPrefilteredCubes; i++)
+    {
+        m_pPrefilteredTextureCube[i] = GenerateBakedReflectionCube(pCubeMap, (float)i / (float)(cNumberOfPrefilteredCubes - 1));
+    }
 }
 
 ID3D11ShaderResourceView *D3D11EnvironmentTextureCube::GenerateBakedReflectionCube(ID3D11ShaderResourceView *pCubeMap, float roughness)
@@ -587,7 +615,7 @@ ID3D11ShaderResourceView *D3D11EnvironmentTextureCube::GenerateBakedReflectionCu
         ID3D11Buffer *pBuffers[] = { BRDFResources.GetCubeMapVertexBuffer((CUBE_FACES)face) };
         UINT pStride[] = { BRDFResources.GetCubeMapVertexBufferStride() };
         UINT pOffset[] = { 0 };
-
+    
         CComPtr<ID3D11RenderTargetView> pRenderTarget;
         D3D11_RENDER_TARGET_VIEW_DESC renderTargetDesc = CD3D11_RENDER_TARGET_VIEW_DESC(pOutputResource, D3D11_RTV_DIMENSION_TEXTURE2DARRAY, cubeMapDesc.Format, 0, face, 1);
         pDevice->CreateRenderTargetView(pOutputResource, &renderTargetDesc, &pRenderTarget);
@@ -595,9 +623,14 @@ ID3D11ShaderResourceView *D3D11EnvironmentTextureCube::GenerateBakedReflectionCu
         ID3D11RenderTargetView *pRTVs[] = { pRenderTarget };
         float black[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
         pImmediateContext->ClearRenderTargetView(pRenderTarget, black);
-        
+    
+        ID3D11Buffer *pMaterialBuffer = BRDFResources.GetMaterialBuffer(roughness);
+    
+        ID3D11Buffer* pConstantBuffers[] = { pMaterialBuffer };
+    
         pImmediateContext->OMSetRenderTargets(1, pRTVs, nullptr);
         pImmediateContext->IASetVertexBuffers(0, ARRAYSIZE(pBuffers), pBuffers, pStride, pOffset);
+        pImmediateContext->PSSetConstantBuffers(0, ARRAYSIZE(pConstantBuffers), pConstantBuffers);
         pImmediateContext->Draw(D3D11GeometryHelper::cScreenSpacePlaneVertexCount, 0);
     }
 
@@ -775,17 +808,15 @@ public:
         ID3D11Buffer *pViewProjBuffer, 
         ID3D11Buffer *pLightViewProjBuffer, 
         ID3D11ShaderResourceView *pShadowView,
-        ID3D11ShaderResourceView *pEnvironmentMap,
-        ID3D11ShaderResourceView *pIrradianceMap,
+        ID3D11ShaderResourceView *pBRDF_LUT,
         ID3D11RenderTargetView *pRenderTarget, 
         ID3D11DepthStencilView *pDepthBuffer) :
         m_pDepthBuffer(pDepthBuffer), 
         m_pViewProjBuffer(pViewProjBuffer), 
         m_pLightViewProjBuffer(pLightViewProjBuffer),
+        m_pBRDF_LUT(pBRDF_LUT),
         m_pRenderTarget(pRenderTarget),
-        m_pShadowView(pShadowView),
-        m_pEnvironmentMap(pEnvironmentMap),
-        m_pIrradianceMap(pIrradianceMap) {}
+        m_pShadowView(pShadowView) {}
 
     void SetBindings(ID3D11DeviceContext *pContext)
     {
@@ -794,8 +825,8 @@ public:
         pContext->PSSetConstantBuffers(1, 1, &m_pViewProjBuffer);
         pContext->VSSetConstantBuffers(3, 1, &m_pLightViewProjBuffer);
         pContext->PSSetShaderResources(1, 1, &m_pShadowView);
-        pContext->PSSetShaderResources(2, 1, &m_pEnvironmentMap);
-        pContext->PSSetShaderResources(3, 1, &m_pIrradianceMap);
+        pContext->PSSetShaderResources(5, 1, &m_pBRDF_LUT);
+
     }
 
     virtual void UndoBindings(ID3D11DeviceContext *pContext)
@@ -813,7 +844,7 @@ private:
     ID3D11RenderTargetView* m_pRenderTarget;
     ID3D11DepthStencilView* m_pDepthBuffer;
     ID3D11ShaderResourceView *m_pShadowView;
-    ID3D11ShaderResourceView *m_pEnvironmentMap;
+    ID3D11ShaderResourceView *m_pBRDF_LUT;
     ID3D11ShaderResourceView *m_pIrradianceMap;
 };
 
@@ -856,10 +887,11 @@ void D3D11Renderer::DrawScene(Camera *pCamera, Scene *pScene, const RenderSettin
         pCameraViewProjBuffer, 
         pLightViewProjBuffer, 
         m_pShadowResourceView, 
-        pD3D11Scene->GetEnvironmentMap()->GetEnvironmentMapSRV(),
-        pD3D11Scene->GetEnvironmentMap()->GetIrradianceMapSRV(),
-        m_pBasePassTexture->GetRenderTargetView(), m_pDepthBuffer);
+        GetBRDFPrecomputedResources().GetBRDF_LUT(),
+        m_pBasePassTexture->GetRenderTargetView(), 
+        m_pDepthBuffer);
     Passes.push_back(&BasePass);
+
     for (D3D11Pass *pPass : Passes)
     {
         pPass->SetBindings(m_pImmediateContext);
@@ -873,6 +905,13 @@ void D3D11Renderer::DrawScene(Camera *pCamera, Scene *pScene, const RenderSettin
             m_pImmediateContext->IASetVertexBuffers(0, 1, &pVertexBuffer, &Strides, &Offsets);
             m_pImmediateContext->IASetIndexBuffer(pIndexBuffer, DXGI_FORMAT_R32_UINT, 0);
             m_pImmediateContext->PSSetConstantBuffers(4, 1, &pMaterialBuffer);
+
+            const float roughness = pGeometry->GetMaterial()->GetRoughness();
+            ID3D11ShaderResourceView *pEnvironmentMapLowerBound = pD3D11Scene->GetEnvironmentMap()->GetLowerBoundEnvironmentMapSRV(roughness);
+            ID3D11ShaderResourceView *pEnvironmentMapUpperBound = pD3D11Scene->GetEnvironmentMap()->GetUpperBoundEnvironmentMapSRV(roughness);
+
+            m_pImmediateContext->PSSetShaderResources(2, 1, &pEnvironmentMapLowerBound);
+            m_pImmediateContext->PSSetShaderResources(3, 1, &pEnvironmentMapUpperBound);
 
             if (pGeometry->GetD3D11Material()->HasDiffuseTexture())
             {
@@ -962,8 +1001,8 @@ void D3D11Renderer::PostProcess(ReadWriteTexture *pInput, ID3D11RenderTargetView
     std::vector<D3D11Pass *> PostProcessPasses;
 
     ID3D11ShaderResourceView *pSRVs = pInput->GetShaderResourceView();
-    PostProcessPass GammaCorrectionPass(m_pGammaCorrectPS, m_pPostProcessVS, 1, &pSRVs, 1, &pOutput);
-    PostProcessPass PassThroughPass(m_pPassThroughPS, m_pPostProcessVS, 1, &pSRVs, 1, &pOutput);
+    PostProcessPass GammaCorrectionPass(m_pGammaCorrectPS, m_pFullscreenVS, 1, &pSRVs, 1, &pOutput);
+    PostProcessPass PassThroughPass(m_pPassThroughPS, m_pFullscreenVS, 1, &pSRVs, 1, &pOutput);
     if (RenderFlags.m_GammaCorrection)
     {
         PostProcessPasses.push_back(&GammaCorrectionPass);
@@ -1095,7 +1134,7 @@ D3D11DirectionalLight::D3D11DirectionalLight(
     m_ViewProjCpuData.m_Projection = XMMatrixIdentity();
     m_ViewProjCpuData.m_View = XMMatrixIdentity();
     m_ViewProjCpuData.m_InvTransView = XMMatrixIdentity();
-    m_pViewProjBuffer = CreateConstantBuffer(pDevice, m_pLightConstantBuffer, sizeof(CBViewProjectionTransforms));
+    m_pViewProjBuffer = CreateConstantBuffer(pDevice, &m_ViewProjCpuData, sizeof(CBViewProjectionTransforms));
 }
 
 void D3D11DirectionalLight::UpdateLight(ID3D11DeviceContext *pContext, const XMMATRIX &invTransView)
@@ -1280,6 +1319,11 @@ ID3D11Buffer* D3D11Camera::GetViewProjBuffer()
     return m_pViewProjBuffer;
 }
 
+float FloatRand()
+{
+    return rand() / (float)RAND_MAX;
+}
+
 BRDFPrecomputationResouces::BRDFPrecomputationResouces(D3D11Renderer *pRenderer) :
     D3D11RendererChild(pRenderer)
 {
@@ -1288,15 +1332,15 @@ BRDFPrecomputationResouces::BRDFPrecomputationResouces(D3D11Renderer *pRenderer)
     HRESULT hr = S_OK;
 
     CComPtr<ID3DBlob> pPSBlob = nullptr;
-    CompileShaderHelper(L"PrecalcBRDF_PS.hlsl", "main", "ps_5_0", nullptr, &pPSBlob);
+    CompileShaderHelper(L"PrefilterCube_PS.hlsl", "main", "ps_5_0", nullptr, &pPSBlob);
 
     hr = pDevice->CreatePixelShader(pPSBlob->GetBufferPointer(), pPSBlob->GetBufferSize(), nullptr, &m_pPrecalcBRDFPixelShader);
-    FAIL_CHK(FAILED(hr), "Failed Creating PrecalcBRDF Pixel Shader");
+    FAIL_CHK(FAILED(hr), "Failed Creating PrefilterCube Pixel Shader");
 
     CComPtr<ID3DBlob> pVSBlob = nullptr;
-    CompileShaderHelper(L"PrecalcBRDF_VS.hlsl", "main", "vs_5_0", nullptr, &pVSBlob);
+    CompileShaderHelper(L"PrefilterCube_VS.hlsl", "main", "vs_5_0", nullptr, &pVSBlob);
     hr = pDevice->CreateVertexShader(pVSBlob->GetBufferPointer(), pVSBlob->GetBufferSize(), nullptr, &m_pPrecalcBRDFVertexShader);
-    FAIL_CHK(FAILED(hr), "Failed Creating PrecalcBRDF Vertex Shader");
+    FAIL_CHK(FAILED(hr), "Failed Creating PrefilterCube Vertex Shader");
 
     // Define the input layout
     D3D11_INPUT_ELEMENT_DESC layout[] =
@@ -1306,6 +1350,9 @@ BRDFPrecomputationResouces::BRDFPrecomputationResouces(D3D11Renderer *pRenderer)
     };  
     UINT numElements = ARRAYSIZE(layout);
     hr = pDevice->CreateInputLayout(layout, numElements, pVSBlob->GetBufferPointer(), pVSBlob->GetBufferSize(), &m_pPrecalcBRDFInputLayout);
+
+    const D3D11_BUFFER_DESC materialBufferDesc = CD3D11_BUFFER_DESC(sizeof(CBPrecalcBRDFMaterial), D3D11_BIND_CONSTANT_BUFFER);
+    pDevice->CreateBuffer(&materialBufferDesc, nullptr, &m_pMaterialBuffer);
 
     const D3D11_BUFFER_DESC vertexBufferDesc = CD3D11_BUFFER_DESC(sizeof(CameraPlaneVertex) * 6, D3D11_BIND_VERTEX_BUFFER);
     D3D11_SUBRESOURCE_DATA initialData;
@@ -1321,10 +1368,10 @@ BRDFPrecomputationResouces::BRDFPrecomputationResouces(D3D11Renderer *pRenderer)
         switch (face)
         {
         case CUBE_FACES::X_POSITIVE:
-            TopLeftViewVector = XMVector3Normalize(XMVectorSet(1.0, 1.0, -1.0, 0.0f));
-            TopRightViewVector = XMVector3Normalize(XMVectorSet(1.0, 1.0, 1.0, 0.0f));
-            BottomLeftViewVector = XMVector3Normalize(XMVectorSet(1.0, -1.0, -1.0, 0.0f));
-            BottomRightViewVector = XMVector3Normalize(XMVectorSet(1.0, -1.0, 1.0, 0.0f));
+            TopLeftViewVector = XMVector3Normalize(XMVectorSet(1.0, 1.0, 1.0, 0.0f));
+            TopRightViewVector = XMVector3Normalize(XMVectorSet(1.0, 1.0, -1.0, 0.0f));
+            BottomLeftViewVector = XMVector3Normalize(XMVectorSet(1.0, -1.0, 1.0, 0.0f));
+            BottomRightViewVector = XMVector3Normalize(XMVectorSet(1.0, -1.0, -1.0, 0.0f));
             break;
         case CUBE_FACES::Y_POSITIVE:
             TopLeftViewVector = XMVector3Normalize(XMVectorSet(1.0, 1.0, -1.0, 0.0f));
@@ -1333,16 +1380,16 @@ BRDFPrecomputationResouces::BRDFPrecomputationResouces(D3D11Renderer *pRenderer)
             BottomRightViewVector = XMVector3Normalize(XMVectorSet(-1.0, 1.0, 1.0, 0.0f));
             break;
         case CUBE_FACES::Z_POSITIVE:
-            TopLeftViewVector = XMVector3Normalize(XMVectorSet(-1.0, 1.0, 1.0, 0.0f));
-            TopRightViewVector = XMVector3Normalize(XMVectorSet(1.0, 1.0, 1.0, 0.0f));
-            BottomLeftViewVector = XMVector3Normalize(XMVectorSet(-1.0, -1.0, 1.0, 0.0f));
-            BottomRightViewVector = XMVector3Normalize(XMVectorSet(1.0, -1.0, 1.0, 0.0f));
+            TopLeftViewVector = XMVector3Normalize(XMVectorSet(1.0, 1.0, 1.0, 0.0f));
+            TopRightViewVector = XMVector3Normalize(XMVectorSet(-1.0, 1.0, 1.0, 0.0f));
+            BottomLeftViewVector = XMVector3Normalize(XMVectorSet(1.0, -1.0, 1.0, 0.0f));
+            BottomRightViewVector = XMVector3Normalize(XMVectorSet(-1.0, -1.0, 1.0, 0.0f));
             break;
         case CUBE_FACES::X_NEGATIVE:
-            TopLeftViewVector = XMVector3Normalize(XMVectorSet(-1.0, 1.0, 1.0, 0.0f));
-            TopRightViewVector = XMVector3Normalize(XMVectorSet(-1.0, 1.0, -1.0, 0.0f));
-            BottomLeftViewVector = XMVector3Normalize(XMVectorSet(-1.0, -1.0, 1.0, 0.0f));
-            BottomRightViewVector = XMVector3Normalize(XMVectorSet(-1.0, -1.0, -1.0, 0.0f));
+            TopLeftViewVector = XMVector3Normalize(XMVectorSet(-1.0, 1.0, -1.0, 0.0f));
+            TopRightViewVector = XMVector3Normalize(XMVectorSet(-1.0, 1.0, 1.0, 0.0f));
+            BottomLeftViewVector = XMVector3Normalize(XMVectorSet(-1.0, -1.0, -1.0, 0.0f));
+            BottomRightViewVector = XMVector3Normalize(XMVectorSet(-1.0, -1.0, 1.0, 0.0f));
             break;
         case CUBE_FACES::Y_NEGATIVE:
             TopLeftViewVector = XMVector3Normalize(XMVectorSet(1.0, -1.0, -1.0, 0.0f));
@@ -1351,10 +1398,10 @@ BRDFPrecomputationResouces::BRDFPrecomputationResouces(D3D11Renderer *pRenderer)
             BottomRightViewVector = XMVector3Normalize(XMVectorSet(-1.0, -1.0, 1.0, 0.0f));
             break;
         case CUBE_FACES::Z_NEGATIVE:
-            TopLeftViewVector = XMVector3Normalize(XMVectorSet(-1.0, 1.0, -1.0, 0.0f));
-            TopRightViewVector = XMVector3Normalize(XMVectorSet(1.0, 1.0, -1.0, 0.0f));
-            BottomLeftViewVector = XMVector3Normalize(XMVectorSet(-1.0, -1.0, -1.0, 0.0f));
-            BottomRightViewVector = XMVector3Normalize(XMVectorSet(1.0, -1.0, -1.0, 0.0f));
+            TopLeftViewVector = XMVector3Normalize(XMVectorSet(1.0, 1.0, -1.0, 0.0f));
+            TopRightViewVector = XMVector3Normalize(XMVectorSet(-1.0, 1.0, -1.0, 0.0f));
+            BottomLeftViewVector = XMVector3Normalize(XMVectorSet(1.0, -1.0, -1.0, 0.0f));
+            BottomRightViewVector = XMVector3Normalize(XMVectorSet(-1.0, -1.0, -1.0, 0.0f));
             break;
         default:
             assert(false);
@@ -1363,4 +1410,42 @@ BRDFPrecomputationResouces::BRDFPrecomputationResouces(D3D11Renderer *pRenderer)
         GenerateScreenSpaceVectorPlane(TopLeftViewVector, TopRightViewVector, BottomLeftViewVector, BottomRightViewVector, pVertexBufferData);
         pDevice->CreateBuffer(&vertexBufferDesc, &initialData, &m_pCubeMapBuffers[face]);
     }
+
+    InitBRDFLUT();
+}
+
+void BRDFPrecomputationResouces::InitBRDFLUT()
+{
+    auto pDevice = GetParent()->GetD3D11Device();
+    auto pImmediateContext = GetParent()->GetD3D11Context();
+
+    const UINT integratedBRDFTextureWidth = 512;
+    const UINT integratedBRDFTextureHeight = 512;
+    ReadWriteTexture BRDFTex(pDevice, integratedBRDFTextureWidth, integratedBRDFTextureHeight, DXGI_FORMAT_R16G16_FLOAT);
+    m_pIntegratedBRDF = BRDFTex.GetShaderResourceView();
+    
+    D3D11_VIEWPORT viewport = CD3D11_VIEWPORT(0.0f, 0.0f, (float)integratedBRDFTextureWidth, (float)integratedBRDFTextureHeight);
+
+    CComPtr<ID3DBlob> pPSBlob = nullptr;
+    CompileShaderHelper(L"PrecalcBRDF_PS.hlsl", "main", "ps_5_0", nullptr, &pPSBlob);
+    CComPtr<ID3D11PixelShader> pPrecalcBRDFShader;
+    pDevice->CreatePixelShader(pPSBlob->GetBufferPointer(), pPSBlob->GetBufferSize(), nullptr, &pPrecalcBRDFShader);
+
+    ID3D11RenderTargetView *ppRTVs[] = { BRDFTex.GetRenderTargetView() };
+    pImmediateContext->RSSetViewports(1, &viewport);
+    pImmediateContext->OMSetRenderTargets(1, ppRTVs, nullptr);
+    pImmediateContext->IASetInputLayout(nullptr);
+    pImmediateContext->VSSetShader(GetParent()->GetFullscreenVS(), nullptr, 0);
+    pImmediateContext->PSSetShader(pPrecalcBRDFShader, nullptr, 0);
+    pImmediateContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    pImmediateContext->Draw(D3D11GeometryHelper::cScreenSpacePlaneVertexCount, 0);
+}
+
+
+ID3D11Buffer *BRDFPrecomputationResouces::GetMaterialBuffer(float roughness) const
+{
+    CBPrecalcBRDFMaterial MaterialConstant;
+    MaterialConstant.roughness = XMVectorSet(roughness, 0, 0, 0);
+    GetParent()->GetD3D11Context()->UpdateSubresource(m_pMaterialBuffer, 0, nullptr, &MaterialConstant, 0, 0);
+    return m_pMaterialBuffer;
 }

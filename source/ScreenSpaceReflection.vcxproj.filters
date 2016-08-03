@@ -518,10 +518,19 @@
     <ClInclude Include="embree\inc\rtcore_scene.h">
       <Filter>Embree</Filter>
     </ClInclude>
-    <ClInclude Include="PostProcess.h">
+    <ClInclude Include="PrecalcBRDF.h">
       <Filter>Shaders</Filter>
     </ClInclude>
-    <ClInclude Include="PrecalcBRDF.h">
+    <ClInclude Include="SharedShaderDefines.h">
+      <Filter>Shaders</Filter>
+    </ClInclude>
+    <ClInclude Include="PrefilterCube.h">
+      <Filter>Shaders</Filter>
+    </ClInclude>
+    <ClInclude Include="ShaderUtil.h">
+      <Filter>Shaders</Filter>
+    </ClInclude>
+    <ClInclude Include="FullscreenPlane.h">
       <Filter>Shaders</Filter>
     </ClInclude>
   </ItemGroup>
@@ -541,16 +550,19 @@
     <FxCompile Include="GammaCorrect_PS.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
-    <FxCompile Include="PostProcess_VS.hlsl">
-      <Filter>Shaders</Filter>
-    </FxCompile>
     <FxCompile Include="PassThrough_PS.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
     <FxCompile Include="PrecalcBRDF_PS.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
-    <FxCompile Include="PrecalcBRDF_VS.hlsl">
+    <FxCompile Include="PrefilterCube_PS.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="PrefilterCube_VS.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="FullscreenPlane_VS.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
   </ItemGroup>

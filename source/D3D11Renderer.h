@@ -1,4 +1,5 @@
 #include "Renderer.h"
+#include "SharedShaderDefines.h"
 
 #include <d3d11_1.h>
 #include <directxmath.h>
@@ -6,6 +7,13 @@
 #include <unordered_map>
 #include <memory>
 #include <atlbase.h>
+
+#define CLAMP(value, bottom, top) min(top, max(bottom, value))
+
+struct CBPrecalcBRDFMaterial
+{
+    DirectX::XMVECTOR roughness;
+};
 
 struct CBCamera
 {
@@ -60,7 +68,7 @@ class D3D11RendererChild
 {
 public:
     D3D11RendererChild(D3D11Renderer *pRenderer) : m_pRenderer(pRenderer) {}
-    D3D11Renderer *GetParent() { return m_pRenderer; }
+    D3D11Renderer *GetParent() const { return m_pRenderer; }
 private:
     D3D11Renderer *m_pRenderer;
 };
@@ -228,7 +236,8 @@ public:
     D3D11EnvironmentMap(D3D11Renderer *pRenderer) : D3D11RendererChild(pRenderer) {}
     virtual void DrawEnvironmentMap(_In_ ID3D11DeviceContext *pImmediateContext, D3D11Camera *pCamera, ID3D11RenderTargetView *pRenderTarget) = 0;
     virtual ID3D11ShaderResourceView *GetEnvironmentMapSRV() = 0;
-    virtual ID3D11ShaderResourceView *GetIrradianceMapSRV() = 0;
+    virtual ID3D11ShaderResourceView *GetUpperBoundEnvironmentMapSRV(float roughness) = 0;
+    virtual ID3D11ShaderResourceView *GetLowerBoundEnvironmentMapSRV(float roughness) = 0;
 };
 
 class D3D11EnvironmentTextureCube : public D3D11EnvironmentMap
@@ -237,13 +246,23 @@ public:
     D3D11EnvironmentTextureCube(_In_ D3D11Renderer *pRenderer, _In_ const CreateEnvironmentTextureCube *pCreateTextureCube);
     void DrawEnvironmentMap(_In_ ID3D11DeviceContext *pImmediateContext, D3D11Camera *pCamera, ID3D11RenderTargetView *pRenderTarget);
     ID3D11ShaderResourceView *GetEnvironmentMapSRV() { return m_pEnvironmentTextureCube; }
-    ID3D11ShaderResourceView *GetIrradianceMapSRV() { return m_pIrradianceTextureCube; }
+    ID3D11ShaderResourceView *GetUpperBoundEnvironmentMapSRV(float roughness) { 
+        UINT index = CLAMP((UINT)ceilf(roughness * (float)(cNumberOfPrefilteredCubes - 1)), 0, cNumberOfPrefilteredCubes - 1);
+        return m_pPrefilteredTextureCube[index];
+    }
+    ID3D11ShaderResourceView *GetLowerBoundEnvironmentMapSRV(float roughness) {
+        UINT index = CLAMP((UINT)floorf(roughness * (float)(cNumberOfPrefilteredCubes - 1)), 0, cNumberOfPrefilteredCubes - 1);
+        return m_pPrefilteredTextureCube[index];
+    }
+
 private:
+    static const UINT cNumberOfPrefilteredCubes = ENVIRONMENT_TEXTURE_CUBES;
+
     static ID3D11ShaderResourceView *CreateTextureCube(_In_ ID3D11Device *pDevice, _In_ ID3D11DeviceContext *pImmediateContext, _In_reads_(TEXTURES_PER_CUBE) char * const *textureNames);
     ID3D11ShaderResourceView* GenerateBakedReflectionCube(ID3D11ShaderResourceView *pCubeMap, float roughness);
 
     ID3D11ShaderResourceView *m_pEnvironmentTextureCube;
-    ID3D11ShaderResourceView *m_pIrradianceTextureCube;
+    ID3D11ShaderResourceView *m_pPrefilteredTextureCube[cNumberOfPrefilteredCubes];
 
     ID3D11Buffer *m_pCameraVertexBuffer;
     ID3D11PixelShader *m_pEnvironmentPixelShader;
@@ -261,7 +280,8 @@ public:
         assert(false);
     }
     ID3D11ShaderResourceView *GetEnvironmentMapSRV() { return nullptr; }
-    ID3D11ShaderResourceView *GetIrradianceMapSRV() { return nullptr; }
+    ID3D11ShaderResourceView *GetLowerBoundEnvironmentMapSRV(float) { return nullptr; }
+    ID3D11ShaderResourceView *GetUpperBoundEnvironmentMapSRV(float) { return nullptr; }
 
     void DrawEnvironmentMap(_In_ ID3D11DeviceContext *pImmediateContext, D3D11Camera *pCamera, ID3D11RenderTargetView *pRenderTarget) {}
 };
@@ -358,15 +378,15 @@ private:
 
 enum CUBE_FACES
 {
-    Z_POSITIVE = 0,
-    Z_NEGATIVE,
+    X_POSITIVE = 0,
+    X_NEGATIVE,
     Y_POSITIVE,
     Y_NEGATIVE,
-    X_POSITIVE,
-    X_NEGATIVE,
+    Z_POSITIVE,
+    Z_NEGATIVE,
     NUM_CUBE_FACES
 };
-class BRDFPrecomputationResouces : D3D11RendererChild
+class BRDFPrecomputationResouces : public D3D11RendererChild
 {
 public:
     BRDFPrecomputationResouces(D3D11Renderer *pRenderer);
@@ -376,12 +396,21 @@ public:
     ID3D11InputLayout *GetInputLayout() const { return m_pPrecalcBRDFInputLayout; }
     ID3D11VertexShader* GetVertexShader() const { return m_pPrecalcBRDFVertexShader; }
     ID3D11PixelShader* GetPixelShader() const { return m_pPrecalcBRDFPixelShader; }
+
+    ID3D11Buffer* GetMaterialBuffer(float roughhness) const;
+    ID3D11ShaderResourceView *GetBRDF_LUT() { return m_pIntegratedBRDF; }
 private:
+    void InitBRDFLUT();
+
     ID3D11Buffer *m_pCubeMapBuffers[NUM_CUBE_FACES];
+
+    ID3D11Buffer *m_pMaterialBuffer;
 
     ID3D11InputLayout *m_pPrecalcBRDFInputLayout;
     ID3D11VertexShader *m_pPrecalcBRDFVertexShader;
     ID3D11PixelShader *m_pPrecalcBRDFPixelShader;
+
+    ID3D11ShaderResourceView *m_pIntegratedBRDF;
 };
 
 class D3D11Renderer : public Renderer
@@ -417,7 +446,8 @@ public:
 
     ID3D11DeviceContext *GetD3D11Context() { return m_pImmediateContext; }
     ID3D11Device *GetD3D11Device() { return m_pDevice; }
-    const BRDFPrecomputationResouces &GetBRDFPrecomputedResources() { return *m_pBRDFPrecalculatedResources.get(); }
+    BRDFPrecomputationResouces &GetBRDFPrecomputedResources() const { return *m_pBRDFPrecalculatedResources.get(); }
+    ID3D11VertexShader *GetFullscreenVS() { return m_pFullscreenVS; }
 private:
     void SetDefaultState();
     void CompileShaders();
@@ -449,7 +479,7 @@ private:
 
     ID3D11PixelShader* m_pGammaCorrectPS;
     ID3D11PixelShader* m_pPassThroughPS;
-    ID3D11VertexShader *m_pPostProcessVS;
+    ID3D11VertexShader *m_pFullscreenVS;
     std::unique_ptr<BRDFPrecomputationResouces> m_pBRDFPrecalculatedResources;
 };
 

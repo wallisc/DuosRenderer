@@ -488,7 +488,7 @@
       <EntryPointName Condition="'$(Configuration)|$(Platform)'=='Profile|x64'">PS</EntryPointName>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Profile|x64'">5.0</ShaderModel>
     </FxCompile>
-    <FxCompile Include="PostProcess_VS.hlsl">
+    <FxCompile Include="FullscreenPlane_VS.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Profile|x64'">Vertex</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Profile|Win32'">Vertex</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Vertex</ShaderType>
@@ -534,7 +534,21 @@
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Profile|x64'">Pixel</ShaderType>
     </FxCompile>
-    <FxCompile Include="PrecalcBRDF_VS.hlsl">
+    <FxCompile Include="PrefilterCube_PS.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Profile|x64'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Profile|Win32'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">5.0</ShaderModel>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">5.0</ShaderModel>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Profile|Win32'">5.0</ShaderModel>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Profile|x64'">5.0</ShaderModel>
+    </FxCompile>
+    <FxCompile Include="PrefilterCube_VS.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Profile|x64'">Vertex</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Profile|Win32'">Vertex</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Vertex</ShaderType>
@@ -714,7 +728,7 @@
     <ClInclude Include="glm\vec3.hpp" />
     <ClInclude Include="glm\vec4.hpp" />
     <ClInclude Include="glm\vector_relational.hpp" />
-    <ClInclude Include="PostProcess.h">
+    <ClInclude Include="FullscreenPlane.h">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </ClInclude>
     <ClInclude Include="PrecalcBRDF.h">
@@ -725,10 +739,20 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Profile|x64'">true</ExcludedFromBuild>
     </ClInclude>
+    <ClInclude Include="PrefilterCube.h" />
     <ClInclude Include="Renderer.h" />
     <ClInclude Include="RendererException.h" />
     <CLInclude Include="resource.h" />
     <ClInclude Include="RTRenderer.h" />
+    <ClInclude Include="ShaderUtil.h">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Profile|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Profile|x64'">true</ExcludedFromBuild>
+    </ClInclude>
+    <ClInclude Include="SharedShaderDefines.h" />
     <ClInclude Include="stb_image\stb_image.h" />
     <ResourceCompile Include="ScreenSpaceReflection.rc" />
   </ItemGroup>

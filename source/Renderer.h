@@ -115,7 +115,6 @@ class CreateEnvironmentTextureCube
 {
 public:
     char *m_TextureNames[TEXTURES_PER_CUBE];
-    char *m_IrradianceTextureNames[TEXTURES_PER_CUBE];
 };
 
 class CreateEnvironmentColor

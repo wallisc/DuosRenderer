@@ -261,9 +261,6 @@ void InitEnvironmentMap(_In_ Renderer *pRenderer, char *CubeMapName, char* irrad
     {
         sprintf_s(textureCubFileNames[i], "%s_c0%d.bmp", CubeMapName, i);
         TexCubeDescriptor.m_TextureNames[i] = textureCubFileNames[i];
-
-        sprintf_s(irradTextureCubFileNames[i], "%s_c0%d.bmp", irradMapName, i);
-        TexCubeDescriptor.m_IrradianceTextureNames[i] = irradTextureCubFileNames[i];
     }
 
     *ppEnviromentMap = pRenderer->CreateEnvironmentMap(&EnvMapDescriptor);
