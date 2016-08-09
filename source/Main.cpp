@@ -15,6 +15,8 @@
 #include "DXUT/Optional/DXUTgui.h"
 #include "DXUT/Optional/SDKMisc.h"
 
+#include "dxtk/inc/WICTextureLoader.h"
+
 #include "assimp/Importer.hpp"      // C++ importer interface
 #include "assimp/scene.h"      
 #include "assimp/postprocess.h"     // Post processing flags
@@ -25,14 +27,14 @@
 using namespace DirectX;
 using namespace Assimp;
 
-#define WIDTH 800
-#define HEIGHT 600
 UINT g_Width = 1024;
+UINT g_Height = 1024;
 
 enum
 {
     CMD_CHANGE_RENDERER = 0,
     CMD_CAMERA_MODE,
+    CMD_SHOW_GOLDEN_IMAGE,
     ROUGHNESS_TEXT,
     ROUGHNESS_SLIDER,
     REFLECTIVITY_TEXT,
@@ -54,7 +56,7 @@ enum RENDERER_TYPE
     NUM_RENDERER_TYPES
 };
 
-const float CAMERA_ROTATION_SPEED = 3.14 / (WIDTH);
+const float CAMERA_ROTATION_SPEED = 3.14 / (800);
 const float CAMERA_SIDE_SCREEN_ROTATION_SPEED = 3.14 / 4.0;
 
 Renderer *g_pRenderer[NUM_RENDERER_TYPES];
@@ -65,8 +67,13 @@ std::vector<Material *> g_MaterialList[NUM_RENDERER_TYPES];
 EnvironmentMap *g_pEnvironmentMap[NUM_RENDERER_TYPES];
 RenderSettings g_RenderSettings = DefaultRenderSettings;
 RENDERER_TYPE g_ActiveRenderer = D3D11;
+bool g_ShowGoldenImage = false;
+
+UINT g_NumRenderers = NUM_RENDERER_TYPES;
 D3D11Canvas *g_pCanvas;
 Assimp::Importer g_importer;
+
+std::string g_referenceImageFilePath;
 
 bool g_MouseInitialized = false;
 int g_MouseX;
@@ -89,6 +96,7 @@ ID3D11DeviceContext *g_pImmediateContext;
 IDXGISwapChain1* g_pSwapChain1;
 IDXGISwapChain* g_pSwapChain;
 
+ID3D11Texture2D* g_pGoldenImage = nullptr;
 
 //--------------------------------------------------------------------------------------
 // Forward declarations
@@ -124,6 +132,44 @@ int WINAPI wWinMain( _In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
     _CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
 #endif
 
+    auto commandLineToStringVector = [](LPWSTR commandLine) -> std::vector<std::string>{
+        std::vector<std::string> parsedArgs;
+        std::string word;
+        for (UINT charIndex = 0;; charIndex++)
+        {
+            auto currentChar = commandLine[charIndex];
+            if (isspace(currentChar))
+            {
+                if (word.size() > 0)
+                {
+                    parsedArgs.push_back(word);
+                    word.clear();
+                }
+            }
+            else if (currentChar == 0)
+            {
+                if (word.size() > 0) parsedArgs.push_back(word);
+                break;
+            }
+            else 
+            {
+                word.push_back(currentChar);
+            }
+        }
+        return parsedArgs;
+    };
+
+    auto parsedArgs = commandLineToStringVector(lpCmdLine);
+    for (UINT argIndex = 0; argIndex < parsedArgs.size(); argIndex++)
+    {
+        auto &arg = parsedArgs[argIndex];
+        if (arg.compare("-i") == 0 && argIndex < parsedArgs.size() - 1)
+        {
+            g_referenceImageFilePath = parsedArgs[++argIndex];
+        }
+    }
+
+    
     // DXUT will create and use the best device
     // that is available on the system depending on which D3D callbacks are set below
 
@@ -150,7 +196,7 @@ int WINAPI wWinMain( _In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 
     DXUTCreateWindow(L"Duos Renderer");
 
-    DXUTCreateDevice(D3D_FEATURE_LEVEL_11_1, true, WIDTH, HEIGHT);
+    DXUTCreateDevice(D3D_FEATURE_LEVEL_11_1, true, 1024, 1024);
     DXUTMainLoop();
 
     return DXUTGetExitCode();
@@ -162,7 +208,39 @@ HRESULT CALLBACK OnDeviceCreated(_In_ ID3D11Device* pd3dDevice, _In_ const DXGI_
 {
     g_pDevice = pd3dDevice;
     g_pImmediateContext = DXUTGetD3D11DeviceContext();
-    g_pCanvas = new D3D11Canvas(g_pDevice, g_pImmediateContext, WIDTH, HEIGHT);
+
+    if (g_referenceImageFilePath.size())
+    {
+        CComPtr<ID3D11Resource> pGoldenResource;
+        CA2WEX<MAX_ALLOWED_STR_LENGTH> WideTextureName(g_referenceImageFilePath.c_str());
+        HRESULT result = CreateWICTextureFromFileEx(
+            g_pDevice,
+            WideTextureName,
+            20 * 1024 * 1024,
+            D3D11_USAGE_DEFAULT,
+            0,
+            0,
+            0,
+            false,
+            &pGoldenResource,
+            nullptr);
+        if (FAILED(result))
+        {
+            return result;
+        }
+
+        pGoldenResource->QueryInterface(&g_pGoldenImage);
+        g_NumRenderers++;
+
+        D3D11_TEXTURE2D_DESC texDesc;
+        g_pGoldenImage->GetDesc(&texDesc);
+
+        g_Width = texDesc.Width;
+        g_Height = texDesc.Height;
+
+    }
+
+    g_pCanvas = new D3D11Canvas(g_pDevice, g_pImmediateContext, g_Width, g_Height);
     g_pSwapChain = DXUTGetDXGISwapChain();
 
     HRESULT hr = g_DialogResourceManager.OnD3D11CreateDevice(pd3dDevice, g_pImmediateContext);
@@ -171,6 +249,10 @@ HRESULT CALLBACK OnDeviceCreated(_In_ ID3D11Device* pd3dDevice, _In_ const DXGI_
     g_GUI.SetCallback(OnGUIEvent); int iY = 10;
     const INT BUTTON_HEIGHT = 26;
     hr = g_GUI.AddButton(CMD_CHANGE_RENDERER, L"Change renderer (space)", 0, iY, 170, BUTTON_HEIGHT, VK_SPACE);
+    assert(SUCCEEDED(hr));
+
+    iY += BUTTON_HEIGHT;
+    hr = g_GUI.AddButton(CMD_SHOW_GOLDEN_IMAGE, L"Toggle Golden Image (i)", 0, iY, 170, BUTTON_HEIGHT, 'I');
     assert(SUCCEEDED(hr));
 
     iY += BUTTON_HEIGHT;
@@ -206,10 +288,10 @@ HRESULT CALLBACK OnDeviceCreated(_In_ ID3D11Device* pd3dDevice, _In_ const DXGI_
         switch (i)
         {
         case RENDERER_TYPE::D3D11:
-            g_pRenderer[i] = new D3D11Renderer(g_hWnd, WIDTH, HEIGHT);
+            g_pRenderer[i] = new D3D11Renderer(g_hWnd, g_Width, g_Height);
             break;
         case RENDERER_TYPE::RAYTRACER:
-            g_pRenderer[i] = new RTRenderer(WIDTH, HEIGHT);
+            g_pRenderer[i] = new RTRenderer(g_Width, g_Height);
             break;
         default:
             break;
@@ -382,14 +464,14 @@ void InitSceneAndCamera(_In_ Renderer *pRenderer, _In_ const aiScene &assimpScen
     position = XMVector4Transform(position, camMatrix);
 
     const float LensHeight = 2.0f;
-    const float AspectRatio = (float)WIDTH / (float)HEIGHT;
+    const float AspectRatio = (float)g_Width / (float)g_Height;
     const float LensWidth = LensHeight * AspectRatio;
     const float FocalLength = LensWidth / (2.0f* tan(pCam->mHorizontalFOV / 2.0f));
     float VerticalFov = 2 * atan(LensHeight / (2.0f * FocalLength));
 
     CreateCameraDescriptor CameraDescriptor = {};
-    CameraDescriptor.m_Height = HEIGHT;
-    CameraDescriptor.m_Width = WIDTH;
+    CameraDescriptor.m_Height = g_Height;
+    CameraDescriptor.m_Width = g_Width;
     CameraDescriptor.m_FocalPoint = ConvertVec3(pCam->mPosition);
     CameraDescriptor.m_LookAt = ConvertVec3(pCam->mLookAt);
     CameraDescriptor.m_Up = ConvertVec3(pCam->mUp);
@@ -405,7 +487,14 @@ void RenderText(float fps)
     g_pTextWriter->Begin();
     g_pTextWriter->SetInsertionPos(5, 5);
     g_pTextWriter->SetForegroundColor(Colors::Yellow);
-    g_pTextWriter->DrawTextLine(g_ActiveRenderer == D3D11 ? L"Rasterizer" : L"Raytracer");
+    if (g_ShowGoldenImage)
+    {
+        g_pTextWriter->DrawTextLine(L"Golden Image");
+    }
+    else
+    {
+        g_pTextWriter->DrawTextLine(g_ActiveRenderer == D3D11 ? L"Rasterizer" : L"Raytracer");
+    }
     g_pTextWriter->DrawFormattedTextLine(L"%f", fps);
     g_pTextWriter->DrawFormattedTextLine(L"Mouse coord: %d, %d", g_MouseX, g_MouseY);
     g_pTextWriter->End();
@@ -414,21 +503,26 @@ void RenderText(float fps)
 void CALLBACK OnFrameRender(_In_ ID3D11Device* pd3dDevice, _In_ ID3D11DeviceContext* pd3dImmediateContext, _In_ double fTime, _In_ float fElapsedTime, _In_opt_ void* pUserContext)
 {
     UpdateCamera();
-    g_pRenderer[g_ActiveRenderer]->DrawScene(g_pCamera[g_ActiveRenderer], g_pScene[g_ActiveRenderer], g_RenderSettings);
+
 
     ID3D11Texture2D* pBackBuffer = nullptr;
     HRESULT hr = g_pSwapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), reinterpret_cast<void**>(&pBackBuffer));
-    
     FAIL_CHK(FAILED(hr), "Failed to get the back buffer");
 
-    g_pImmediateContext->CopyResource(pBackBuffer, g_pCanvas->GetCanvasResource());
+    if (g_ShowGoldenImage)
+    {
+        g_pImmediateContext->CopyResource(pBackBuffer, g_pGoldenImage);
+    }
+    else
+    {
+        g_pRenderer[g_ActiveRenderer]->DrawScene(g_pCamera[g_ActiveRenderer], g_pScene[g_ActiveRenderer], g_RenderSettings);
+        g_pImmediateContext->CopyResource(pBackBuffer, g_pCanvas->GetCanvasResource());
+    }
 
     g_GUI.OnRender(fElapsedTime);
 
     float fps = 1.0f / fElapsedTime;
     RenderText(fps);
-
-
 }
 
 HRESULT CALLBACK OnResizedSwapChain(ID3D11Device* pd3dDevice, IDXGISwapChain* pSwapChain, const DXGI_SURFACE_DESC* pBackBufferSurfaceDesc, void* pUserContext)
@@ -504,6 +598,9 @@ void CALLBACK OnGUIEvent(UINT nEvent, int nControlID, CDXUTControl* pControl, vo
         pMaterial->SetRoughness(pMaterial->GetRoughness());
         break;
     }
+    case CMD_SHOW_GOLDEN_IMAGE:
+        if(g_pGoldenImage) g_ShowGoldenImage = !g_ShowGoldenImage;
+        break;
     case CMD_CAMERA_MODE:
         g_CameraModeEnabled = !g_CameraModeEnabled;
         break;
@@ -580,7 +677,7 @@ void UpdateCamera()
             {
                 deltaX += 1;
             }
-            else if (g_MouseX > WIDTH - 100)
+            else if (g_MouseX > g_Width - 100)
             {
                 deltaX -= 1;
             }
@@ -589,7 +686,7 @@ void UpdateCamera()
             {
                 deltaY += 1;
             }
-            else if (g_MouseY > HEIGHT - 100)
+            else if (g_MouseY > g_Height - 100)
             {
                 deltaY -= 1;
             }
