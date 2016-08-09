@@ -27,6 +27,7 @@ using namespace Assimp;
 
 #define WIDTH 800
 #define HEIGHT 600
+UINT g_Width = 1024;
 
 enum
 {
