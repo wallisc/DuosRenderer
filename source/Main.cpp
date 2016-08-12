@@ -23,12 +23,13 @@
 
 #include <list>
 #include "Strsafe.h"
+#include "PBRTParser.h"
 
 using namespace DirectX;
 using namespace Assimp;
 
-UINT g_Width = 1024;
-UINT g_Height = 1024;
+UINT g_Width = 800;
+UINT g_Height = 600;
 
 enum
 {
@@ -160,6 +161,7 @@ int WINAPI wWinMain( _In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
     };
 
     auto parsedArgs = commandLineToStringVector(lpCmdLine);
+    std::string sceneFilePath;
     for (UINT argIndex = 0; argIndex < parsedArgs.size(); argIndex++)
     {
         auto &arg = parsedArgs[argIndex];
@@ -167,9 +169,30 @@ int WINAPI wWinMain( _In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
         {
             g_referenceImageFilePath = parsedArgs[++argIndex];
         }
+
+        if (arg.compare("-s") == 0 && argIndex < parsedArgs.size() - 1)
+        {
+            sceneFilePath = parsedArgs[++argIndex];
+        }
     }
 
+    SceneParser::Scene outputScene;
+    if(sceneFilePath.substr(sceneFilePath.size() - 4, 4).compare("pbrt") == 0)
+    {
+        PBRTParser::PBRTParser().Parse(sceneFilePath, outputScene);
+    }
+    else
+    {
+        // Unknown scene file format
+        return 0;
+    }
     
+    if (outputScene.m_Film.m_ResolutionX > 0 && outputScene.m_Film.m_ResolutionY > 0)
+    {
+        g_Width = outputScene.m_Film.m_ResolutionX;
+        g_Height = outputScene.m_Film.m_ResolutionY;
+    }
+
     // DXUT will create and use the best device
     // that is available on the system depending on which D3D callbacks are set below
 

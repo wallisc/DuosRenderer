@@ -533,6 +533,7 @@
     <ClInclude Include="FullscreenPlane.h">
       <Filter>Shaders</Filter>
     </ClInclude>
+    <ClInclude Include="SceneParser.h" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="Geometry_PS.hlsl">
