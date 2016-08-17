@@ -26,6 +26,44 @@ namespace SceneParser
         float m_DiffuseBlue;
     };
 
+    struct Vector2
+    {
+        union {
+            struct {
+                float x, y;
+            };
+            struct {
+                float u, v;
+            };
+        };
+    };
+
+    struct Vector3
+    {
+        union {
+            struct {
+                float x, y, z;
+            };
+            struct {
+                float r, g, b;
+            };
+        };
+    };
+
+    struct Vertex
+    {
+        Vector3 Normal;
+        Vector3 Position;
+        Vector2 UV;
+    };
+
+    struct Mesh
+    {
+        Material *m_pMaterial;
+        std::vector<int> m_IndexBuffer;
+        std::vector<Vertex> m_VertexBuffer;
+    };
+
     struct Scene
     {
         Camera m_Camera;
