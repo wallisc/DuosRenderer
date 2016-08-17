@@ -6,7 +6,7 @@ using namespace std;
 
 namespace PBRTParser
 {
-    void ThrowIfNotTrue(bool expression, std::string errorMessage)
+    void ThrowIfTrue(bool expression, std::string errorMessage)
     {
         if (expression)
         {
@@ -60,6 +60,10 @@ namespace PBRTParser
             {
                 ParseMaterial(fileStream, outputScene);
             }
+            else if (!firstWord.compare("NamedMaterial"))
+            {
+                ParseMesh(fileStream, outputScene);
+            }
             else if (!firstWord.compare("WorldEnd"))
             {
                 break;
@@ -78,7 +82,7 @@ namespace PBRTParser
         UINT argCount = sscanf_s(pTempBuffer, " \"perspective\" \"float fov\" \[ %f \]",
             &outputScene.m_Camera.m_FieldOfView);
 
-        ThrowIfNotTrue(argCount != 1, "Camera arguments not formatted correctly");
+        ThrowIfTrue(argCount != 1, "Camera arguments not formatted correctly");
     }
 
     void PBRTParser::ParseFilm(std::ifstream &fileStream, SceneParser::Scene &outputScene)
@@ -95,7 +99,7 @@ namespace PBRTParser
             &outputScene.m_Film.m_ResolutionY,
             fileName, ARRAYSIZE(fileName));
 
-        ThrowIfNotTrue(argCount != 3, "Film arguments not formatted correctly");
+        ThrowIfTrue(argCount != 3, "Film arguments not formatted correctly");
         
         // Sometimes scanf pulls more than it needs to, make sure to clean up 
         // any extra characters on the file name
@@ -126,11 +130,197 @@ namespace PBRTParser
             &material.m_DiffuseRed,
             &material.m_DiffuseGreen,
             &material.m_DiffuseBlue);
-        material.m_MaterialName = materialName;
+        material.m_MaterialName = CorrectNameString(materialName);
 
-        ThrowIfNotTrue(argCount != 5, "Material arguments not formatted correctly");
+        ThrowIfTrue(argCount != 5, "Material arguments not formatted correctly");
 
         outputScene.m_Materials[material.m_MaterialName] = material;
     }
+
+    void PBRTParser::ParseMesh(std::ifstream &fileStream, SceneParser::Scene &outputScene)
+    {
+        char *pTempBuffer;
+        size_t bufferSize;
+        GetTempCharBuffer(&pTempBuffer, bufferSize);
+
+        fileStream.getline(pTempBuffer, bufferSize);
+        char materialName[PBRTPARSER_STRINGBUFFERSIZE];
+        UINT argCount = sscanf_s(pTempBuffer, " \"%s \"",
+            materialName,
+            ARRAYSIZE(materialName));
+
+        ThrowIfTrue(argCount != 1, "MakeNamedMaterial arguments not formatted correctly");
+
+        Mesh mesh;
+        string correctedMaterialName = CorrectNameString(materialName);
+        mesh.m_pMaterial = &outputScene.m_Materials[correctedMaterialName];
+        ThrowIfTrue(mesh.m_pMaterial == nullptr, "Material name not found");
+
+        ParseShape(fileStream, outputScene, mesh);
+    }
+
+    void PBRTParser::ParseShape(std::ifstream &fileStream, SceneParser::Scene &outputScene, SceneParser::Mesh &mesh)
+    {
+        string parsedWord;
+        fileStream >> parsedWord;
+        ThrowIfTrue(parsedWord.compare("Shape"), "Geometry expected to be prepended with \"Shape\"");
+
+        fileStream >> parsedWord;
+        ThrowIfTrue(parsedWord.compare("\"trianglemesh\""), "Only TriangleMesh supported topology at the moment");
+
+        fileStream >> parsedWord;
+        if (!parsedWord.compare("\"integer"))
+        {
+            fileStream >> parsedWord;
+            ThrowIfTrue(parsedWord.compare("indices\""), "\"integer\" expected to be followed up with \"integer\"");
+
+            fileStream >> parsedWord;
+            ThrowIfTrue(parsedWord.compare("["), "\"indices\" expected to be followed up with \"[\"");
+
+            while (fileStream.good())
+            {
+                int index;
+                fileStream >> index;
+                if (fileStream.good())
+                {
+                    mesh.m_IndexBuffer.push_back(index);
+                }
+                else
+                {
+                    fileStream.clear(std::ios::goodbit);
+                    fileStream >> parsedWord;
+                    ThrowIfTrue(parsedWord.compare("]"), "Expected closing ']' after indices");
+                    break;
+                }
+            }
+
+            fileStream >> parsedWord;
+        }
+
+        if (!parsedWord.compare("\"point"))
+        {
+            fileStream >> parsedWord;
+            ThrowIfTrue(parsedWord.compare("P\""), "Expecting \"point\" syntax to be followed by \"P\"");
+
+            fileStream >> parsedWord;
+            ThrowIfTrue(parsedWord.compare("["), "'P' expected to be followed up with \"[\"");
+
+            while (fileStream.good())
+            {
+                Vertex vertex;
+                fileStream >> vertex.Position.x;
+                fileStream >> vertex.Position.y;
+                fileStream >> vertex.Position.z;
+
+                if (fileStream.good())
+                {
+                    mesh.m_VertexBuffer.push_back(vertex);
+                }
+                else
+                {
+                    fileStream.clear(std::ios::goodbit);
+                    fileStream >> parsedWord;
+                    ThrowIfTrue(parsedWord.compare("]"), "Expected closing ']' after positions");
+                    break;
+                }
+            }
+
+            fileStream >> parsedWord;
+        }
+
+        if (!parsedWord.compare("\"normal"))
+        {
+            fileStream >> parsedWord;
+            ThrowIfTrue(parsedWord.compare("N\""), "Expecting \"normal\" syntax to be followed by an \"N\"");
+
+            fileStream >> parsedWord;
+            ThrowIfTrue(parsedWord.compare("["), "'N' expected to be followed up with \"[\"");
+
+            UINT vertexIndex = 0;
+            while (fileStream.good())
+            {
+                float x, y, z;
+                fileStream >> x;
+                fileStream >> y;
+                fileStream >> z;
+                if (fileStream.good())
+                {
+                    ThrowIfTrue(vertexIndex >= mesh.m_VertexBuffer.size(), "More position values specified than normals");
+                    Vertex &vertex = mesh.m_VertexBuffer[vertexIndex];
+                    vertexIndex++;
+
+                    vertex.Normal.x = x;
+                    vertex.Normal.y = y;
+                    vertex.Normal.z = z;
+                }
+                else
+                {
+                    fileStream.clear(std::ios::goodbit);
+                    fileStream >> parsedWord;
+                    ThrowIfTrue(parsedWord.compare("]"), "Expected closing ']' after positions");
+                    break;
+                }
+            }
+
+            fileStream >> parsedWord;
+        }
+
+        if (!parsedWord.compare("\"float"))
+        {
+            fileStream >> parsedWord;
+            ThrowIfTrue(parsedWord.compare("uv\""), "Expecting \"float\" syntax to be followed by \"uv\"");
+
+            fileStream >> parsedWord;
+            ThrowIfTrue(parsedWord.compare("["), "'UV' expected to be followed up with \"[\"");
+
+            UINT vertexIndex = 0;
+            while (fileStream.good())
+            {
+                float u, v;
+                fileStream >> u;
+                fileStream >> v;
+                if (fileStream.good())
+                {
+                    ThrowIfTrue(vertexIndex >= mesh.m_VertexBuffer.size(), "More UV values specified than normals");
+                    Vertex &vertex = mesh.m_VertexBuffer[vertexIndex];
+                    vertexIndex++;
+
+                    vertex.UV.u = u;
+                    vertex.UV.v = v;
+                }
+                else
+                {
+                    fileStream.clear(std::ios::goodbit);
+                    fileStream >> parsedWord;
+                    ThrowIfTrue(parsedWord.compare("]"), "Expected closing ']' after positions");
+                    break;
+                }
+            }
+
+            fileStream >> parsedWord;
+        }
+    }
+
+    string PBRTParser::CorrectNameString(char *pString)
+    {
+        string correctedString(pString);
+        UINT startIndex = 0;
+        UINT endIndex = correctedString.size();
+        if (correctedString.size())
+        {
+            // sscanf often pulls extra quotations, cut these out
+            if (correctedString[0] == '"')
+            {
+                startIndex = 1;
+            }
+            
+            if (correctedString[correctedString.size() - 1] == '"')
+            {
+                endIndex = endIndex - 1;
+            }
+        }
+        return correctedString.substr(startIndex, endIndex);
+    }
+
 }
 
