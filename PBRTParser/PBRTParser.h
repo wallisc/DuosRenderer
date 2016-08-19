@@ -21,6 +21,9 @@ namespace PBRTParser
 
         void ParseShape(std::ifstream &fileStream, SceneParser::Scene &outputScene, SceneParser::Mesh &mesh);
 
+        void InitializeDefaults(SceneParser::Scene &outputScene);
+        void InitializeCameraDefaults(SceneParser::Camera &camera);
+
         static std::string CorrectNameString(char *pString);
 
         void GetTempCharBuffer(char **ppBuffer, size_t &charBufferSize)

@@ -6,26 +6,6 @@
 
 namespace SceneParser
 {
-    struct Film
-    {
-        UINT m_ResolutionX;
-        UINT m_ResolutionY;
-        std::string m_Filename;
-    };
-
-    struct Camera
-    {
-        float m_FieldOfView;
-    };
-
-    struct Material
-    {
-        std::string m_MaterialName;
-        float m_DiffuseRed;
-        float m_DiffuseGreen;
-        float m_DiffuseBlue;
-    };
-
     struct Vector2
     {
         union {
@@ -40,6 +20,10 @@ namespace SceneParser
 
     struct Vector3
     {
+        Vector3(float nX, float nY, float nZ) : x(nX), y(nY), z(nZ) {}
+        Vector3() : Vector3(0, 0, 0) {}
+
+
         union {
             struct {
                 float x, y, z;
@@ -48,6 +32,27 @@ namespace SceneParser
                 float r, g, b;
             };
         };
+    };
+
+    struct Film
+    {
+        UINT m_ResolutionX;
+        UINT m_ResolutionY;
+        std::string m_Filename;
+    };
+
+    struct Camera
+    {
+        // In Degrees. The is the narrower of the view frustrums width/height
+        float m_FieldOfView; 
+        Vector3 m_Position;
+        Vector3 m_LookAt;
+    };
+
+    struct Material
+    {
+        std::string m_MaterialName;
+        Vector3 m_Diffuse;
     };
 
     struct Vertex
@@ -69,6 +74,7 @@ namespace SceneParser
         Camera m_Camera;
         Film m_Film;
         std::unordered_map<std::string, Material> m_Materials;
+        std::vector<Mesh> m_Meshes;
     };
 
     class BadFormatException : public std::exception

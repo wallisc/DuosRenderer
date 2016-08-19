@@ -23,6 +23,8 @@ namespace PBRTParser
             assert(false); // file not found
         }
 
+        InitializeDefaults(outputScene);
+
         while (fileStream.good())
         {
             std::string firstWord;
@@ -127,9 +129,9 @@ namespace PBRTParser
             ARRAYSIZE(materialName),
             materialType,
             ARRAYSIZE(materialType),
-            &material.m_DiffuseRed,
-            &material.m_DiffuseGreen,
-            &material.m_DiffuseBlue);
+            &material.m_Diffuse.r,
+            &material.m_Diffuse.g,
+            &material.m_Diffuse.b);
         material.m_MaterialName = CorrectNameString(materialName);
 
         ThrowIfTrue(argCount != 5, "Material arguments not formatted correctly");
@@ -151,7 +153,8 @@ namespace PBRTParser
 
         ThrowIfTrue(argCount != 1, "MakeNamedMaterial arguments not formatted correctly");
 
-        Mesh mesh;
+        outputScene.m_Meshes.push_back(Mesh());
+        Mesh &mesh = outputScene.m_Meshes[outputScene.m_Meshes.size() - 1];
         string correctedMaterialName = CorrectNameString(materialName);
         mesh.m_pMaterial = &outputScene.m_Materials[correctedMaterialName];
         ThrowIfTrue(mesh.m_pMaterial == nullptr, "Material name not found");
@@ -322,5 +325,16 @@ namespace PBRTParser
         return correctedString.substr(startIndex, endIndex);
     }
 
+    void PBRTParser::InitializeDefaults(Scene &outputScene)
+    {
+        InitializeCameraDefaults(outputScene.m_Camera);
+    }
+
+    void PBRTParser::InitializeCameraDefaults(Camera &camera)
+    {
+        camera.m_FieldOfView = 90;
+        camera.m_LookAt = Vector3( 0.0f, 0.0f, 0.0f );
+        camera.m_Position = Vector3(0.0f, 0.0f, -1.0f);
+    }
 }
 
