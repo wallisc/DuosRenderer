@@ -83,7 +83,7 @@ int g_MouseX;
 int g_MouseY;
 
 const unsigned int NO_MATERIAL_SELECTED = (unsigned int)-1;
-unsigned int g_SelectedMaterialIndex = NO_MATERIAL_SELECTED;
+std::string g_SelectedMaterialName = "";
 
 bool g_CameraModeEnabled = false;
 
@@ -687,14 +687,13 @@ LRESULT CALLBACK MsgProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam,
 
 void SetMaterialProperty(UINT ControlID)
 {
-#if 0
-    if (g_SelectedMaterialIndex != NO_MATERIAL_SELECTED)
+    if (g_SelectedMaterialName.size() > 0)
     {
         float Value = ((CDXUTSlider*)g_GUI.GetControl(ControlID))->GetValue() / (float)MAX_SLIDER_VALUE;
 
         for (UINT i = 0; i < NUM_RENDERER_TYPES; i++)
         {
-            Material *pMaterial = g_MaterialList[i][g_SelectedMaterialIndex];
+            Material *pMaterial = g_MaterialList[i][g_SelectedMaterialName];
             switch (ControlID)
             {
             case ROUGHNESS_SLIDER:
@@ -706,20 +705,17 @@ void SetMaterialProperty(UINT ControlID)
             }
         }
     }
-#endif
 }
 
 void SetReflectivityOnSelectedGeometry(float Reflectivity)
 {
-#if 0
-    if (g_SelectedMaterialIndex != NO_MATERIAL_SELECTED)
+    if (g_SelectedMaterialName.size() > 0)
     {
         for (UINT i = 0; i < NUM_RENDERER_TYPES; i++)
         {
-            g_MaterialList[i][g_SelectedMaterialIndex]->SetReflectivity(Reflectivity);
+            g_MaterialList[i][g_SelectedMaterialName]->SetReflectivity(Reflectivity);
         }
     }
-#endif
 }
 
 void CALLBACK OnGUIEvent(UINT nEvent, int nControlID, CDXUTControl* pControl, void* pUserContext)
@@ -729,10 +725,6 @@ void CALLBACK OnGUIEvent(UINT nEvent, int nControlID, CDXUTControl* pControl, vo
     case CMD_CHANGE_RENDERER:
     {
         g_ActiveRenderer = (RENDERER_TYPE)((g_ActiveRenderer + 1) % NUM_RENDERER_TYPES);
-
-        // TODO: Hack to force the raytracer to re-render
-        auto pMaterial = g_MaterialList[RAYTRACER][0];
-        pMaterial->SetRoughness(pMaterial->GetRoughness());
         break;
     }
     case CMD_SHOW_GOLDEN_IMAGE:
@@ -889,24 +881,21 @@ void CALLBACK OnMouseMove(_In_ bool bLeftButtonDown, _In_ bool bRightButtonDown,
 
         if (bLeftButtonDown && !IsOverGUI(xPos, yPos))
         {
-#if 0
             const UINT RendererIndex = RAYTRACER; // Not implemented in D3D11 renderer
             Geometry *pGeometry = g_pRenderer[RendererIndex]->GetGeometryAtPixel(g_pCamera[RendererIndex], g_pScene[RendererIndex], Vec2(xPos, yPos));
             SetGUISliders(pGeometry ? pGeometry->GetMaterial() : nullptr);
 
-            g_SelectedMaterialIndex = NO_MATERIAL_SELECTED;
+            g_SelectedMaterialName = "";
             if (pGeometry)
             {
-                for (UINT i = 0; i < g_MaterialList[RAYTRACER].size(); i++)
+                for (auto &materialPair : g_MaterialList[RAYTRACER])
                 {
-                    if (g_MaterialList[RAYTRACER][i] == pGeometry->GetMaterial())
+                    if (pGeometry->GetMaterial() == materialPair.second)
                     {
-                        g_SelectedMaterialIndex = i;
-                        break;
+                        g_SelectedMaterialName = materialPair.first;
                     }
                 }
             }
-#endif
         }
     }
 }
