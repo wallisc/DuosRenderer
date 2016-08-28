@@ -63,7 +63,8 @@ const float CAMERA_SIDE_SCREEN_ROTATION_SPEED = 3.14 / 4.0;
 Renderer *g_pRenderer[NUM_RENDERER_TYPES];
 Scene *g_pScene[NUM_RENDERER_TYPES];
 Camera *g_pCamera[NUM_RENDERER_TYPES];
-std::vector<Material *> g_MaterialList[NUM_RENDERER_TYPES];
+//std::vector<Material *> g_MaterialList[NUM_RENDERER_TYPES];
+std::unordered_map<std::string, Material *> g_MaterialList[NUM_RENDERER_TYPES];
 
 EnvironmentMap *g_pEnvironmentMap[NUM_RENDERER_TYPES];
 RenderSettings g_RenderSettings = DefaultRenderSettings;
@@ -74,6 +75,7 @@ UINT g_NumRenderers = NUM_RENDERER_TYPES;
 D3D11Canvas *g_pCanvas;
 Assimp::Importer g_importer;
 
+SceneParser::Scene g_outputScene;
 std::string g_referenceImageFilePath;
 
 bool g_MouseInitialized = false;
@@ -102,7 +104,8 @@ ID3D11Texture2D* g_pGoldenImage = nullptr;
 //--------------------------------------------------------------------------------------
 // Forward declarations
 //--------------------------------------------------------------------------------------
-void InitSceneAndCamera(_In_ Renderer *, _In_ const aiScene &assimpScene, _In_ EnvironmentMap *pEnvMap, _Out_ std::vector<Material *> &MaterialList, _Out_ Scene **, _Out_ Camera **);
+//void InitSceneAndCamera(_In_ Renderer *, _In_ const aiScene &assimpScene, _In_ EnvironmentMap *pEnvMap, _Out_ std::vector<Material *> &MaterialList, _Out_ Scene **, _Out_ Camera **);
+void InitSceneAndCamera(_In_ Renderer *, _In_ EnvironmentMap *pEnvMap, _In_ const SceneParser::Scene &fileScene, std::unordered_map<std::string, Material *> &materialList, _Out_ Scene **, _Out_ Camera **);
 void InitEnvironmentMap(_In_ Renderer *pRenderer, char *CubeMapName, char *irradMapName, _Out_ EnvironmentMap **ppEnviromentMap);
 HRESULT InitWindow( HINSTANCE hInstance, int nCmdShow );
 LRESULT CALLBACK    WndProc( HWND, UINT, WPARAM, LPARAM );
@@ -176,10 +179,9 @@ int WINAPI wWinMain( _In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
         }
     }
 
-    SceneParser::Scene outputScene;
     if(sceneFilePath.substr(sceneFilePath.size() - 4, 4).compare("pbrt") == 0)
     {
-        PBRTParser::PBRTParser().Parse(sceneFilePath, outputScene);
+        PBRTParser::PBRTParser().Parse(sceneFilePath, g_outputScene);
     }
     else
     {
@@ -187,10 +189,10 @@ int WINAPI wWinMain( _In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
         return 0;
     }
     
-    if (outputScene.m_Film.m_ResolutionX > 0 && outputScene.m_Film.m_ResolutionY > 0)
+    if (g_outputScene.m_Film.m_ResolutionX > 0 && g_outputScene.m_Film.m_ResolutionY > 0)
     {
-        g_Width = outputScene.m_Film.m_ResolutionX;
-        g_Height = outputScene.m_Film.m_ResolutionY;
+        g_Width = g_outputScene.m_Film.m_ResolutionX;
+        g_Height = g_outputScene.m_Film.m_ResolutionY;
     }
 
     // DXUT will create and use the best device
@@ -322,7 +324,9 @@ HRESULT CALLBACK OnDeviceCreated(_In_ ID3D11Device* pd3dDevice, _In_ const DXGI_
 
         g_pRenderer[i]->SetCanvas(g_pCanvas);
         InitEnvironmentMap(g_pRenderer[i], "Assets\\EnvironmentMap\\Uffizi\\Uffizi", "Assets\\EnvironmentMap\\Uffizi\\irrad", &g_pEnvironmentMap[i]);
-        InitSceneAndCamera(g_pRenderer[i], *pAssimpScene, g_pEnvironmentMap[i], g_MaterialList[i], &g_pScene[i], &g_pCamera[i]);
+        
+        InitSceneAndCamera(g_pRenderer[i], g_pEnvironmentMap[i], g_outputScene, g_MaterialList[i], &g_pScene[i], &g_pCamera[i]);
+        //InitSceneAndCamera(g_pRenderer[i], *pAssimpScene, g_pEnvironmentMap[i], g_MaterialList[i], &g_pScene[i], &g_pCamera[i]);
     }
 
     return	S_OK;
@@ -345,6 +349,17 @@ const aiScene* InitAssimpScene(_In_ char *pSceneFile)
 
     return AssimpScene;
 }
+
+Vec3 ConvertVec3(const SceneParser::Vector3 &vec)
+{
+    return Vec3(vec.x, vec.y, vec.z);
+}
+
+Vec2 ConvertVec2(const SceneParser::Vector2 &vec)
+{
+    return Vec2(vec.x, vec.y);
+}
+
 
 Vec3 ConvertVec3(const aiVector3D &vec)
 {
@@ -372,6 +387,101 @@ void InitEnvironmentMap(_In_ Renderer *pRenderer, char *CubeMapName, char* irrad
     *ppEnviromentMap = pRenderer->CreateEnvironmentMap(&EnvMapDescriptor);
 }
 
+void InitSceneAndCamera(_In_ Renderer *pRenderer, _In_ EnvironmentMap *pEnvMap, _In_ const SceneParser::Scene &fileScene, _Out_ std::unordered_map<std::string, Material*> &MaterialList, _Out_ Scene **ppScene, _Out_ Camera **ppCamera)
+{
+    *ppScene = pRenderer->CreateScene(pEnvMap);
+    Scene *pScene = *ppScene;
+
+    const UINT materialCount = g_outputScene.m_Materials.size();
+    MaterialList.reserve(materialCount);
+    for (auto &materialKeyValuePair : g_outputScene.m_Materials)
+    {
+        SceneParser::Material &material = materialKeyValuePair.second;
+
+        CreateMaterialDescriptor CreateMaterialDescriptor = {};
+        CreateMaterialDescriptor.m_TextureName = material.m_DiffuseTextureFilename.c_str();
+
+        CreateMaterialDescriptor.m_DiffuseColor.x = material.m_Diffuse.r;
+        CreateMaterialDescriptor.m_DiffuseColor.y = material.m_Diffuse.g;
+        CreateMaterialDescriptor.m_DiffuseColor.z = material.m_Diffuse.b;
+
+        // TODO: Need to add these
+        const float shininess = 0.5f;
+        CreateMaterialDescriptor.m_Reflectivity = 0.5f;
+        CreateMaterialDescriptor.m_Roughness = sqrt(2.0 / (shininess + 2.0f));
+
+        MaterialList[materialKeyValuePair.first] = pRenderer->CreateMaterial(&CreateMaterialDescriptor);
+    }
+
+    {
+        std::vector<Vertex> vertexList;
+        std::vector<unsigned int> indexList;
+        for (const SceneParser::Mesh &mesh : fileScene.m_Meshes)
+        {
+            UINT numVerts = mesh.m_VertexBuffer.size();
+            UINT numIndices = mesh.m_IndexBuffer.size();
+
+            vertexList.resize(numVerts);
+            indexList.resize(numIndices);
+            for (UINT vertIdx = 0; vertIdx < numVerts; vertIdx++)
+            {
+                const SceneParser::Vertex &inputVertex = mesh.m_VertexBuffer[vertIdx];
+                Vertex &vertex = vertexList[vertIdx];
+                vertex.m_Position = ConvertVec3(inputVertex.Position);
+                vertex.m_Normal = ConvertVec3(inputVertex.Normal);
+                vertex.m_Tex = ConvertVec2(inputVertex.UV);
+                vertex.m_Tangent = ConvertVec3(inputVertex.Tangents);
+            }
+            
+            for (UINT ibIdx = 0; ibIdx < mesh.m_IndexBuffer.size(); ibIdx++)
+            {
+                assert(mesh.m_IndexBuffer[ibIdx] >= 0);
+                indexList[ibIdx] = (UINT)mesh.m_IndexBuffer[ibIdx];
+            }
+
+            CreateGeometryDescriptor geometryDescriptor;
+            geometryDescriptor.m_pVertices = vertexList.data();
+            geometryDescriptor.m_NumVertices = numVerts;
+            geometryDescriptor.m_pIndices = indexList.data();
+            geometryDescriptor.m_NumIndices = numIndices;
+            geometryDescriptor.m_pMaterial = MaterialList[mesh.m_pMaterial->m_MaterialName];
+            Geometry *pGeometry = pRenderer->CreateGeometry(&geometryDescriptor);
+            pScene->AddGeometry(pGeometry);
+        }
+    }
+
+    {
+        CreateLightDescriptor CreateLight;
+        CreateDirectionalLight CreateDirectional;
+        CreateDirectional.m_EmissionDirection = Vec3(1.0f, -1.0, -1.0);
+        CreateLight.m_Color = Vec3(1.0f, 1.0f, 1.0f);
+        CreateLight.m_LightType = CreateLightDescriptor::DIRECTIONAL_LIGHT;
+        CreateLight.m_pCreateDirectionalLight = &CreateDirectional;
+
+        Light *pLight = pRenderer->CreateLight(&CreateLight);
+        pScene->AddLight(pLight);
+    }
+
+    const float LensHeight = 2.0f;
+    const float AspectRatio = (float)fileScene.m_Film.m_ResolutionX / fileScene.m_Film.m_ResolutionY;
+    const float LensWidth = LensHeight * AspectRatio;
+    const float FocalLength = LensWidth / (2.0f* tan(fileScene.m_Camera.m_FieldOfView / 2.0f));
+    float VerticalFov = 2 * atan(LensHeight / (2.0f * FocalLength));
+
+    CreateCameraDescriptor CameraDescriptor = {};
+    CameraDescriptor.m_Height = fileScene.m_Film.m_ResolutionX;
+    CameraDescriptor.m_Width = fileScene.m_Film.m_ResolutionY;
+    CameraDescriptor.m_FocalPoint = ConvertVec3(fileScene.m_Camera.m_Position);
+    CameraDescriptor.m_LookAt = ConvertVec3(fileScene.m_Camera.m_LookAt);
+    CameraDescriptor.m_Up = ConvertVec3(fileScene.m_Camera.m_Up);
+    CameraDescriptor.m_NearClip = fileScene.m_Camera.m_NearPlane;
+    CameraDescriptor.m_FarClip = fileScene.m_Camera.m_FarPlane;
+    CameraDescriptor.m_VerticalFieldOfView = VerticalFov;
+
+    *ppCamera = pRenderer->CreateCamera(&CameraDescriptor);
+}
+
+#if 0
 void InitSceneAndCamera(_In_ Renderer *pRenderer, _In_ const aiScene &assimpScene, _In_ EnvironmentMap *pEnvMap, _Out_ std::vector<Material *> &MaterialList, _Out_ Scene **ppScene, _Out_ Camera **ppCamera)
 {
     *ppScene = pRenderer->CreateScene(pEnvMap);
@@ -504,7 +614,7 @@ void InitSceneAndCamera(_In_ Renderer *pRenderer, _In_ const aiScene &assimpScen
 
     *ppCamera = pRenderer->CreateCamera(&CameraDescriptor);
 }
-
+#endif
 void RenderText(float fps)
 {
     g_pTextWriter->Begin();
@@ -577,6 +687,7 @@ LRESULT CALLBACK MsgProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam,
 
 void SetMaterialProperty(UINT ControlID)
 {
+#if 0
     if (g_SelectedMaterialIndex != NO_MATERIAL_SELECTED)
     {
         float Value = ((CDXUTSlider*)g_GUI.GetControl(ControlID))->GetValue() / (float)MAX_SLIDER_VALUE;
@@ -595,10 +706,12 @@ void SetMaterialProperty(UINT ControlID)
             }
         }
     }
+#endif
 }
 
 void SetReflectivityOnSelectedGeometry(float Reflectivity)
 {
+#if 0
     if (g_SelectedMaterialIndex != NO_MATERIAL_SELECTED)
     {
         for (UINT i = 0; i < NUM_RENDERER_TYPES; i++)
@@ -606,6 +719,7 @@ void SetReflectivityOnSelectedGeometry(float Reflectivity)
             g_MaterialList[i][g_SelectedMaterialIndex]->SetReflectivity(Reflectivity);
         }
     }
+#endif
 }
 
 void CALLBACK OnGUIEvent(UINT nEvent, int nControlID, CDXUTControl* pControl, void* pUserContext)
@@ -775,6 +889,7 @@ void CALLBACK OnMouseMove(_In_ bool bLeftButtonDown, _In_ bool bRightButtonDown,
 
         if (bLeftButtonDown && !IsOverGUI(xPos, yPos))
         {
+#if 0
             const UINT RendererIndex = RAYTRACER; // Not implemented in D3D11 renderer
             Geometry *pGeometry = g_pRenderer[RendererIndex]->GetGeometryAtPixel(g_pCamera[RendererIndex], g_pScene[RendererIndex], Vec2(xPos, yPos));
             SetGUISliders(pGeometry ? pGeometry->GetMaterial() : nullptr);
@@ -791,6 +906,7 @@ void CALLBACK OnMouseMove(_In_ bool bLeftButtonDown, _In_ bool bRightButtonDown,
                     }
                 }
             }
+#endif
         }
     }
 }

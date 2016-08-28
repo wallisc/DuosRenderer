@@ -44,21 +44,26 @@ namespace SceneParser
     struct Camera
     {
         // In Degrees. The is the narrower of the view frustrums width/height
-        float m_FieldOfView; 
+        float m_FieldOfView;
+        float m_NearPlane;
+        float m_FarPlane;
         Vector3 m_Position;
         Vector3 m_LookAt;
+        Vector3 m_Up;
     };
 
     struct Material
     {
         std::string m_MaterialName;
         Vector3 m_Diffuse;
+        std::string m_DiffuseTextureFilename;
     };
 
     struct Vertex
     {
         Vector3 Normal;
         Vector3 Position;
+        Vector3 Tangents;
         Vector2 UV;
     };
 
@@ -67,6 +72,8 @@ namespace SceneParser
         Material *m_pMaterial;
         std::vector<int> m_IndexBuffer;
         std::vector<Vertex> m_VertexBuffer;
+
+        bool m_AreTangentsValid;
     };
 
     struct Scene

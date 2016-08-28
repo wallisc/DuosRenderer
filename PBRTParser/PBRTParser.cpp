@@ -16,34 +16,32 @@ namespace PBRTParser
 
     void PBRTParser::Parse(std::string filename, Scene &outputScene)
     {
-        ifstream fileStream(filename);
+        m_fileStream = ifstream(filename);
 
-        if (!fileStream.good())
+        if (!m_fileStream.good())
         {
             assert(false); // file not found
         }
 
         InitializeDefaults(outputScene);
 
-        while (fileStream.good())
+        while (m_fileStream.good())
         {
-            std::string firstWord;
-            fileStream >> firstWord;
-            if (firstWord.size() == 0)
+            if (!lastParsedWord.compare("Film"))
             {
-                continue;
+                ParseFilm(m_fileStream, outputScene);
             }
-            else if (!firstWord.compare("Film"))
+            else if (!lastParsedWord.compare("Camera"))
             {
-                ParseFilm(fileStream, outputScene);
+                ParseCamera(m_fileStream, outputScene);
             }
-            else if (!firstWord.compare("Camera"))
+            else if (!lastParsedWord.compare("WorldBegin"))
             {
-                ParseCamera(fileStream, outputScene);
+                ParseWorld(m_fileStream, outputScene);
             }
-            else if (!firstWord.compare("WorldBegin"))
+            else
             {
-                ParseWorld(fileStream, outputScene);
+                m_fileStream >> lastParsedWord;
             }
         }
     }
@@ -52,34 +50,28 @@ namespace PBRTParser
     {
         while (fileStream.good())
         {
-            std::string firstWord;
-            fileStream >> firstWord;
-            if (firstWord.size() == 0)
-            {
-                continue;
-            }
-            else if (!firstWord.compare("MakeNamedMaterial"))
+            if (!lastParsedWord.compare("MakeNamedMaterial"))
             {
                 ParseMaterial(fileStream, outputScene);
             }
-            else if (!firstWord.compare("NamedMaterial"))
+            else if (!lastParsedWord.compare("NamedMaterial"))
             {
                 ParseMesh(fileStream, outputScene);
             }
-            else if (!firstWord.compare("WorldEnd"))
+            else if (!lastParsedWord.compare("WorldEnd"))
             {
                 break;
+            }
+            else
+            {
+                fileStream >> lastParsedWord;
             }
         }
     }
 
     void PBRTParser::ParseCamera(std::ifstream &fileStream, SceneParser::Scene &outputScene)
     {
-        char *pTempBuffer;
-        size_t bufferSize;
-        GetTempCharBuffer(&pTempBuffer, bufferSize);
-
-        fileStream.getline(pTempBuffer, bufferSize);
+        char *pTempBuffer = GetLine();
 
         UINT argCount = sscanf_s(pTempBuffer, " \"perspective\" \"float fov\" \[ %f \]",
             &outputScene.m_Camera.m_FieldOfView);
@@ -89,13 +81,9 @@ namespace PBRTParser
 
     void PBRTParser::ParseFilm(std::ifstream &fileStream, SceneParser::Scene &outputScene)
     {
-        char *pTempBuffer;
-        size_t bufferSize;
-        GetTempCharBuffer(&pTempBuffer, bufferSize);
+        char *pTempBuffer = GetLine();
 
         char fileName[PBRTPARSER_STRINGBUFFERSIZE];
-        fileStream.getline(pTempBuffer, bufferSize);
-
         UINT argCount = sscanf_s(pTempBuffer, " \"image\" \"integer xresolution\" \[ %u \] \"integer yresolution\" \[ %u \] \"string filename\" \[ \"%s\" \]", 
             &outputScene.m_Film.m_ResolutionX,
             &outputScene.m_Film.m_ResolutionY,
@@ -116,11 +104,8 @@ namespace PBRTParser
 
     void PBRTParser::ParseMaterial(std::ifstream &fileStream, SceneParser::Scene &outputScene)
     {
-        char *pTempBuffer;
-        size_t bufferSize;
-        GetTempCharBuffer(&pTempBuffer, bufferSize);
+        char *pTempBuffer = GetLine();
 
-        fileStream.getline(pTempBuffer, bufferSize);
         Material material;
         char materialName[PBRTPARSER_STRINGBUFFERSIZE];
         char materialType[PBRTPARSER_STRINGBUFFERSIZE];
@@ -141,11 +126,8 @@ namespace PBRTParser
 
     void PBRTParser::ParseMesh(std::ifstream &fileStream, SceneParser::Scene &outputScene)
     {
-        char *pTempBuffer;
-        size_t bufferSize;
-        GetTempCharBuffer(&pTempBuffer, bufferSize);
+        char *pTempBuffer = GetLine();
 
-        fileStream.getline(pTempBuffer, bufferSize);
         char materialName[PBRTPARSER_STRINGBUFFERSIZE];
         UINT argCount = sscanf_s(pTempBuffer, " \"%s \"",
             materialName,
@@ -164,21 +146,20 @@ namespace PBRTParser
 
     void PBRTParser::ParseShape(std::ifstream &fileStream, SceneParser::Scene &outputScene, SceneParser::Mesh &mesh)
     {
-        string parsedWord;
-        fileStream >> parsedWord;
-        ThrowIfTrue(parsedWord.compare("Shape"), "Geometry expected to be prepended with \"Shape\"");
+        fileStream >> lastParsedWord;
+        ThrowIfTrue(lastParsedWord.compare("Shape"), "Geometry expected to be prepended with \"Shape\"");
 
-        fileStream >> parsedWord;
-        ThrowIfTrue(parsedWord.compare("\"trianglemesh\""), "Only TriangleMesh supported topology at the moment");
+        fileStream >> lastParsedWord;
+        ThrowIfTrue(lastParsedWord.compare("\"trianglemesh\""), "Only TriangleMesh supported topology at the moment");
 
-        fileStream >> parsedWord;
-        if (!parsedWord.compare("\"integer"))
+        fileStream >> lastParsedWord;
+        if (!lastParsedWord.compare("\"integer"))
         {
-            fileStream >> parsedWord;
-            ThrowIfTrue(parsedWord.compare("indices\""), "\"integer\" expected to be followed up with \"integer\"");
+            fileStream >> lastParsedWord;
+            ThrowIfTrue(lastParsedWord.compare("indices\""), "\"integer\" expected to be followed up with \"integer\"");
 
-            fileStream >> parsedWord;
-            ThrowIfTrue(parsedWord.compare("["), "\"indices\" expected to be followed up with \"[\"");
+            fileStream >> lastParsedWord;
+            ThrowIfTrue(lastParsedWord.compare("["), "\"indices\" expected to be followed up with \"[\"");
 
             while (fileStream.good())
             {
@@ -191,26 +172,26 @@ namespace PBRTParser
                 else
                 {
                     fileStream.clear(std::ios::goodbit);
-                    fileStream >> parsedWord;
-                    ThrowIfTrue(parsedWord.compare("]"), "Expected closing ']' after indices");
+                    fileStream >> lastParsedWord;
+                    ThrowIfTrue(lastParsedWord.compare("]"), "Expected closing ']' after indices");
                     break;
                 }
             }
 
-            fileStream >> parsedWord;
+            fileStream >> lastParsedWord;
         }
 
-        if (!parsedWord.compare("\"point"))
+        if (!lastParsedWord.compare("\"point"))
         {
-            fileStream >> parsedWord;
-            ThrowIfTrue(parsedWord.compare("P\""), "Expecting \"point\" syntax to be followed by \"P\"");
+            fileStream >> lastParsedWord;
+            ThrowIfTrue(lastParsedWord.compare("P\""), "Expecting \"point\" syntax to be followed by \"P\"");
 
-            fileStream >> parsedWord;
-            ThrowIfTrue(parsedWord.compare("["), "'P' expected to be followed up with \"[\"");
+            fileStream >> lastParsedWord;
+            ThrowIfTrue(lastParsedWord.compare("["), "'P' expected to be followed up with \"[\"");
 
             while (fileStream.good())
             {
-                Vertex vertex;
+                Vertex vertex = {};
                 fileStream >> vertex.Position.x;
                 fileStream >> vertex.Position.y;
                 fileStream >> vertex.Position.z;
@@ -222,22 +203,22 @@ namespace PBRTParser
                 else
                 {
                     fileStream.clear(std::ios::goodbit);
-                    fileStream >> parsedWord;
-                    ThrowIfTrue(parsedWord.compare("]"), "Expected closing ']' after positions");
+                    fileStream >> lastParsedWord;
+                    ThrowIfTrue(lastParsedWord.compare("]"), "Expected closing ']' after positions");
                     break;
                 }
             }
 
-            fileStream >> parsedWord;
+            fileStream >> lastParsedWord;
         }
 
-        if (!parsedWord.compare("\"normal"))
+        if (!lastParsedWord.compare("\"normal"))
         {
-            fileStream >> parsedWord;
-            ThrowIfTrue(parsedWord.compare("N\""), "Expecting \"normal\" syntax to be followed by an \"N\"");
+            fileStream >> lastParsedWord;
+            ThrowIfTrue(lastParsedWord.compare("N\""), "Expecting \"normal\" syntax to be followed by an \"N\"");
 
-            fileStream >> parsedWord;
-            ThrowIfTrue(parsedWord.compare("["), "'N' expected to be followed up with \"[\"");
+            fileStream >> lastParsedWord;
+            ThrowIfTrue(lastParsedWord.compare("["), "'N' expected to be followed up with \"[\"");
 
             UINT vertexIndex = 0;
             while (fileStream.good())
@@ -259,22 +240,22 @@ namespace PBRTParser
                 else
                 {
                     fileStream.clear(std::ios::goodbit);
-                    fileStream >> parsedWord;
-                    ThrowIfTrue(parsedWord.compare("]"), "Expected closing ']' after positions");
+                    fileStream >> lastParsedWord;
+                    ThrowIfTrue(lastParsedWord.compare("]"), "Expected closing ']' after positions");
                     break;
                 }
             }
 
-            fileStream >> parsedWord;
+            fileStream >> lastParsedWord;
         }
 
-        if (!parsedWord.compare("\"float"))
+        if (!lastParsedWord.compare("\"float"))
         {
-            fileStream >> parsedWord;
-            ThrowIfTrue(parsedWord.compare("uv\""), "Expecting \"float\" syntax to be followed by \"uv\"");
+            fileStream >> lastParsedWord;
+            ThrowIfTrue(lastParsedWord.compare("uv\""), "Expecting \"float\" syntax to be followed by \"uv\"");
 
-            fileStream >> parsedWord;
-            ThrowIfTrue(parsedWord.compare("["), "'UV' expected to be followed up with \"[\"");
+            fileStream >> lastParsedWord;
+            ThrowIfTrue(lastParsedWord.compare("["), "'UV' expected to be followed up with \"[\"");
 
             UINT vertexIndex = 0;
             while (fileStream.good())
@@ -294,14 +275,16 @@ namespace PBRTParser
                 else
                 {
                     fileStream.clear(std::ios::goodbit);
-                    fileStream >> parsedWord;
-                    ThrowIfTrue(parsedWord.compare("]"), "Expected closing ']' after positions");
+                    fileStream >> lastParsedWord;
+                    ThrowIfTrue(lastParsedWord.compare("]"), "Expected closing ']' after positions");
                     break;
                 }
             }
 
-            fileStream >> parsedWord;
+            fileStream >> lastParsedWord;
         }
+
+        mesh.m_AreTangentsValid = false;
     }
 
     string PBRTParser::CorrectNameString(char *pString)
@@ -333,8 +316,11 @@ namespace PBRTParser
     void PBRTParser::InitializeCameraDefaults(Camera &camera)
     {
         camera.m_FieldOfView = 90;
-        camera.m_LookAt = Vector3( 0.0f, 0.0f, 0.0f );
+        camera.m_LookAt = Vector3(0.0f, 0.0f, 0.0f);
         camera.m_Position = Vector3(0.0f, 0.0f, -1.0f);
+        camera.m_Up = Vector3(0.0f, 1.0f, 0.0f);
+        camera.m_NearPlane = 0.001f;
+        camera.m_FarPlane = 999999.0f;
     }
 }
 
