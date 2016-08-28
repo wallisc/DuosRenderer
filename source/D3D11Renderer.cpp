@@ -9,7 +9,7 @@
 #include <d3dcompiler.h>
 #include <directxcolors.h>
 
-#define M_PI 3.14
+#define M_PI 3.14f
 
 using namespace DirectX;
 
@@ -377,6 +377,25 @@ void D3D11Renderer::SetDefaultState()
     FAIL_CHK(FAILED(hr), "Failed CreateDepthStencilState");
 
     m_pImmediateContext->OMSetDepthStencilState(pDepthStencilState, 0);
+
+    CComPtr<ID3D11RasterizerState1> pRasterizerState;
+    D3D11_RASTERIZER_DESC1 rasterizerDesc = {};
+    rasterizerDesc.AntialiasedLineEnable = false;
+    rasterizerDesc.CullMode = D3D11_CULL_NONE;
+    rasterizerDesc.DepthBias = 0;
+    rasterizerDesc.SlopeScaledDepthBias = 0.0f;
+    rasterizerDesc.DepthBiasClamp = 0.0f;
+    rasterizerDesc.DepthClipEnable = true;
+    rasterizerDesc.FillMode = D3D11_FILL_SOLID;
+    rasterizerDesc.ForcedSampleCount = 0;
+    rasterizerDesc.FrontCounterClockwise = false;
+    rasterizerDesc.MultisampleEnable = false;
+    rasterizerDesc.ScissorEnable = false;
+    rasterizerDesc.SlopeScaledDepthBias = 0.0f;
+    hr = m_pDevice1->CreateRasterizerState1(&rasterizerDesc, &pRasterizerState);
+    FAIL_CHK(FAILED(hr), "Failed CreateRasterizerState");
+
+    m_pImmediateContext->RSSetState(pRasterizerState);
 
     // Create the sample state
     D3D11_SAMPLER_DESC sampDesc;

@@ -111,7 +111,7 @@
     <LinkIncremental>false</LinkIncremental>
     <GenerateManifest>true</GenerateManifest>
     <IncludePath>$(VC_IncludePath);$(WindowsSDK_IncludePath);dxtk\Inc;DXUT\core;DXUT\core;..\PBRTParser</IncludePath>
-    <LibraryPath>$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64);;$(WindowsSDK_MetadataPath);;assimp\lib64;embree\lib;..\PBRTParser;..\PBRTParser\x64;;x64\release\pbrtparser</LibraryPath>
+    <LibraryPath>$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64);;$(WindowsSDK_MetadataPath);;assimp\lib64;embree\lib;..\PBRTParser;..\x64\release\PBRTParser</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Profile|Win32'">
     <LinkIncremental>false</LinkIncremental>

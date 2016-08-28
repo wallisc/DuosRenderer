@@ -32,7 +32,23 @@ namespace PBRTParser
             charBufferSize = ARRAYSIZE(_m_buffer);
         };
 
+        char *GetLine()
+        {
+            char *pTempBuffer;
+            size_t bufferSize;
+            GetTempCharBuffer(&pTempBuffer, bufferSize);
+
+            char fileName[PBRTPARSER_STRINGBUFFERSIZE];
+            m_fileStream.getline(pTempBuffer, bufferSize);
+
+            lastParsedWord = "";
+            return pTempBuffer;
+        }
+
+        std::ifstream m_fileStream;
+
         // Shouldn't be accessed directly outside of GetTempCharBuffer
-        char _m_buffer[500]; 
+        char _m_buffer[500];
+        std::string lastParsedWord;
     };
 }
