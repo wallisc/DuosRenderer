@@ -329,16 +329,6 @@ Vec2 ConvertVec2(const SceneParser::Vector2 &vec)
 }
 
 
-Vec3 ConvertVec3(const aiVector3D &vec)
-{
-    return Vec3(vec.x, vec.y, vec.z);
-}
-
-Vec2 ConvertVec2(const aiVector3D &vec)
-{
-    return Vec2(vec.x, vec.y);
-}
-
 void InitEnvironmentMap(_In_ Renderer *pRenderer, char *CubeMapName, char* irradMapName, _Out_ EnvironmentMap **ppEnviromentMap)
 {
     CreateEnvironmentMapDescriptor EnvMapDescriptor;
