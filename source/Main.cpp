@@ -17,16 +17,11 @@
 
 #include "dxtk/inc/WICTextureLoader.h"
 
-#include "assimp/Importer.hpp"      // C++ importer interface
-#include "assimp/scene.h"      
-#include "assimp/postprocess.h"     // Post processing flags
-
 #include <list>
 #include "Strsafe.h"
 #include "PBRTParser.h"
 
 using namespace DirectX;
-using namespace Assimp;
 
 UINT g_Width = 800;
 UINT g_Height = 600;
@@ -73,7 +68,6 @@ bool g_ShowGoldenImage = false;
 
 UINT g_NumRenderers = NUM_RENDERER_TYPES;
 D3D11Canvas *g_pCanvas;
-Assimp::Importer g_importer;
 
 SceneParser::Scene g_outputScene;
 std::string g_referenceImageFilePath;
@@ -104,7 +98,6 @@ ID3D11Texture2D* g_pGoldenImage = nullptr;
 //--------------------------------------------------------------------------------------
 // Forward declarations
 //--------------------------------------------------------------------------------------
-//void InitSceneAndCamera(_In_ Renderer *, _In_ const aiScene &assimpScene, _In_ EnvironmentMap *pEnvMap, _Out_ std::vector<Material *> &MaterialList, _Out_ Scene **, _Out_ Camera **);
 void InitSceneAndCamera(_In_ Renderer *, _In_ EnvironmentMap *pEnvMap, _In_ const SceneParser::Scene &fileScene, std::unordered_map<std::string, Material *> &materialList, _Out_ Scene **, _Out_ Camera **);
 void InitEnvironmentMap(_In_ Renderer *pRenderer, char *CubeMapName, char *irradMapName, _Out_ EnvironmentMap **ppEnviromentMap);
 HRESULT InitWindow( HINSTANCE hInstance, int nCmdShow );
@@ -227,8 +220,6 @@ int WINAPI wWinMain( _In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
     return DXUTGetExitCode();
 }
 
-const aiScene* InitAssimpScene(_In_ char *pSceneFile);
-
 HRESULT CALLBACK OnDeviceCreated(_In_ ID3D11Device* pd3dDevice, _In_ const DXGI_SURFACE_DESC* pBackBufferSurfaceDesc, _In_opt_ void* pUserContext)
 {
     g_pDevice = pd3dDevice;
@@ -304,10 +295,6 @@ HRESULT CALLBACK OnDeviceCreated(_In_ ID3D11Device* pd3dDevice, _In_ const DXGI_
 
     FAIL_CHK(FAILED(hr), "Failed to create DXUT dialog manager");
 
-    const aiScene* pAssimpScene = InitAssimpScene("Assets/sampleScene/sampleScene.dae");
-
-    FAIL_CHK(!pAssimpScene, "Failed to open scene file");
-
     for (UINT i = 0; i < NUM_RENDERER_TYPES; i++)
     {
         switch (i)
@@ -326,28 +313,9 @@ HRESULT CALLBACK OnDeviceCreated(_In_ ID3D11Device* pd3dDevice, _In_ const DXGI_
         InitEnvironmentMap(g_pRenderer[i], "Assets\\EnvironmentMap\\Uffizi\\Uffizi", "Assets\\EnvironmentMap\\Uffizi\\irrad", &g_pEnvironmentMap[i]);
         
         InitSceneAndCamera(g_pRenderer[i], g_pEnvironmentMap[i], g_outputScene, g_MaterialList[i], &g_pScene[i], &g_pCamera[i]);
-        //InitSceneAndCamera(g_pRenderer[i], *pAssimpScene, g_pEnvironmentMap[i], g_MaterialList[i], &g_pScene[i], &g_pCamera[i]);
     }
 
     return	S_OK;
-}
-
-const aiScene* InitAssimpScene(_In_ char *pSceneFile)
-{
-    // Create an instance of the Importer class
-    // And have it read the given file with some example postprocessing
-    // Usually - if speed is not the most important aspect for you - you'll 
-    // propably to request more postprocessing than we do in this example.
-    const aiScene* AssimpScene = g_importer.ReadFile(pSceneFile,
-        aiProcess_Triangulate |
-        aiProcess_MakeLeftHanded |
-        aiProcess_FlipUVs |
-        aiProcess_FlipWindingOrder |
-        aiProcess_GenSmoothNormals |
-        aiProcess_CalcTangentSpace |
-        aiProcess_PreTransformVertices);
-
-    return AssimpScene;
 }
 
 Vec3 ConvertVec3(const SceneParser::Vector3 &vec)
@@ -481,140 +449,6 @@ void InitSceneAndCamera(_In_ Renderer *pRenderer, _In_ EnvironmentMap *pEnvMap, 
     *ppCamera = pRenderer->CreateCamera(&CameraDescriptor);
 }
 
-#if 0
-void InitSceneAndCamera(_In_ Renderer *pRenderer, _In_ const aiScene &assimpScene, _In_ EnvironmentMap *pEnvMap, _Out_ std::vector<Material *> &MaterialList, _Out_ Scene **ppScene, _Out_ Camera **ppCamera)
-{
-    *ppScene = pRenderer->CreateScene(pEnvMap);
-    Scene *pScene = *ppScene;
-
-    MaterialList = std::vector<Material *>(assimpScene.mNumMaterials);
-    for (UINT i = 0; i < assimpScene.mNumMaterials; i++)
-    {
-        aiMaterial *pMat = assimpScene.mMaterials[i];
-        assert(pMat);
-
-        aiString path;
-        float reflectivity, shininess;
-        pMat->GetTexture(aiTextureType_DIFFUSE, 0, &path);
-        pMat->Get(AI_MATKEY_REFLECTIVITY, reflectivity);
-        pMat->Get(AI_MATKEY_SHININESS, shininess);
-
-        aiColor3D diffuse;
-        pMat->Get(AI_MATKEY_COLOR_DIFFUSE, diffuse);
-
-        CreateMaterialDescriptor CreateMaterialDescriptor = {};
-        CreateMaterialDescriptor.m_TextureName = path.C_Str();
-
-        // TODO: Collada doesn't support bump maps so I'm using this hack to test bump mapping on the sample scene
-        if (strcmp(CreateMaterialDescriptor.m_TextureName, "Assets/sampleScene/crate.png") == 0)
-        {
-            CreateMaterialDescriptor.m_NormalMapName = "Assets/sampleScene/crateBump.jpg";
-        }
-
-        CreateMaterialDescriptor.m_DiffuseColor.x = diffuse.r;
-        CreateMaterialDescriptor.m_DiffuseColor.y = diffuse.g;
-        CreateMaterialDescriptor.m_DiffuseColor.z = diffuse.b;
-
-        CreateMaterialDescriptor.m_Reflectivity = reflectivity;
-        CreateMaterialDescriptor.m_Roughness = sqrt(2.0 / (shininess + 2.0f));
-
-        MaterialList[i] = pRenderer->CreateMaterial(&CreateMaterialDescriptor);
-    }
-
-    {
-        std::vector<Vertex> vertexList;
-        std::vector<unsigned int> indexList;
-        for (UINT i = 0; i < assimpScene.mNumMeshes; i++)
-        {
-            const aiMesh *pMesh = assimpScene.mMeshes[i];
-            assert(*pMesh->mNumUVComponents == 2 || *pMesh->mNumUVComponents == 0);
-            assert(pMesh->HasTangentsAndBitangents());
-
-            UINT numVerts = pMesh->mNumVertices;
-            UINT numFaces = pMesh->mNumFaces;
-            UINT numIndices = numFaces * 3;
-
-            vertexList.resize(numVerts);
-            indexList.resize(numIndices);
-            for (UINT vertIdx = 0; vertIdx < numVerts; vertIdx++)
-            {
-                Vertex &vertex = vertexList[vertIdx];
-                vertex.m_Position = ConvertVec3(pMesh->mVertices[vertIdx]);
-                vertex.m_Normal = ConvertVec3(pMesh->mNormals[vertIdx]);
-                vertex.m_Tex = ConvertVec2(pMesh->mTextureCoords[0][vertIdx]);
-                vertex.m_Tangent = ConvertVec3(pMesh->mTangents[vertIdx]);
-            }
-
-            for (UINT i = 0; i < numFaces; i++)
-            {
-                auto pFace = &pMesh->mFaces[i];
-                assert(pFace->mNumIndices == 3);
-                indexList[i * 3] = pFace->mIndices[0];
-                indexList[i * 3 + 1] = pFace->mIndices[1];
-                indexList[i * 3 + 2] = pFace->mIndices[2];
-            }
-
-            CreateGeometryDescriptor geometryDescriptor;
-            geometryDescriptor.m_pVertices = &vertexList[0];
-            geometryDescriptor.m_NumVertices = numVerts;
-            geometryDescriptor.m_pIndices = &indexList[0];
-            geometryDescriptor.m_NumIndices = numIndices;
-            geometryDescriptor.m_pMaterial = MaterialList[pMesh->mMaterialIndex];
-            Geometry *pGeometry = pRenderer->CreateGeometry(&geometryDescriptor);
-            pScene->AddGeometry(pGeometry);
-        }
-    }
-    
-    {
-        CreateLightDescriptor CreateLight;
-        CreateDirectionalLight CreateDirectional;
-        CreateDirectional.m_EmissionDirection = Vec3(1.0f, -1.0, -1.0);
-        CreateLight.m_Color = Vec3(1.0f, 1.0f, 1.0f);
-        CreateLight.m_LightType = CreateLightDescriptor::DIRECTIONAL_LIGHT;
-        CreateLight.m_pCreateDirectionalLight = &CreateDirectional;
-
-        Light *pLight = pRenderer->CreateLight(&CreateLight);
-        pScene->AddLight(pLight);
-    }
-
-    assert(assimpScene.HasCameras() && assimpScene.mNumCameras == 1);
-    auto pCam = assimpScene.mCameras[0];
-
-    aiVector3D lookAt;
-        
-    aiNode* rootNode = assimpScene.mRootNode;
-    aiNode* camNode = assimpScene.mRootNode->FindNode(pCam->mName);
-        
-    aiMatrix4x4 camMat;
-    pCam->GetCameraMatrix(camMat);
-
-    XMVECTOR position = XMVectorSet(pCam->mPosition.x, pCam->mPosition.y, pCam->mPosition.z, 1.0);
-    XMMATRIX camMatrix = XMMatrixSet(
-        camMat.a1, camMat.a2, camMat.a3, camMat.a4,
-        camMat.b1, camMat.b2, camMat.b3, camMat.b4,
-        camMat.c1, camMat.c2, camMat.c3, camMat.c4,
-        camMat.d1, camMat.d2, camMat.d3, camMat.d4);
-    position = XMVector4Transform(position, camMatrix);
-
-    const float LensHeight = 2.0f;
-    const float AspectRatio = (float)g_Width / (float)g_Height;
-    const float LensWidth = LensHeight * AspectRatio;
-    const float FocalLength = LensWidth / (2.0f* tan(pCam->mHorizontalFOV / 2.0f));
-    float VerticalFov = 2 * atan(LensHeight / (2.0f * FocalLength));
-
-    CreateCameraDescriptor CameraDescriptor = {};
-    CameraDescriptor.m_Height = g_Height;
-    CameraDescriptor.m_Width = g_Width;
-    CameraDescriptor.m_FocalPoint = ConvertVec3(pCam->mPosition);
-    CameraDescriptor.m_LookAt = ConvertVec3(pCam->mLookAt);
-    CameraDescriptor.m_Up = ConvertVec3(pCam->mUp);
-    CameraDescriptor.m_NearClip = pCam->mClipPlaneNear;
-    CameraDescriptor.m_FarClip = pCam->mClipPlaneFar;
-    CameraDescriptor.m_VerticalFieldOfView = VerticalFov;
-
-    *ppCamera = pRenderer->CreateCamera(&CameraDescriptor);
-}
-#endif
 void RenderText(float fps)
 {
     g_pTextWriter->Begin();
