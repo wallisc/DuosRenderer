@@ -10,6 +10,7 @@ namespace PBRTParser
 {
 // Keep this inside our namespace because glm doesn't protect
 // against double inclusion
+#include "glm/vec4.hpp"
 #include "glm/vec3.hpp"
 #include "glm/vec2.hpp"
 #include "glm/glm.hpp"
@@ -54,9 +55,17 @@ namespace PBRTParser
             return pTempBuffer;
         }
 
+        static SceneParser::Vector3 ConvertToVector3(const glm::vec4 &vec)
+        {
+            return SceneParser::Vector3(vec.x, vec.y, vec.z);
+        }
+
         std::ifstream m_fileStream;
 
         glm::mat4 m_currentTransform;
+        glm::vec4 m_lookAt;
+        glm::vec4 m_camPos;
+        glm::vec4 m_camUp;
 
         // Shouldn't be accessed directly outside of GetTempCharBuffer
         char _m_buffer[500];

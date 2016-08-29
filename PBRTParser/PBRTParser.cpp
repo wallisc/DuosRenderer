@@ -17,6 +17,7 @@ namespace PBRTParser
     void PBRTParser::Parse(std::string filename, Scene &outputScene)
     {
         m_fileStream = ifstream(filename);
+        m_currentTransform = glm::mat4();
 
         if (!m_fileStream.good())
         {
@@ -35,8 +36,13 @@ namespace PBRTParser
             {
                 ParseCamera(m_fileStream, outputScene);
             }
+            else if (!lastParsedWord.compare("Transform"))
+            {
+                ParseTransform();
+            }
             else if (!lastParsedWord.compare("WorldBegin"))
             {
+                m_currentTransform = glm::mat4();
                 ParseWorld(m_fileStream, outputScene);
             }
             else
@@ -77,6 +83,10 @@ namespace PBRTParser
             &outputScene.m_Camera.m_FieldOfView);
 
         ThrowIfTrue(argCount != 1, "Camera arguments not formatted correctly");
+    
+        outputScene.m_Camera.m_LookAt = ConvertToVector3(m_currentTransform * m_lookAt);
+        outputScene.m_Camera.m_Position = ConvertToVector3(m_currentTransform * m_camPos);
+        outputScene.m_Camera.m_Up = ConvertToVector3(m_currentTransform * m_camUp);
     }
 
     void PBRTParser::ParseFilm(std::ifstream &fileStream, SceneParser::Scene &outputScene)
@@ -315,9 +325,13 @@ namespace PBRTParser
 
     void PBRTParser::InitializeCameraDefaults(Camera &camera)
     {
+        m_lookAt = glm::vec4(0.0f, 2.0f, 1.0f, 1.0f);
+        m_camPos = glm::vec4(0.0f, 2.0f, 0.0f, 1.0f);
+        m_camUp = glm::vec4(0.0f, 1.0f, 0.0f, 0.0f);
+
         camera.m_FieldOfView = 90;
-        camera.m_LookAt = Vector3(0.0f, 0.0f, 0.0f);
-        camera.m_Position = Vector3(0.0f, 0.0f, -1.0f);
+        camera.m_LookAt = ConvertToVector3(m_lookAt);
+        camera.m_Position = ConvertToVector3(m_camPos);
         camera.m_Up = Vector3(0.0f, 1.0f, 0.0f);
         camera.m_NearPlane = 0.001f;
         camera.m_FarPlane = 999999.0f;
@@ -325,7 +339,52 @@ namespace PBRTParser
 
     void PBRTParser::ParseTransform()
     {
-        
+        char *pTempBuffer = GetLine();
+        float mat[4][4];
+
+        UINT argCount = sscanf_s(pTempBuffer, " \[ %f %f %f %f  %f %f %f %f  %f %f %f %f  %f %f %f %f \] ",
+            &mat[0][0],
+            &mat[0][1],
+            &mat[0][2],
+            &mat[0][3],
+
+            &mat[1][0],
+            &mat[1][1],
+            &mat[1][2],
+            &mat[1][3],
+
+            &mat[2][0],
+            &mat[2][1],
+            &mat[2][2],
+            &mat[2][3],
+
+            &mat[3][0],
+            &mat[3][1],
+            &mat[3][2],
+            &mat[3][3]);
+
+        ThrowIfTrue(argCount != 16, "Transform arguments not formatted correctly");
+
+        m_currentTransform = glm::mat4(
+            mat[0][0],
+            mat[0][1],
+            mat[0][2],
+            mat[0][3],
+
+            mat[1][0],
+            mat[1][1],
+            mat[1][2],
+            mat[1][3],
+
+            mat[2][0],
+            mat[2][1],
+            mat[2][2],
+            mat[2][3],
+
+            mat[3][0],
+            mat[3][1],
+            mat[3][2],
+            mat[3][3]);
     }
 }
 

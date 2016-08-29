@@ -423,7 +423,9 @@ void InitSceneAndCamera(_In_ Renderer *pRenderer, _In_ EnvironmentMap *pEnvMap, 
     const float LensHeight = 2.0f;
     const float AspectRatio = (float)fileScene.m_Film.m_ResolutionX / fileScene.m_Film.m_ResolutionY;
     const float LensWidth = LensHeight * AspectRatio;
-    const float FocalLength = LensWidth / (2.0f* tan(fileScene.m_Camera.m_FieldOfView / 2.0f));
+    const float fov = fileScene.m_Camera.m_FieldOfView * M_PI / 180.0f;
+
+    const float FocalLength = LensWidth / (2.0f* tan(fov / 2.0f));
     float VerticalFov = 2 * atan(LensHeight / (2.0f * FocalLength));
 
     CreateCameraDescriptor CameraDescriptor = {};
