@@ -3,10 +3,17 @@
 #include <iostream>
 #include <fstream>
 
+
 #define PBRTPARSER_STRINGBUFFERSIZE 200
 
 namespace PBRTParser
 {
+// Keep this inside our namespace because glm doesn't protect
+// against double inclusion
+#include "glm/vec3.hpp"
+#include "glm/vec2.hpp"
+#include "glm/glm.hpp"
+
     class PBRTParser : public SceneParser::SceneParserClass
     {
     public:
@@ -18,6 +25,8 @@ namespace PBRTParser
         void ParseWorld(std::ifstream &fileStream, SceneParser::Scene &outputScene);
         void ParseMaterial(std::ifstream &fileStream, SceneParser::Scene &outputScene);
         void ParseMesh(std::ifstream &fileStream, SceneParser::Scene &outputScene);
+        
+        void ParseTransform();
 
         void ParseShape(std::ifstream &fileStream, SceneParser::Scene &outputScene, SceneParser::Mesh &mesh);
 
@@ -46,6 +55,8 @@ namespace PBRTParser
         }
 
         std::ifstream m_fileStream;
+
+        glm::mat4 m_currentTransform;
 
         // Shouldn't be accessed directly outside of GetTempCharBuffer
         char _m_buffer[500];

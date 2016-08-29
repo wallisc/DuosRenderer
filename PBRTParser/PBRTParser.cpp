@@ -322,5 +322,10 @@ namespace PBRTParser
         camera.m_NearPlane = 0.001f;
         camera.m_FarPlane = 999999.0f;
     }
+
+    void PBRTParser::ParseTransform()
+    {
+        
+    }
 }
 

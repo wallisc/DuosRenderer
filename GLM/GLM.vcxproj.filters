@@ -1,0 +1,284 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="14.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tga;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="detail">
+      <UniqueIdentifier>{e87585b3-3df6-49ed-b25f-c1f66b80191a}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="glm\glm.hpp" />
+    <ClInclude Include="glm\integer.hpp" />
+    <ClInclude Include="glm\mat2x2.hpp" />
+    <ClInclude Include="glm\mat2x3.hpp" />
+    <ClInclude Include="glm\mat2x4.hpp" />
+    <ClInclude Include="glm\mat3x2.hpp" />
+    <ClInclude Include="glm\mat3x3.hpp" />
+    <ClInclude Include="glm\mat3x4.hpp" />
+    <ClInclude Include="glm\mat4x2.hpp" />
+    <ClInclude Include="glm\mat4x3.hpp" />
+    <ClInclude Include="glm\mat4x4.hpp" />
+    <ClInclude Include="glm\matrix.hpp" />
+    <ClInclude Include="glm\packing.hpp" />
+    <ClInclude Include="glm\trigonometric.hpp" />
+    <ClInclude Include="glm\vec2.hpp" />
+    <ClInclude Include="glm\vec3.hpp" />
+    <ClInclude Include="glm\vec4.hpp" />
+    <ClInclude Include="glm\vector_relational.hpp" />
+    <ClInclude Include="glm\common.hpp" />
+    <ClInclude Include="glm\exponential.hpp" />
+    <ClInclude Include="glm\ext.hpp" />
+    <ClInclude Include="glm\fwd.hpp" />
+    <ClInclude Include="glm\geometric.hpp" />
+    <ClInclude Include="glm\detail\_fixes.hpp">
+      <Filter>detail</Filter>
+    </ClInclude>
+    <ClInclude Include="glm\detail\_noise.hpp">
+      <Filter>detail</Filter>
+    </ClInclude>
+    <ClInclude Include="glm\detail\_swizzle.hpp">
+      <Filter>detail</Filter>
+    </ClInclude>
+    <ClInclude Include="glm\detail\_swizzle_func.hpp">
+      <Filter>detail</Filter>
+    </ClInclude>
+    <ClInclude Include="glm\detail\_vectorize.hpp">
+      <Filter>detail</Filter>
+    </ClInclude>
+    <ClInclude Include="glm\detail\func_common.hpp">
+      <Filter>detail</Filter>
+    </ClInclude>
+    <ClInclude Include="glm\detail\func_exponential.hpp">
+      <Filter>detail</Filter>
+    </ClInclude>
+    <ClInclude Include="glm\detail\func_geometric.hpp">
+      <Filter>detail</Filter>
+    </ClInclude>
+    <ClInclude Include="glm\detail\func_integer.hpp">
+      <Filter>detail</Filter>
+    </ClInclude>
+    <ClInclude Include="glm\detail\func_matrix.hpp">
+      <Filter>detail</Filter>
+    </ClInclude>
+    <ClInclude Include="glm\detail\func_noise.hpp">
+      <Filter>detail</Filter>
+    </ClInclude>
+    <ClInclude Include="glm\detail\func_packing.hpp">
+      <Filter>detail</Filter>
+    </ClInclude>
+    <ClInclude Include="glm\detail\func_trigonometric.hpp">
+      <Filter>detail</Filter>
+    </ClInclude>
+    <ClInclude Include="glm\detail\func_vector_relational.hpp">
+      <Filter>detail</Filter>
+    </ClInclude>
+    <ClInclude Include="glm\detail\intrinsic_common.hpp">
+      <Filter>detail</Filter>
+    </ClInclude>
+    <ClInclude Include="glm\detail\intrinsic_exponential.hpp">
+      <Filter>detail</Filter>
+    </ClInclude>
+    <ClInclude Include="glm\detail\intrinsic_geometric.hpp">
+      <Filter>detail</Filter>
+    </ClInclude>
+    <ClInclude Include="glm\detail\intrinsic_integer.hpp">
+      <Filter>detail</Filter>
+    </ClInclude>
+    <ClInclude Include="glm\detail\intrinsic_matrix.hpp">
+      <Filter>detail</Filter>
+    </ClInclude>
+    <ClInclude Include="glm\detail\intrinsic_trigonometric.hpp">
+      <Filter>detail</Filter>
+    </ClInclude>
+    <ClInclude Include="glm\detail\intrinsic_vector_relational.hpp">
+      <Filter>detail</Filter>
+    </ClInclude>
+    <ClInclude Include="glm\detail\precision.hpp">
+      <Filter>detail</Filter>
+    </ClInclude>
+    <ClInclude Include="glm\detail\setup.hpp">
+      <Filter>detail</Filter>
+    </ClInclude>
+    <ClInclude Include="glm\detail\type_float.hpp">
+      <Filter>detail</Filter>
+    </ClInclude>
+    <ClInclude Include="glm\detail\type_gentype.hpp">
+      <Filter>detail</Filter>
+    </ClInclude>
+    <ClInclude Include="glm\detail\type_half.hpp">
+      <Filter>detail</Filter>
+    </ClInclude>
+    <ClInclude Include="glm\detail\type_int.hpp">
+      <Filter>detail</Filter>
+    </ClInclude>
+    <ClInclude Include="glm\detail\type_mat.hpp">
+      <Filter>detail</Filter>
+    </ClInclude>
+    <ClInclude Include="glm\detail\type_mat2x2.hpp">
+      <Filter>detail</Filter>
+    </ClInclude>
+    <ClInclude Include="glm\detail\type_mat2x3.hpp">
+      <Filter>detail</Filter>
+    </ClInclude>
+    <ClInclude Include="glm\detail\type_mat2x4.hpp">
+      <Filter>detail</Filter>
+    </ClInclude>
+    <ClInclude Include="glm\detail\type_mat3x2.hpp">
+      <Filter>detail</Filter>
+    </ClInclude>
+    <ClInclude Include="glm\detail\type_mat3x3.hpp">
+      <Filter>detail</Filter>
+    </ClInclude>
+    <ClInclude Include="glm\detail\type_mat3x4.hpp">
+      <Filter>detail</Filter>
+    </ClInclude>
+    <ClInclude Include="glm\detail\type_mat4x2.hpp">
+      <Filter>detail</Filter>
+    </ClInclude>
+    <ClInclude Include="glm\detail\type_mat4x3.hpp">
+      <Filter>detail</Filter>
+    </ClInclude>
+    <ClInclude Include="glm\detail\type_mat4x4.hpp">
+      <Filter>detail</Filter>
+    </ClInclude>
+    <ClInclude Include="glm\detail\type_vec.hpp">
+      <Filter>detail</Filter>
+    </ClInclude>
+    <ClInclude Include="glm\detail\type_vec1.hpp">
+      <Filter>detail</Filter>
+    </ClInclude>
+    <ClInclude Include="glm\detail\type_vec2.hpp">
+      <Filter>detail</Filter>
+    </ClInclude>
+    <ClInclude Include="glm\detail\type_vec3.hpp">
+      <Filter>detail</Filter>
+    </ClInclude>
+    <ClInclude Include="glm\detail\type_vec4.hpp">
+      <Filter>detail</Filter>
+    </ClInclude>
+    <ClInclude Include="glm\detail\_features.hpp">
+      <Filter>detail</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="glm\detail\dummy.cpp">
+      <Filter>detail</Filter>
+    </ClCompile>
+    <ClCompile Include="glm\detail\glm.cpp">
+      <Filter>detail</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="glm\detail\func_common.inl">
+      <Filter>detail</Filter>
+    </None>
+    <None Include="glm\detail\func_exponential.inl">
+      <Filter>detail</Filter>
+    </None>
+    <None Include="glm\detail\func_geometric.inl">
+      <Filter>detail</Filter>
+    </None>
+    <None Include="glm\detail\func_integer.inl">
+      <Filter>detail</Filter>
+    </None>
+    <None Include="glm\detail\func_matrix.inl">
+      <Filter>detail</Filter>
+    </None>
+    <None Include="glm\detail\func_noise.inl">
+      <Filter>detail</Filter>
+    </None>
+    <None Include="glm\detail\func_packing.inl">
+      <Filter>detail</Filter>
+    </None>
+    <None Include="glm\detail\func_trigonometric.inl">
+      <Filter>detail</Filter>
+    </None>
+    <None Include="glm\detail\func_vector_relational.inl">
+      <Filter>detail</Filter>
+    </None>
+    <None Include="glm\detail\intrinsic_common.inl">
+      <Filter>detail</Filter>
+    </None>
+    <None Include="glm\detail\intrinsic_exponential.inl">
+      <Filter>detail</Filter>
+    </None>
+    <None Include="glm\detail\intrinsic_geometric.inl">
+      <Filter>detail</Filter>
+    </None>
+    <None Include="glm\detail\intrinsic_integer.inl">
+      <Filter>detail</Filter>
+    </None>
+    <None Include="glm\detail\intrinsic_matrix.inl">
+      <Filter>detail</Filter>
+    </None>
+    <None Include="glm\detail\intrinsic_trigonometric.inl">
+      <Filter>detail</Filter>
+    </None>
+    <None Include="glm\detail\intrinsic_vector_relational.inl">
+      <Filter>detail</Filter>
+    </None>
+    <None Include="glm\detail\type_gentype.inl">
+      <Filter>detail</Filter>
+    </None>
+    <None Include="glm\detail\type_half.inl">
+      <Filter>detail</Filter>
+    </None>
+    <None Include="glm\detail\type_mat.inl">
+      <Filter>detail</Filter>
+    </None>
+    <None Include="glm\detail\type_mat2x2.inl">
+      <Filter>detail</Filter>
+    </None>
+    <None Include="glm\detail\type_mat2x3.inl">
+      <Filter>detail</Filter>
+    </None>
+    <None Include="glm\detail\type_mat2x4.inl">
+      <Filter>detail</Filter>
+    </None>
+    <None Include="glm\detail\type_mat3x2.inl">
+      <Filter>detail</Filter>
+    </None>
+    <None Include="glm\detail\type_mat3x3.inl">
+      <Filter>detail</Filter>
+    </None>
+    <None Include="glm\detail\type_mat3x4.inl">
+      <Filter>detail</Filter>
+    </None>
+    <None Include="glm\detail\type_mat4x2.inl">
+      <Filter>detail</Filter>
+    </None>
+    <None Include="glm\detail\type_mat4x3.inl">
+      <Filter>detail</Filter>
+    </None>
+    <None Include="glm\detail\type_mat4x4.inl">
+      <Filter>detail</Filter>
+    </None>
+    <None Include="glm\detail\type_vec.inl">
+      <Filter>detail</Filter>
+    </None>
+    <None Include="glm\detail\type_vec1.inl">
+      <Filter>detail</Filter>
+    </None>
+    <None Include="glm\detail\type_vec2.inl">
+      <Filter>detail</Filter>
+    </None>
+    <None Include="glm\detail\type_vec3.inl">
+      <Filter>detail</Filter>
+    </None>
+    <None Include="glm\detail\type_vec4.inl">
+      <Filter>detail</Filter>
+    </None>
+    <None Include="glm\detail\type_vec4_avx.inl">
+      <Filter>detail</Filter>
+    </None>
+    <None Include="glm\detail\type_vec4_avx2.inl">
+      <Filter>detail</Filter>
+    </None>
+    <None Include="glm\detail\type_vec4_sse2.inl">
+      <Filter>detail</Filter>
+    </None>
+  </ItemGroup>
+</Project>

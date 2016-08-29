@@ -13,6 +13,5 @@
   <ItemGroup>
     <ClInclude Include="PBRTParser.h" />
     <ClInclude Include="pch.h" />
-    <ClInclude Include="targetver.h" />
   </ItemGroup>
 </Project>
