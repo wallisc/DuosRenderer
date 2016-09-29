@@ -403,6 +403,8 @@ void InitSceneAndCamera(_In_ Renderer *pRenderer, _In_ EnvironmentMap *pEnvMap, 
             geometryDescriptor.m_pIndices = indexList.data();
             geometryDescriptor.m_NumIndices = numIndices;
             geometryDescriptor.m_pMaterial = MaterialList[mesh.m_pMaterial->m_MaterialName];
+            assert(geometryDescriptor.m_pMaterial);
+
             Geometry *pGeometry = pRenderer->CreateGeometry(&geometryDescriptor);
             pScene->AddGeometry(pGeometry);
         }

@@ -9,3 +9,11 @@
 #include <windows.h>
 #include <assert.h>
 #include <exception>
+
+#include "SceneParser.h"
+#include <string>
+#include <iostream>
+#include <fstream>
+
+#include "PlyParser.h"
+#include "PbrtParser.h"

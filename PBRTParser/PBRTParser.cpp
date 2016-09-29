@@ -6,7 +6,7 @@ using namespace std;
 
 namespace PBRTParser
 {
-    void ThrowIfTrue(bool expression, std::string errorMessage)
+    void ThrowIfTrue(bool expression, std::string errorMessage = "")
     {
         if (expression)
         {
@@ -64,6 +64,10 @@ namespace PBRTParser
             {
                 ParseMesh(fileStream, outputScene);
             }
+            else if (!lastParsedWord.compare("Texture"))
+            {
+                ParseTexture(fileStream, outputScene);
+            }
             else if (!lastParsedWord.compare("WorldEnd"))
             {
                 break;
@@ -112,26 +116,91 @@ namespace PBRTParser
         outputScene.m_Film.m_Filename = correctedFileName;
     }
 
+    void PBRTParser::ParseBracketedVector3(std::istream is, float &x, float &y, float &z)
+    {
+        is >> lastParsedWord;
+        ThrowIfTrue(lastParsedWord.compare("["), "Expect '[' at beginning of vector");
+
+        is >> x;
+        is >> y;
+        is >> z;
+
+        ThrowIfTrue(!is.good());
+
+        is >> lastParsedWord;
+        ThrowIfTrue(lastParsedWord.compare("]"), "Expect '[' at beginning of vector");
+    }
+
+
     void PBRTParser::ParseMaterial(std::ifstream &fileStream, SceneParser::Scene &outputScene)
+    {
+        Material material;
+        char materialName[PBRTPARSER_STRINGBUFFERSIZE];
+        std::string materialType;
+
+        auto lineStream = GetLineStream();
+        
+        lineStream >> lastParsedWord;
+        material.m_MaterialName = CorrectNameString(lastParsedWord);
+
+        while (lineStream.good())
+        {
+            if (!lastParsedWord.compare("\"string"))
+            {
+                lineStream >> lastParsedWord;
+                if (!lastParsedWord.compare("type\""))
+                {
+                    lineStream >> lastParsedWord;
+                    ThrowIfTrue(lastParsedWord.compare("["));
+
+                    lineStream >> materialType;
+                    materialType = CorrectNameString(materialType);
+
+                    lineStream >> lastParsedWord;
+                    ThrowIfTrue(lastParsedWord.compare("]"));
+                }
+                else
+                {
+                    ThrowIfTrue(false, "string not followed up with recognized token");
+                }
+            }
+            else if (!lastParsedWord.compare("\"rgb"))
+            {
+                lineStream >> lastParsedWord;
+                if (!lastParsedWord.compare("Kd\""))
+                {
+                    lineStream >> lastParsedWord;
+                    ThrowIfTrue(lastParsedWord.compare("["));
+
+                    lineStream >> material.m_Diffuse.r;
+                    if (lineStream.good())
+                    {
+                        lineStream >> material.m_Diffuse.g;
+                        lineStream >> material.m_Diffuse.b;
+                    }
+                    else
+                    {
+                        lineStream.clear();
+                        lineStream >> material.m_DiffuseTextureFilename;
+                    }
+
+                    lineStream >> lastParsedWord;
+                    ThrowIfTrue(lastParsedWord.compare("]"));
+                }
+            }
+            else
+            {
+                lineStream >> lastParsedWord;
+            }
+        }
+        outputScene.m_Materials[material.m_MaterialName] = material;
+    }
+
+    void PBRTParser::ParseTexture(std::ifstream &fileStream, SceneParser::Scene &outputScene)
     {
         char *pTempBuffer = GetLine();
 
-        Material material;
-        char materialName[PBRTPARSER_STRINGBUFFERSIZE];
-        char materialType[PBRTPARSER_STRINGBUFFERSIZE];
-        UINT argCount = sscanf_s(pTempBuffer, " \"%s \"string type\" \[ \"%s \] \"rgb Kd\" \[ %f %f %f \]",
-            materialName,
-            ARRAYSIZE(materialName),
-            materialType,
-            ARRAYSIZE(materialType),
-            &material.m_Diffuse.r,
-            &material.m_Diffuse.g,
-            &material.m_Diffuse.b);
-        material.m_MaterialName = CorrectNameString(materialName);
-
-        ThrowIfTrue(argCount != 5, "Material arguments not formatted correctly");
-
-        outputScene.m_Materials[material.m_MaterialName] = material;
+        // TODO: Implement
     }
 
     void PBRTParser::ParseMesh(std::ifstream &fileStream, SceneParser::Scene &outputScene)
@@ -160,144 +229,170 @@ namespace PBRTParser
         ThrowIfTrue(lastParsedWord.compare("Shape"), "Geometry expected to be prepended with \"Shape\"");
 
         fileStream >> lastParsedWord;
-        ThrowIfTrue(lastParsedWord.compare("\"trianglemesh\""), "Only TriangleMesh supported topology at the moment");
-
-        fileStream >> lastParsedWord;
-        if (!lastParsedWord.compare("\"integer"))
+        
+        if (!lastParsedWord.compare("PlyMesh"))
         {
             fileStream >> lastParsedWord;
-            ThrowIfTrue(lastParsedWord.compare("indices\""), "\"integer\" expected to be followed up with \"integer\"");
+            ThrowIfTrue(lastParsedWord.compare("\"string"), "PlyMesh expected to be prepended with \"string\"");
+            
+            fileStream >> lastParsedWord;
+            ThrowIfTrue(lastParsedWord.compare("filename\""), "string expected to be prepended with filename\"");
+            
+            fileStream >> lastParsedWord;
+            ThrowIfTrue(lastParsedWord.compare("["), "Expected \'[\'");
 
             fileStream >> lastParsedWord;
-            ThrowIfTrue(lastParsedWord.compare("["), "\"indices\" expected to be followed up with \"[\"");
+            std::string correctedFileName = CorrectNameString(lastParsedWord.c_str());
 
-            while (fileStream.good())
-            {
-                int index;
-                fileStream >> index;
-                if (fileStream.good())
-                {
-                    mesh.m_IndexBuffer.push_back(index);
-                }
-                else
-                {
-                    fileStream.clear(std::ios::goodbit);
-                    fileStream >> lastParsedWord;
-                    ThrowIfTrue(lastParsedWord.compare("]"), "Expected closing ']' after indices");
-                    break;
-                }
-            }
+            PlyParser::PlyParser().Parse(correctedFileName, mesh);
 
             fileStream >> lastParsedWord;
+            ThrowIfTrue(lastParsedWord.compare("]"), "Expected \']\'");
         }
-
-        if (!lastParsedWord.compare("\"point"))
+        else if (!lastParsedWord.compare("\"trianglemesh\""))
         {
             fileStream >> lastParsedWord;
-            ThrowIfTrue(lastParsedWord.compare("P\""), "Expecting \"point\" syntax to be followed by \"P\"");
-
-            fileStream >> lastParsedWord;
-            ThrowIfTrue(lastParsedWord.compare("["), "'P' expected to be followed up with \"[\"");
-
-            while (fileStream.good())
+            if (!lastParsedWord.compare("\"integer"))
             {
-                Vertex vertex = {};
-                fileStream >> vertex.Position.x;
-                fileStream >> vertex.Position.y;
-                fileStream >> vertex.Position.z;
+                fileStream >> lastParsedWord;
+                ThrowIfTrue(lastParsedWord.compare("indices\""), "\"integer\" expected to be followed up with \"integer\"");
 
-                if (fileStream.good())
+                fileStream >> lastParsedWord;
+                ThrowIfTrue(lastParsedWord.compare("["), "\"indices\" expected to be followed up with \"[\"");
+
+                while (fileStream.good())
                 {
-                    mesh.m_VertexBuffer.push_back(vertex);
+                    int index;
+                    fileStream >> index;
+                    if (fileStream.good())
+                    {
+                        mesh.m_IndexBuffer.push_back(index);
+                    }
+                    else
+                    {
+                        fileStream.clear(std::ios::goodbit);
+                        fileStream >> lastParsedWord;
+                        ThrowIfTrue(lastParsedWord.compare("]"), "Expected closing ']' after indices");
+                        break;
+                    }
                 }
-                else
-                {
-                    fileStream.clear(std::ios::goodbit);
-                    fileStream >> lastParsedWord;
-                    ThrowIfTrue(lastParsedWord.compare("]"), "Expected closing ']' after positions");
-                    break;
-                }
+
+                fileStream >> lastParsedWord;
             }
 
-            fileStream >> lastParsedWord;
-        }
-
-        if (!lastParsedWord.compare("\"normal"))
-        {
-            fileStream >> lastParsedWord;
-            ThrowIfTrue(lastParsedWord.compare("N\""), "Expecting \"normal\" syntax to be followed by an \"N\"");
-
-            fileStream >> lastParsedWord;
-            ThrowIfTrue(lastParsedWord.compare("["), "'N' expected to be followed up with \"[\"");
-
-            UINT vertexIndex = 0;
-            while (fileStream.good())
+            if (!lastParsedWord.compare("\"point"))
             {
-                float x, y, z;
-                fileStream >> x;
-                fileStream >> y;
-                fileStream >> z;
-                if (fileStream.good())
-                {
-                    ThrowIfTrue(vertexIndex >= mesh.m_VertexBuffer.size(), "More position values specified than normals");
-                    Vertex &vertex = mesh.m_VertexBuffer[vertexIndex];
-                    vertexIndex++;
+                fileStream >> lastParsedWord;
+                ThrowIfTrue(lastParsedWord.compare("P\""), "Expecting \"point\" syntax to be followed by \"P\"");
 
-                    vertex.Normal.x = x;
-                    vertex.Normal.y = y;
-                    vertex.Normal.z = z;
-                }
-                else
+                fileStream >> lastParsedWord;
+                ThrowIfTrue(lastParsedWord.compare("["), "'P' expected to be followed up with \"[\"");
+
+                while (fileStream.good())
                 {
-                    fileStream.clear(std::ios::goodbit);
-                    fileStream >> lastParsedWord;
-                    ThrowIfTrue(lastParsedWord.compare("]"), "Expected closing ']' after positions");
-                    break;
+                    Vertex vertex = {};
+                    fileStream >> vertex.Position.x;
+                    fileStream >> vertex.Position.y;
+                    fileStream >> vertex.Position.z;
+
+                    if (fileStream.good())
+                    {
+                        mesh.m_VertexBuffer.push_back(vertex);
+                    }
+                    else
+                    {
+                        fileStream.clear(std::ios::goodbit);
+                        fileStream >> lastParsedWord;
+                        ThrowIfTrue(lastParsedWord.compare("]"), "Expected closing ']' after positions");
+                        break;
+                    }
                 }
+
+                fileStream >> lastParsedWord;
             }
 
-            fileStream >> lastParsedWord;
-        }
-
-        if (!lastParsedWord.compare("\"float"))
-        {
-            fileStream >> lastParsedWord;
-            ThrowIfTrue(lastParsedWord.compare("uv\""), "Expecting \"float\" syntax to be followed by \"uv\"");
-
-            fileStream >> lastParsedWord;
-            ThrowIfTrue(lastParsedWord.compare("["), "'UV' expected to be followed up with \"[\"");
-
-            UINT vertexIndex = 0;
-            while (fileStream.good())
+            if (!lastParsedWord.compare("\"normal"))
             {
-                float u, v;
-                fileStream >> u;
-                fileStream >> v;
-                if (fileStream.good())
-                {
-                    ThrowIfTrue(vertexIndex >= mesh.m_VertexBuffer.size(), "More UV values specified than normals");
-                    Vertex &vertex = mesh.m_VertexBuffer[vertexIndex];
-                    vertexIndex++;
+                fileStream >> lastParsedWord;
+                ThrowIfTrue(lastParsedWord.compare("N\""), "Expecting \"normal\" syntax to be followed by an \"N\"");
 
-                    vertex.UV.u = u;
-                    vertex.UV.v = v;
-                }
-                else
+                fileStream >> lastParsedWord;
+                ThrowIfTrue(lastParsedWord.compare("["), "'N' expected to be followed up with \"[\"");
+
+                UINT vertexIndex = 0;
+                while (fileStream.good())
                 {
-                    fileStream.clear(std::ios::goodbit);
-                    fileStream >> lastParsedWord;
-                    ThrowIfTrue(lastParsedWord.compare("]"), "Expected closing ']' after positions");
-                    break;
+                    float x, y, z;
+                    fileStream >> x;
+                    fileStream >> y;
+                    fileStream >> z;
+                    if (fileStream.good())
+                    {
+                        ThrowIfTrue(vertexIndex >= mesh.m_VertexBuffer.size(), "More position values specified than normals");
+                        Vertex &vertex = mesh.m_VertexBuffer[vertexIndex];
+                        vertexIndex++;
+
+                        vertex.Normal.x = x;
+                        vertex.Normal.y = y;
+                        vertex.Normal.z = z;
+                    }
+                    else
+                    {
+                        fileStream.clear(std::ios::goodbit);
+                        fileStream >> lastParsedWord;
+                        ThrowIfTrue(lastParsedWord.compare("]"), "Expected closing ']' after positions");
+                        break;
+                    }
                 }
+
+                fileStream >> lastParsedWord;
             }
 
-            fileStream >> lastParsedWord;
-        }
+            if (!lastParsedWord.compare("\"float"))
+            {
+                fileStream >> lastParsedWord;
+                ThrowIfTrue(lastParsedWord.compare("uv\""), "Expecting \"float\" syntax to be followed by \"uv\"");
 
-        mesh.m_AreTangentsValid = false;
+                fileStream >> lastParsedWord;
+                ThrowIfTrue(lastParsedWord.compare("["), "'UV' expected to be followed up with \"[\"");
+
+                UINT vertexIndex = 0;
+                while (fileStream.good())
+                {
+                    float u, v;
+                    fileStream >> u;
+                    fileStream >> v;
+                    if (fileStream.good())
+                    {
+                        ThrowIfTrue(vertexIndex >= mesh.m_VertexBuffer.size(), "More UV values specified than normals");
+                        Vertex &vertex = mesh.m_VertexBuffer[vertexIndex];
+                        vertexIndex++;
+
+                        vertex.UV.u = u;
+                        vertex.UV.v = v;
+                    }
+                    else
+                    {
+                        fileStream.clear(std::ios::goodbit);
+                        fileStream >> lastParsedWord;
+                        ThrowIfTrue(lastParsedWord.compare("]"), "Expected closing ']' after positions");
+                        break;
+                    }
+                }
+
+                fileStream >> lastParsedWord;
+            }
+
+            mesh.m_AreTangentsValid = false;
+        }
     }
 
-    string PBRTParser::CorrectNameString(char *pString)
+    string PBRTParser::CorrectNameString(const string &str)
+    {
+        return CorrectNameString(str.c_str());
+    }
+
+    string PBRTParser::CorrectNameString(const char *pString)
     {
         string correctedString(pString);
         UINT startIndex = 0;
@@ -315,7 +410,7 @@ namespace PBRTParser
                 endIndex = endIndex - 1;
             }
         }
-        return correctedString.substr(startIndex, endIndex);
+        return correctedString.substr(startIndex, endIndex - startIndex);
     }
 
     void PBRTParser::InitializeDefaults(Scene &outputScene)

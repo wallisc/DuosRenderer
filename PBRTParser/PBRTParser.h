@@ -2,6 +2,7 @@
 #include "SceneParser.h"
 #include <iostream>
 #include <fstream>
+#include <sstream>
 
 
 #define PBRTPARSER_STRINGBUFFERSIZE 200
@@ -26,15 +27,19 @@ namespace PBRTParser
         void ParseWorld(std::ifstream &fileStream, SceneParser::Scene &outputScene);
         void ParseMaterial(std::ifstream &fileStream, SceneParser::Scene &outputScene);
         void ParseMesh(std::ifstream &fileStream, SceneParser::Scene &outputScene);
-        
+        void ParseTexture(std::ifstream &fileStream, SceneParser::Scene &outputScene);
+
         void ParseTransform();
 
         void ParseShape(std::ifstream &fileStream, SceneParser::Scene &outputScene, SceneParser::Mesh &mesh);
 
+        void ParseBracketedVector3(std::istream, float &x, float &y, float &z);
+
         void InitializeDefaults(SceneParser::Scene &outputScene);
         void InitializeCameraDefaults(SceneParser::Camera &camera);
 
-        static std::string CorrectNameString(char *pString);
+        static std::string CorrectNameString(const char *pString);
+        static std::string CorrectNameString(const std::string &str);
 
         void GetTempCharBuffer(char **ppBuffer, size_t &charBufferSize)
         {
@@ -48,12 +53,23 @@ namespace PBRTParser
             size_t bufferSize;
             GetTempCharBuffer(&pTempBuffer, bufferSize);
 
-            char fileName[PBRTPARSER_STRINGBUFFERSIZE];
             m_fileStream.getline(pTempBuffer, bufferSize);
 
             lastParsedWord = "";
             return pTempBuffer;
         }
+
+        std::stringstream GetLineStream()
+        {
+            char *pTempBuffer;
+            size_t bufferSize;
+            GetTempCharBuffer(&pTempBuffer, bufferSize);
+
+            m_fileStream.getline(pTempBuffer, bufferSize);
+
+            return std::stringstream(std::string(pTempBuffer));
+        }
+
 
         static SceneParser::Vector3 ConvertToVector3(const glm::vec4 &vec)
         {

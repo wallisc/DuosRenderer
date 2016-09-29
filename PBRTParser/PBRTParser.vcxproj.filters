@@ -9,9 +9,11 @@
   <ItemGroup>
     <ClCompile Include="PBRTParser.cpp" />
     <ClCompile Include="pch.cpp" />
+    <ClCompile Include="PlyParser.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="PBRTParser.h" />
     <ClInclude Include="pch.h" />
+    <ClInclude Include="PlyParser.h" />
   </ItemGroup>
 </Project>
