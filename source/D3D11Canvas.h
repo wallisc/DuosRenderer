@@ -4,6 +4,7 @@
 #include <Windows.h>
 #include <d3d11_1.h>
 #include <string>
+#include <atlbase.h>
 
 static const char *D3D11CanvasKey = "D3D11Canvas";
 class D3D11Canvas : public Canvas
@@ -46,7 +47,7 @@ public:
         hr = pDevice->CreateTexture2D(&StagingDesc, nullptr, &m_pStagingResource);
         FAIL_CHK(FAILED(hr), "Failed creating a canvas resource");
 
-        IDXGIResource1* pDXGIResource(NULL);
+        CComPtr<IDXGIResource1> pDXGIResource(NULL);
         hr = m_pResource->QueryInterface(__uuidof(IDXGIResource1), (void**)&pDXGIResource);
         FAIL_CHK(FAILED(hr), "Failed querying for IDXGIResource interface");
         
@@ -120,8 +121,8 @@ private:
 
     bool PixelsWritten;
     ID3D11DeviceContext *m_pContext;
-    ID3D11Texture2D *m_pResource;
-    ID3D11Texture2D *m_pStagingResource;
+    CComPtr<ID3D11Texture2D> m_pResource;
+    CComPtr<ID3D11Texture2D> m_pStagingResource;
     unsigned int m_RowPitch;
     HANDLE m_ResourceHandle;
     mutable void* m_pMappedData;

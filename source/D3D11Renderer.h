@@ -95,9 +95,9 @@ private:
     void UpdateMaterialBuffer();
     ID3D11DeviceContext *m_pContext;
     CBMaterial m_CBMaterial;
-    ID3D11Buffer *m_pMaterialBuffer;
-    ID3D11ShaderResourceView *m_pDiffuseTexture;
-    ID3D11ShaderResourceView *m_pNormalMap;
+    CComPtr<ID3D11Buffer> m_pMaterialBuffer;
+    CComPtr<ID3D11ShaderResourceView> m_pDiffuseTexture;
+    CComPtr<ID3D11ShaderResourceView> m_pNormalMap;
 };
 
 class D3D11Transformable : public Transformable
@@ -114,7 +114,7 @@ protected:
 
 private:
     ID3D11DeviceContext *m_pImmediateContext;
-    ID3D11Buffer *m_pWorldTransform;
+    CComPtr<ID3D11Buffer> m_pWorldTransform;
     DirectX::XMMATRIX m_WorldMatrix;
 };
 
@@ -141,8 +141,8 @@ private:
     bool m_UsesIndexBuffer;
     unsigned int m_VertexCount;
     unsigned int m_IndexCount;
-    ID3D11Buffer* m_pVertexBuffer;
-    ID3D11Buffer* m_pIndexBuffer;
+    CComPtr<ID3D11Buffer> m_pVertexBuffer;
+    CComPtr<ID3D11Buffer> m_pIndexBuffer;
     D3D11Material *m_pMaterial;
 
     DirectX::XMVECTOR m_MaxDimensions;
@@ -179,8 +179,8 @@ private:
     CBDirectionalLight m_CpuLightData;
     CBViewProjectionTransforms m_ViewProjCpuData;
 
-    ID3D11Buffer* m_pLightConstantBuffer;
-    ID3D11Buffer *m_pViewProjBuffer;
+    CComPtr<ID3D11Buffer> m_pLightConstantBuffer;
+    CComPtr<ID3D11Buffer> m_pViewProjBuffer;
 };
 
 class D3D11Camera : public Camera
@@ -213,8 +213,8 @@ private:
 
     ID3D11DeviceContext *m_pContext;
 
-    ID3D11Buffer *m_pCameraBuffer;
-    ID3D11Buffer *m_pViewProjBuffer;
+    CComPtr<ID3D11Buffer> m_pCameraBuffer;
+    CComPtr<ID3D11Buffer> m_pViewProjBuffer;
 
     REAL m_Width;
     REAL m_Height;
@@ -258,16 +258,16 @@ public:
 private:
     static const UINT cNumberOfPrefilteredCubes = ENVIRONMENT_TEXTURE_CUBES;
 
-    static ID3D11ShaderResourceView *CreateTextureCube(_In_ ID3D11Device *pDevice, _In_ ID3D11DeviceContext *pImmediateContext, _In_reads_(TEXTURES_PER_CUBE) char * const *textureNames);
-    ID3D11ShaderResourceView* GenerateBakedReflectionCube(ID3D11ShaderResourceView *pCubeMap, float roughness);
+    static CComPtr<ID3D11ShaderResourceView> CreateTextureCube(_In_ ID3D11Device *pDevice, _In_ ID3D11DeviceContext *pImmediateContext, _In_reads_(TEXTURES_PER_CUBE) char * const *textureNames);
+    CComPtr<ID3D11ShaderResourceView> GenerateBakedReflectionCube(ID3D11ShaderResourceView *pCubeMap, float roughness);
 
-    ID3D11ShaderResourceView *m_pEnvironmentTextureCube;
-    ID3D11ShaderResourceView *m_pPrefilteredTextureCube[cNumberOfPrefilteredCubes];
+    CComPtr<ID3D11ShaderResourceView> m_pEnvironmentTextureCube;
+    CComPtr<ID3D11ShaderResourceView> m_pPrefilteredTextureCube[cNumberOfPrefilteredCubes];
 
-    ID3D11Buffer *m_pCameraVertexBuffer;
-    ID3D11PixelShader *m_pEnvironmentPixelShader;
-    ID3D11VertexShader *m_pEnvironmentVertexShader;
-    ID3D11InputLayout *m_pEnvironmentInputLayout;
+    CComPtr<ID3D11Buffer> m_pCameraVertexBuffer;
+    CComPtr<ID3D11PixelShader> m_pEnvironmentPixelShader;
+    CComPtr<ID3D11VertexShader> m_pEnvironmentVertexShader;
+    CComPtr<ID3D11InputLayout> m_pEnvironmentInputLayout;
     const UINT VerticesInCameraPlane = 6;
 };
 
@@ -279,9 +279,9 @@ public:
     {
         assert(false);
     }
-    ID3D11ShaderResourceView *GetEnvironmentMapSRV() { return nullptr; }
-    ID3D11ShaderResourceView *GetLowerBoundEnvironmentMapSRV(float) { return nullptr; }
-    ID3D11ShaderResourceView *GetUpperBoundEnvironmentMapSRV(float) { return nullptr; }
+    ID3D11ShaderResourceView* GetEnvironmentMapSRV() { return nullptr; }
+    ID3D11ShaderResourceView* GetLowerBoundEnvironmentMapSRV(float) { return nullptr; }
+    ID3D11ShaderResourceView* GetUpperBoundEnvironmentMapSRV(float) { return nullptr; }
 
     void DrawEnvironmentMap(_In_ ID3D11DeviceContext *pImmediateContext, D3D11Camera *pCamera, ID3D11RenderTargetView *pRenderTarget) {}
 };
@@ -321,7 +321,7 @@ protected:
         m_pShaderFile(shaderFile), m_pEntryName(entryName), m_pShaderModel(shaderModel) {}
 
     virtual std::vector<D3D_SHADER_MACRO> GetMacrosFromShaderValue(UINT input) = 0;
-    virtual ShaderType *CreateShader(ID3D10Blob *pBlob) = 0;
+    virtual CComPtr<ShaderType> CreateShader(ID3D10Blob *pBlob) = 0;
 
     typename ShaderType *GetShader(UINT shaderValue)
     {
@@ -332,7 +332,7 @@ protected:
             CompileShaderHelper(m_pShaderFile, m_pEntryName, m_pShaderModel, &GetMacrosFromShaderValue(shaderValue)[0], &pShaderBlob);
             FAIL_CHK(FAILED(hr), "The FX file cannot be compiled.  Please run this executable from the directory that contains the FX file.");
 
-            ShaderType *pShader = CreateShader(pBlob);
+            CComPtr<ShaderType> pShader = CreateShader(pBlob);
             FAIL_CHK(!pShader, "Failed to CreateVertexShader");
         }
         else
@@ -355,9 +355,9 @@ protected:
 
     ID3D11Device *m_pDevice;
     virtual std::vector<D3D_SHADER_MACRO> GetMacrosFromShaderValue(UINT input) = 0;
-    ID3D11PixelShader *CreateShader(ID3D10Blob *pBlob)
+    CComPtr<ID3D11PixelShader> CreateShader(ID3D10Blob *pBlob)
     {
-        ID3D11PixelShader *pShader;
+        CComPtr<ID3D11PixelShader> pShader;
         m_pDevice->CreatePixelShader(pBlob->GetBufferPointer(), pBlob->GetBufferSize(), nullptr, &pShader);
         return pShader;
     }
@@ -371,9 +371,9 @@ public:
     ID3D11ShaderResourceView *GetShaderResourceView() { return m_pShaderResourceView; }
     ID3D11RenderTargetView *GetRenderTargetView() { return m_pRenderTargetView; }
 private:
-    ID3D11ShaderResourceView *m_pShaderResourceView;
-    ID3D11RenderTargetView *m_pRenderTargetView;
-    ID3D11Texture2D *m_pResource;
+    CComPtr<ID3D11ShaderResourceView> m_pShaderResourceView;
+    CComPtr<ID3D11RenderTargetView> m_pRenderTargetView;
+    CComPtr<ID3D11Texture2D> m_pResource;
 };
 
 enum CUBE_FACES
@@ -402,15 +402,15 @@ public:
 private:
     void InitBRDFLUT();
 
-    ID3D11Buffer *m_pCubeMapBuffers[NUM_CUBE_FACES];
+    CComPtr<ID3D11Buffer> m_pCubeMapBuffers[NUM_CUBE_FACES];
 
-    ID3D11Buffer *m_pMaterialBuffer;
+    CComPtr<ID3D11Buffer> m_pMaterialBuffer;
 
-    ID3D11InputLayout *m_pPrecalcBRDFInputLayout;
-    ID3D11VertexShader *m_pPrecalcBRDFVertexShader;
-    ID3D11PixelShader *m_pPrecalcBRDFPixelShader;
+    CComPtr<ID3D11InputLayout> m_pPrecalcBRDFInputLayout;
+    CComPtr<ID3D11VertexShader> m_pPrecalcBRDFVertexShader;
+    CComPtr<ID3D11PixelShader> m_pPrecalcBRDFPixelShader;
 
-    ID3D11ShaderResourceView *m_pIntegratedBRDF;
+    CComPtr<ID3D11ShaderResourceView> m_pIntegratedBRDF;
 };
 
 class D3D11Renderer : public Renderer
@@ -456,30 +456,30 @@ private:
 
     D3D11_VIEWPORT m_viewport;
 
-    ID3D11Device *m_pDevice;
-    ID3D11Device1 *m_pDevice1;
-    ID3D11DeviceContext *m_pImmediateContext;
+    CComPtr<ID3D11Device> m_pDevice;
+    CComPtr<ID3D11Device1> m_pDevice1;
+    CComPtr<ID3D11DeviceContext> m_pImmediateContext;
 
     D3D11Canvas *m_pCanvas;
 
     std::unique_ptr<ReadWriteTexture> m_pBasePassTexture;
-    ID3D11RenderTargetView* m_pSwapchainRenderTargetView;
-    ID3D11DepthStencilView* m_pDepthBuffer;
+    CComPtr<ID3D11RenderTargetView> m_pSwapchainRenderTargetView;
+    CComPtr<ID3D11DepthStencilView> m_pDepthBuffer;
 
-    ID3D11DepthStencilView* m_pShadowDepthBuffer;
-    ID3D11ShaderResourceView *m_pShadowResourceView;
+    CComPtr<ID3D11DepthStencilView> m_pShadowDepthBuffer;
+    CComPtr<ID3D11ShaderResourceView> m_pShadowResourceView;
 
-    ID3D11VertexShader* m_pForwardVertexShader;
-    ID3D11PixelShader* m_pForwardMattePixelShader;
-    ID3D11PixelShader* m_pForwardTexturedPixelShader;
-    ID3D11PixelShader* m_pForwardTexturedBumpPixelShader;
-    ID3D11InputLayout* m_pForwardInputLayout;
+    CComPtr<ID3D11VertexShader> m_pForwardVertexShader;
+    CComPtr<ID3D11PixelShader> m_pForwardMattePixelShader;
+    CComPtr<ID3D11PixelShader> m_pForwardTexturedPixelShader;
+    CComPtr<ID3D11PixelShader> m_pForwardTexturedBumpPixelShader;
+    CComPtr<ID3D11InputLayout> m_pForwardInputLayout;
 
     ID3D11SamplerState *m_pSamplerState;
 
-    ID3D11PixelShader* m_pGammaCorrectPS;
-    ID3D11PixelShader* m_pPassThroughPS;
-    ID3D11VertexShader *m_pFullscreenVS;
+    CComPtr<ID3D11PixelShader> m_pGammaCorrectPS;
+    CComPtr<ID3D11PixelShader> m_pPassThroughPS;
+    CComPtr<ID3D11VertexShader> m_pFullscreenVS;
     std::unique_ptr<BRDFPrecomputationResouces> m_pBRDFPrecalculatedResources;
 };
 

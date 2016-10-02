@@ -551,7 +551,7 @@ D3D11EnvironmentTextureCube::D3D11EnvironmentTextureCube(
 {
     auto pDevice = GetParent()->GetD3D11Device();
     auto pImmediateContext = GetParent()->GetD3D11Context();
-    ID3D11ShaderResourceView *pCubeMap = CreateTextureCube(pDevice, pImmediateContext, pCreateTextureCube->m_TextureNames);
+    CComPtr<ID3D11ShaderResourceView> pCubeMap = CreateTextureCube(pDevice, pImmediateContext, pCreateTextureCube->m_TextureNames);
 
     D3D11_BUFFER_DESC CameraVertexBufferDesc;
     ZeroMemory(&CameraVertexBufferDesc, sizeof(CameraVertexBufferDesc));
@@ -591,7 +591,7 @@ D3D11EnvironmentTextureCube::D3D11EnvironmentTextureCube(
     }
 }
 
-ID3D11ShaderResourceView *D3D11EnvironmentTextureCube::GenerateBakedReflectionCube(ID3D11ShaderResourceView *pCubeMap, float roughness)
+CComPtr<ID3D11ShaderResourceView> D3D11EnvironmentTextureCube::GenerateBakedReflectionCube(ID3D11ShaderResourceView *pCubeMap, float roughness)
 {
     auto pImmediateContext = GetParent()->GetD3D11Context();
     auto pDevice = GetParent()->GetD3D11Device();
@@ -603,7 +603,7 @@ ID3D11ShaderResourceView *D3D11EnvironmentTextureCube::GenerateBakedReflectionCu
     CComPtr<ID3D11Resource> pInputResource;
     pCubeMap->GetResource(&pInputResource);
 
-    ID3D11Texture2D* pOutputResource;
+    CComPtr<ID3D11Texture2D> pOutputResource;
     const UINT cBoxHeight = 512;
     D3D11_TEXTURE2D_DESC cubeMapDesc = CD3D11_TEXTURE2D_DESC(
         DXGI_FORMAT_B8G8R8X8_UNORM,
@@ -618,7 +618,7 @@ ID3D11ShaderResourceView *D3D11EnvironmentTextureCube::GenerateBakedReflectionCu
     pDevice->CreateTexture2D(&cubeMapDesc, nullptr, &pOutputResource);
 
     D3D11_SHADER_RESOURCE_VIEW_DESC cubeMapSRV = CD3D11_SHADER_RESOURCE_VIEW_DESC(D3D11_SRV_DIMENSION_TEXTURECUBE, cubeMapDesc.Format, 0, 1);
-    ID3D11ShaderResourceView* pOutputSRV;
+    CComPtr<ID3D11ShaderResourceView> pOutputSRV;
     pDevice->CreateShaderResourceView(pOutputResource, &cubeMapSRV, &pOutputSRV);
 
     ID3D11ShaderResourceView *pSRVs[] = { pCubeMap };
@@ -656,13 +656,13 @@ ID3D11ShaderResourceView *D3D11EnvironmentTextureCube::GenerateBakedReflectionCu
     return pOutputSRV;
 }
 
-ID3D11ShaderResourceView *D3D11EnvironmentTextureCube::CreateTextureCube(
+CComPtr<ID3D11ShaderResourceView> D3D11EnvironmentTextureCube::CreateTextureCube(
     _In_ ID3D11Device *pDevice, 
     _In_ ID3D11DeviceContext *pImmediateContext,
     _In_reads_(TEXTURES_PER_CUBE) char * const *textureNames)
 {
-    ID3D11Texture2D *pCubeResource;
-    ID3D11ShaderResourceView *pShaderResourceView;
+    CComPtr<ID3D11Texture2D> pCubeResource;
+    CComPtr<ID3D11ShaderResourceView> pShaderResourceView;
     for (UINT i = 0; i < TEXTURES_PER_CUBE; i++)
     {
         CA2WEX<MAX_ALLOWED_STR_LENGTH> WideTextureName(textureNames[i]);
@@ -744,12 +744,15 @@ void D3D11EnvironmentTextureCube::DrawEnvironmentMap(_In_ ID3D11DeviceContext *p
 
     const UINT stride = sizeof(CameraPlaneVertex);
     const UINT offset = 0;
-    pImmediateContext->IASetVertexBuffers(0, 1, &m_pCameraVertexBuffer, &stride, &offset);
+
+    ID3D11Buffer *pIndexBuffers[] = { m_pCameraVertexBuffer };
+    ID3D11ShaderResourceView *pSRVs[] = { m_pEnvironmentTextureCube };
+    pImmediateContext->IASetVertexBuffers(0, 1, pIndexBuffers, &stride, &offset);
     pImmediateContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     pImmediateContext->IASetInputLayout(m_pEnvironmentInputLayout);
     pImmediateContext->PSSetShader(m_pEnvironmentPixelShader, nullptr, 0);
     pImmediateContext->VSSetShader(m_pEnvironmentVertexShader, nullptr, 0);
-    pImmediateContext->PSSetShaderResources(0, 1, &m_pEnvironmentTextureCube);
+    pImmediateContext->PSSetShaderResources(0, 1, pSRVs);
     pImmediateContext->OMSetRenderTargets(1, &pRenderTarget, nullptr);
 
     pImmediateContext->DrawInstanced(VerticesInCameraPlane, 1, 0, 0);
@@ -1128,8 +1131,6 @@ D3D11Geometry::D3D11Geometry(_In_ ID3D11Device *pDevice, _In_ ID3D11DeviceContex
 
 D3D11Geometry::~D3D11Geometry()
 {
-    m_pVertexBuffer->Release();
-    if (m_pIndexBuffer) { m_pIndexBuffer->Release(); };
 }
 
 D3D11DirectionalLight::D3D11DirectionalLight(
