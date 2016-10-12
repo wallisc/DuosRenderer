@@ -14,6 +14,17 @@ namespace PBRTParser
         }
     }
 
+    PBRTParser::PBRTParser()
+    {
+        m_AttributeStack.push(Attributes());
+    }
+
+    PBRTParser::~PBRTParser()
+    {
+        m_AttributeStack.pop();
+        assert(m_AttributeStack.size() == 0);
+    }
+
     void PBRTParser::Parse(std::string filename, Scene &outputScene)
     {
         m_fileStream = ifstream(filename);
@@ -67,6 +78,20 @@ namespace PBRTParser
             else if (!lastParsedWord.compare("Texture"))
             {
                 ParseTexture(fileStream, outputScene);
+            }
+            else if (!lastParsedWord.compare("AreaLightSource"))
+            {
+                ParseAreaLightSource(fileStream, outputScene);
+            }
+            else if (!lastParsedWord.compare("AttributeBegin"))
+            {
+                m_AttributeStack.push(Attributes());
+                fileStream >> lastParsedWord;
+            }
+            else if (!lastParsedWord.compare("AttributeEnd"))
+            {
+                m_AttributeStack.pop();
+                fileStream >> lastParsedWord;
             }
             else if (!lastParsedWord.compare("WorldEnd"))
             {
@@ -195,6 +220,35 @@ namespace PBRTParser
         }
         outputScene.m_Materials[material.m_MaterialName] = material;
     }
+
+    void PBRTParser::ParseAreaLightSource(std::ifstream &fileStream, SceneParser::Scene &outputScene)
+    {
+        auto &lineStream = GetLineStream();
+
+        lineStream >> lastParsedWord;
+        ThrowIfTrue(lastParsedWord.compare("\"diffuse\""));
+
+        lineStream >> lastParsedWord;
+        ThrowIfTrue(lastParsedWord.compare("\"rgb"));
+
+        lineStream >> lastParsedWord;
+        ThrowIfTrue(lastParsedWord.compare("L\""));
+
+        lineStream >> lastParsedWord;
+        ThrowIfTrue(lastParsedWord.compare("["));
+
+        AreaLightAttribute attribute;
+        char materialName[PBRTPARSER_STRINGBUFFERSIZE];
+        lineStream >> attribute.m_lightColor.r;
+        lineStream >> attribute.m_lightColor.g;
+        lineStream >> attribute.m_lightColor.b;
+
+        lineStream >> lastParsedWord;
+        ThrowIfTrue(lastParsedWord.compare("]"));
+
+        SetCurrentAttributes(Attributes(attribute));
+    }
+    
 
     void PBRTParser::ParseTexture(std::ifstream &fileStream, SceneParser::Scene &outputScene)
     {

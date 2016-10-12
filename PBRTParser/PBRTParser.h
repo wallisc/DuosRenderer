@@ -3,6 +3,7 @@
 #include <iostream>
 #include <fstream>
 #include <sstream>
+#include <stack>
 
 
 #define PBRTPARSER_STRINGBUFFERSIZE 200
@@ -16,9 +17,61 @@ namespace PBRTParser
 #include "glm/vec2.hpp"
 #include "glm/glm.hpp"
 
-    class PBRTParser : public SceneParser::SceneParserClass
+struct AreaLightAttribute
+{
+    glm::vec3 m_lightColor;
+};
+
+class Attributes
+{
+public:
+    typedef enum _ObjectType
     {
+        Normal,
+        AreaLight
+    } ObjectType;
+
+    Attributes()
+    {
+        m_Type = Normal;
+    }
+
+    Attributes(const Attributes &attributes)
+    {
+        memcpy(this, &attributes, sizeof(*this));
+    }
+
+    Attributes operator=(const Attributes &attributes)
+    {
+        return Attributes(attributes);
+    }
+
+    Attributes(AreaLightAttribute &attribute)
+    {
+        m_Type = AreaLight;
+        m_areaLightAttribute = attribute;
+    }
+
+    ObjectType GetType() { return m_Type; }
+    AreaLightAttribute &GetAreaLightAttribute() 
+    { 
+        assert(GetType() == AreaLight);
+        return m_areaLightAttribute;
+    }
+
+private:
+    ObjectType m_Type;
+    union
+    {
+        AreaLightAttribute m_areaLightAttribute;
+    };
+};
+
+class PBRTParser : public SceneParser::SceneParserClass
+{
     public:
+        PBRTParser();
+        ~PBRTParser();
         virtual void Parse(std::string filename, SceneParser::Scene &outputScene);
 
     private:
@@ -28,7 +81,7 @@ namespace PBRTParser
         void ParseMaterial(std::ifstream &fileStream, SceneParser::Scene &outputScene);
         void ParseMesh(std::ifstream &fileStream, SceneParser::Scene &outputScene);
         void ParseTexture(std::ifstream &fileStream, SceneParser::Scene &outputScene);
-
+        void ParseAreaLightSource(std::ifstream &fileStream, SceneParser::Scene &outputScene);
         void ParseTransform();
 
         void ParseShape(std::ifstream &fileStream, SceneParser::Scene &outputScene, SceneParser::Mesh &mesh);
@@ -76,7 +129,20 @@ namespace PBRTParser
             return SceneParser::Vector3(vec.x, vec.y, vec.z);
         }
 
+        Attributes &GetCurrentAttributes()
+        {
+            return m_AttributeStack.top();
+        }
+        
+        void SetCurrentAttributes(const Attributes &attritbutes)
+        {
+            m_AttributeStack.top() = attritbutes;
+        }
+
+
         std::ifstream m_fileStream;
+
+        std::stack<Attributes> m_AttributeStack;
 
         glm::mat4 m_currentTransform;
         glm::vec4 m_lookAt;
