@@ -76,11 +76,20 @@ namespace SceneParser
         bool m_AreTangentsValid;
     };
 
+    struct AreaLight
+    {
+        AreaLight(Vector3 LightColor) : m_LightColor(LightColor) {}
+
+        Mesh m_Mesh;
+        Vector3 m_LightColor;
+    };
+
     struct Scene
     {
         Camera m_Camera;
         Film m_Film;
         std::unordered_map<std::string, Material> m_Materials;
+        std::vector<AreaLight> m_AreaLights;
         std::vector<Mesh> m_Meshes;
     };
 

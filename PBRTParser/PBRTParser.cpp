@@ -73,6 +73,11 @@ namespace PBRTParser
             }
             else if (!lastParsedWord.compare("NamedMaterial"))
             {
+                fileStream >> m_CurrentMaterial;
+                fileStream >> lastParsedWord;
+            }
+            else if(!lastParsedWord.compare("Shape"))
+            {
                 ParseMesh(fileStream, outputScene);
             }
             else if (!lastParsedWord.compare("Texture"))
@@ -261,27 +266,27 @@ namespace PBRTParser
     {
         char *pTempBuffer = GetLine();
 
-        char materialName[PBRTPARSER_STRINGBUFFERSIZE];
-        UINT argCount = sscanf_s(pTempBuffer, " \"%s \"",
-            materialName,
-            ARRAYSIZE(materialName));
+        Mesh *pMesh;
+        if (GetCurrentAttributes().GetType() == Attributes::AreaLight)
+        {
+            outputScene.m_AreaLights.push_back(
+                AreaLight(GetCurrentAttributes().GetAreaLightAttribute().m_lightColor));
+            pMesh = &outputScene.m_AreaLights.back().m_Mesh;
+        }
+        else
+        {
+            outputScene.m_Meshes.push_back(Mesh());
+            pMesh = &outputScene.m_Meshes[outputScene.m_Meshes.size() - 1];
+        }
+        string correctedMaterialName = CorrectNameString(m_CurrentMaterial);
+        pMesh->m_pMaterial = &outputScene.m_Materials[correctedMaterialName];
+        ThrowIfTrue(pMesh->m_pMaterial == nullptr, "Material name not found");
 
-        ThrowIfTrue(argCount != 1, "MakeNamedMaterial arguments not formatted correctly");
-
-        outputScene.m_Meshes.push_back(Mesh());
-        Mesh &mesh = outputScene.m_Meshes[outputScene.m_Meshes.size() - 1];
-        string correctedMaterialName = CorrectNameString(materialName);
-        mesh.m_pMaterial = &outputScene.m_Materials[correctedMaterialName];
-        ThrowIfTrue(mesh.m_pMaterial == nullptr, "Material name not found");
-
-        ParseShape(fileStream, outputScene, mesh);
+        ParseShape(fileStream, outputScene, *pMesh);
     }
 
     void PBRTParser::ParseShape(std::ifstream &fileStream, SceneParser::Scene &outputScene, SceneParser::Mesh &mesh)
     {
-        fileStream >> lastParsedWord;
-        ThrowIfTrue(lastParsedWord.compare("Shape"), "Geometry expected to be prepended with \"Shape\"");
-
         fileStream >> lastParsedWord;
         
         if (!lastParsedWord.compare("PlyMesh"))

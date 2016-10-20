@@ -19,7 +19,7 @@ namespace PBRTParser
 
 struct AreaLightAttribute
 {
-    glm::vec3 m_lightColor;
+    SceneParser::Vector3 m_lightColor;
 };
 
 class Attributes
@@ -141,7 +141,7 @@ class PBRTParser : public SceneParser::SceneParserClass
 
 
         std::ifstream m_fileStream;
-
+        std::string m_CurrentMaterial;
         std::stack<Attributes> m_AttributeStack;
 
         glm::mat4 m_currentTransform;
