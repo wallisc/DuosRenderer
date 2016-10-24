@@ -1,5 +1,6 @@
 ﻿#pragma once
 #include "SceneParser.h"
+#include <sal.h>
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -139,6 +140,8 @@ class PBRTParser : public SceneParser::SceneParserClass
             m_AttributeStack.top() = attritbutes;
         }
 
+        void ParseExpectedWords(std::istream &inStream, _In_reads_(numWords) std::string *pWords, UINT numWords);
+        void ParseExpectedWord(std::istream &inStream, const std::string &word);
 
         std::ifstream m_fileStream;
         std::string m_CurrentMaterial;

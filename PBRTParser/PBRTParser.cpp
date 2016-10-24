@@ -254,18 +254,78 @@ namespace PBRTParser
         SetCurrentAttributes(Attributes(attribute));
     }
     
+    void PBRTParser::ParseExpectedWords(std::istream &inStream, _In_reads_(numWords) std::string *pWords, UINT numWords)
+    {
+        for (UINT i = 0; i < numWords; i++)
+        {
+            ParseExpectedWord(inStream, pWords[i]);
+        }
+    }
+
+    void PBRTParser::ParseExpectedWord(std::istream &inStream, const std::string &word)
+    {
+        inStream >> lastParsedWord;
+        ThrowIfTrue(lastParsedWord.compare(word));
+    }
 
     void PBRTParser::ParseTexture(std::ifstream &fileStream, SceneParser::Scene &outputScene)
     {
-        char *pTempBuffer = GetLine();
+        // "float uscale"[20.000000] "float vscale"[20.000000] "rgb tex1"[0.325000 0.310000 0.250000] "rgb tex2"[0.725000 0.710000 0.680000]
+        auto &lineStream = GetLineStream();
 
-        // TODO: Implement
+        std::string textureName;
+        lineStream >> textureName;
+
+        lineStream >> lastParsedWord;
+        ThrowIfTrue(lastParsedWord.compare("\"spectrum\""));
+
+        lineStream >> lastParsedWord;
+        if (!lastParsedWord.compare("\"checkerboard\""))
+        {
+            float uscale;
+            {
+                std::string expectedWords[] = { "\"float", "uscale\"", "[" };
+                ParseExpectedWords(lineStream, expectedWords, ARRAYSIZE(expectedWords));
+                lineStream >> uscale;
+                ParseExpectedWord(lineStream, "]");
+            }
+
+            float vscale;
+            {
+                std::string expectedWords[] = { "\"float", "vscale\"", "[" };
+                ParseExpectedWords(lineStream, expectedWords, ARRAYSIZE(expectedWords));
+                lineStream >> vscale;
+                ParseExpectedWord(lineStream, "]");
+            }
+
+            Vector3 col1;
+            {
+                std::string expectedWords[] = { "\"rgb", "tex1\"", "[" };
+                ParseExpectedWords(lineStream, expectedWords, ARRAYSIZE(expectedWords));
+                lineStream >> col1.r;
+                lineStream >> col1.g;
+                lineStream >> col1.b;
+                ParseExpectedWord(lineStream, "]");
+            }
+
+            Vector3 col2;
+            {
+                std::string expectedWords[] = { "\"rgb", "tex2\"", "[" };
+                ParseExpectedWords(lineStream, expectedWords, ARRAYSIZE(expectedWords));
+                lineStream >> col2.r;
+                lineStream >> col2.g;
+                lineStream >> col2.b;
+                ParseExpectedWord(lineStream, "]");
+            }
+        }
+        else
+        {
+            ThrowIfTrue(true);
+        }
     }
 
     void PBRTParser::ParseMesh(std::ifstream &fileStream, SceneParser::Scene &outputScene)
     {
-        char *pTempBuffer = GetLine();
-
         Mesh *pMesh;
         if (GetCurrentAttributes().GetType() == Attributes::AreaLight)
         {
