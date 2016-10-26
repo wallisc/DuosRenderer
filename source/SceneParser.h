@@ -56,7 +56,11 @@ namespace SceneParser
     {
         std::string m_MaterialName;
         Vector3 m_Diffuse;
+        Vector3 m_Specular;
+        float m_URoughness;
+        float m_VRoughness;
         std::string m_DiffuseTextureFilename;
+        std::string m_SpecularTextureFilename;
     };
 
     struct Vertex
@@ -84,6 +88,13 @@ namespace SceneParser
         Vector3 m_LightColor;
     };
 
+    struct EnvironmentMap
+    {
+        EnvironmentMap() {}
+        EnvironmentMap(const std::string &fileName) : m_FileName(fileName) {}
+        std::string m_FileName;
+    };
+
     struct Scene
     {
         Camera m_Camera;
@@ -91,6 +102,7 @@ namespace SceneParser
         std::unordered_map<std::string, Material> m_Materials;
         std::vector<AreaLight> m_AreaLights;
         std::vector<Mesh> m_Meshes;
+        EnvironmentMap m_EnvironmentMap;
     };
 
     class BadFormatException : public std::exception

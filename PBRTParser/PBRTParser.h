@@ -82,6 +82,7 @@ class PBRTParser : public SceneParser::SceneParserClass
         void ParseMaterial(std::ifstream &fileStream, SceneParser::Scene &outputScene);
         void ParseMesh(std::ifstream &fileStream, SceneParser::Scene &outputScene);
         void ParseTexture(std::ifstream &fileStream, SceneParser::Scene &outputScene);
+        void ParseLightSource(std::ifstream &fileStream, SceneParser::Scene &outputScene);
         void ParseAreaLightSource(std::ifstream &fileStream, SceneParser::Scene &outputScene);
         void ParseTransform();
 
@@ -140,12 +141,18 @@ class PBRTParser : public SceneParser::SceneParserClass
             m_AttributeStack.top() = attritbutes;
         }
 
+        float ParseFloat1(std::istream &inStream);
+        std::string ParseString(std::istream &inStream);
         void ParseExpectedWords(std::istream &inStream, _In_reads_(numWords) std::string *pWords, UINT numWords);
         void ParseExpectedWord(std::istream &inStream, const std::string &word);
+
+        std::string GenerateCheckerboardTexture(std::string fileName, float uScale, float vScale, SceneParser::Vector3 color1, SceneParser::Vector3 color2);
+        void GenerateBMPFile(std::string fileName, _In_reads_(width * height)SceneParser::Vector3 *pDmageData, UINT width, UINT height);
 
         std::ifstream m_fileStream;
         std::string m_CurrentMaterial;
         std::stack<Attributes> m_AttributeStack;
+        std::unordered_map<std::string, std::string> m_TextureNameToFileName;
 
         glm::mat4 m_currentTransform;
         glm::vec4 m_lookAt;
@@ -155,5 +162,6 @@ class PBRTParser : public SceneParser::SceneParserClass
         // Shouldn't be accessed directly outside of GetTempCharBuffer
         char _m_buffer[500];
         std::string lastParsedWord;
+        std::string m_relativeDirectory;
     };
 }

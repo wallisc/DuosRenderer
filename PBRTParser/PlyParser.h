@@ -6,6 +6,7 @@ namespace PlyParser
     public:
         void Parse(const std::string &filename, SceneParser::Mesh &mesh);
         void ParseHeader();
+        void ParseBody(SceneParser::Mesh &mesh);
     private:
         std::ifstream m_fileStream;
         std::string lastParsedWord;

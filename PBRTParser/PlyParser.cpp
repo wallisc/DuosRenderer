@@ -66,6 +66,7 @@ void PlyParser::ParseHeader()
         }
         else if (!lastParsedWord.compare("element"))
         {
+            m_fileStream >> lastParsedWord;
             if(!lastParsedWord.compare("face"))
             {
                 m_fileStream >> m_numFaces;
@@ -82,12 +83,23 @@ void PlyParser::ParseHeader()
     }
 }
 
+void PlyParser::ParseBody(SceneParser::Mesh &mesh)
+{
+    for (UINT vertex = 0; vertex < m_numVertices; vertex++)
+    {
+
+    }
+
+    for (UINT face = 0; face < m_numFaces; face++)
+}
+
 void PlyParser::Parse(const std::string &filename, SceneParser::Mesh &mesh)
 {
     m_fileStream = ifstream(filename);
     ThrowIfTrue(!m_fileStream.good(), "Failure opening file");
 
     ParseHeader();
+    ParseBody();
 }
 
 }

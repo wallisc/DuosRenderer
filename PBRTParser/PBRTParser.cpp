@@ -28,6 +28,12 @@ namespace PBRTParser
     void PBRTParser::Parse(std::string filename, Scene &outputScene)
     {
         m_fileStream = ifstream(filename);
+     
+        {
+            UINT relativeDirEnd = filename.find_last_of('\\');
+            m_relativeDirectory = filename.substr(0, relativeDirEnd + 1);
+        }
+
         m_currentTransform = glm::mat4();
 
         if (!m_fileStream.good())
@@ -76,13 +82,17 @@ namespace PBRTParser
                 fileStream >> m_CurrentMaterial;
                 fileStream >> lastParsedWord;
             }
-            else if(!lastParsedWord.compare("Shape"))
+            else if (!lastParsedWord.compare("Shape"))
             {
                 ParseMesh(fileStream, outputScene);
             }
             else if (!lastParsedWord.compare("Texture"))
             {
                 ParseTexture(fileStream, outputScene);
+            }
+            else if (!lastParsedWord.compare("LightSource"))
+            {
+                ParseLightSource(fileStream, outputScene);
             }
             else if (!lastParsedWord.compare("AreaLightSource"))
             {
@@ -117,7 +127,7 @@ namespace PBRTParser
             &outputScene.m_Camera.m_FieldOfView);
 
         ThrowIfTrue(argCount != 1, "Camera arguments not formatted correctly");
-    
+
         outputScene.m_Camera.m_LookAt = ConvertToVector3(m_currentTransform * m_lookAt);
         outputScene.m_Camera.m_Position = ConvertToVector3(m_currentTransform * m_camPos);
         outputScene.m_Camera.m_Up = ConvertToVector3(m_currentTransform * m_camUp);
@@ -128,13 +138,13 @@ namespace PBRTParser
         char *pTempBuffer = GetLine();
 
         char fileName[PBRTPARSER_STRINGBUFFERSIZE];
-        UINT argCount = sscanf_s(pTempBuffer, " \"image\" \"integer xresolution\" \[ %u \] \"integer yresolution\" \[ %u \] \"string filename\" \[ \"%s\" \]", 
+        UINT argCount = sscanf_s(pTempBuffer, " \"image\" \"integer xresolution\" \[ %u \] \"integer yresolution\" \[ %u \] \"string filename\" \[ \"%s\" \]",
             &outputScene.m_Film.m_ResolutionX,
             &outputScene.m_Film.m_ResolutionY,
             fileName, ARRAYSIZE(fileName));
 
         ThrowIfTrue(argCount != 3, "Film arguments not formatted correctly");
-        
+
         // Sometimes scanf pulls more than it needs to, make sure to clean up 
         // any extra characters on the file name
         string correctedFileName(fileName);
@@ -161,6 +171,23 @@ namespace PBRTParser
         ThrowIfTrue(lastParsedWord.compare("]"), "Expect '[' at beginning of vector");
     }
 
+    float PBRTParser::ParseFloat1(std::istream &inStream)
+    {
+        ParseExpectedWord(inStream, "[");
+        float num;
+        inStream >> num;
+        ParseExpectedWord(inStream, "]");
+        return num;
+    }
+
+    std::string PBRTParser::ParseString(std::istream &inStream)
+    {
+        ParseExpectedWord(inStream, "[");
+        std::string word;
+        inStream >> word;
+        ParseExpectedWord(inStream, "]");
+        return word;
+    }
 
     void PBRTParser::ParseMaterial(std::ifstream &fileStream, SceneParser::Scene &outputScene)
     {
@@ -169,9 +196,35 @@ namespace PBRTParser
         std::string materialType;
 
         auto lineStream = GetLineStream();
-        
+
         lineStream >> lastParsedWord;
         material.m_MaterialName = CorrectNameString(lastParsedWord);
+
+        auto pfnParseMaterialColor = [=](std::istream &inStream, Vector3 &color, std::string &textureFileName)
+        {
+            inStream >> lastParsedWord;
+            ThrowIfTrue(lastParsedWord.compare("["));
+
+            inStream >> color.r;
+            if (inStream.good())
+            {
+                inStream >> color.g;
+                inStream >> color.b;
+            }
+            else
+            {
+                inStream.clear();
+
+                std::string textureName;
+                inStream >> textureName;
+                textureName = CorrectNameString(textureName);
+                textureFileName = m_TextureNameToFileName[textureName];
+                ThrowIfTrue(textureFileName.size() == 0);
+            }
+
+            inStream >> lastParsedWord;
+            ThrowIfTrue(lastParsedWord.compare("]"));
+        };
 
         while (lineStream.good())
         {
@@ -199,23 +252,23 @@ namespace PBRTParser
                 lineStream >> lastParsedWord;
                 if (!lastParsedWord.compare("Kd\""))
                 {
-                    lineStream >> lastParsedWord;
-                    ThrowIfTrue(lastParsedWord.compare("["));
-
-                    lineStream >> material.m_Diffuse.r;
-                    if (lineStream.good())
-                    {
-                        lineStream >> material.m_Diffuse.g;
-                        lineStream >> material.m_Diffuse.b;
-                    }
-                    else
-                    {
-                        lineStream.clear();
-                        lineStream >> material.m_DiffuseTextureFilename;
-                    }
-
-                    lineStream >> lastParsedWord;
-                    ThrowIfTrue(lastParsedWord.compare("]"));
+                    pfnParseMaterialColor(lineStream, material.m_Diffuse, material.m_DiffuseTextureFilename);
+                }
+                else if (!lastParsedWord.compare("Ks\""))
+                {
+                    pfnParseMaterialColor(lineStream, material.m_Specular, material.m_SpecularTextureFilename);
+                }
+            }
+            else if (!lastParsedWord.compare("\"float"))
+            {
+                lineStream >> lastParsedWord;
+                if (!lastParsedWord.compare("uroughness\""))
+                {
+                    material.m_URoughness = ParseFloat1(lineStream);
+                }
+                else if (!lastParsedWord.compare("vroughness\""))
+                {
+                    material.m_VRoughness = ParseFloat1(lineStream);
                 }
             }
             else
@@ -224,6 +277,22 @@ namespace PBRTParser
             }
         }
         outputScene.m_Materials[material.m_MaterialName] = material;
+    }
+
+    void PBRTParser::ParseLightSource(std::ifstream &fileStream, SceneParser::Scene &outputScene)
+    {
+        auto &lineStream = GetLineStream();
+        lineStream >> lastParsedWord;
+        if (lastParsedWord.compare("infinite"))
+        {
+            std::string expectedWords[] = { "\"string", "mapname\"" };
+            ParseExpectedWords(lineStream, expectedWords, ARRAYSIZE(expectedWords));
+
+            ThrowIfTrue(
+                outputScene.m_EnvironmentMap.m_FileName.size() > 0,
+                "Multiple environment maps defined");
+            outputScene.m_EnvironmentMap.m_FileName = CorrectNameString(ParseString(lineStream));
+        }
     }
 
     void PBRTParser::ParseAreaLightSource(std::ifstream &fileStream, SceneParser::Scene &outputScene)
@@ -275,6 +344,7 @@ namespace PBRTParser
 
         std::string textureName;
         lineStream >> textureName;
+        textureName = CorrectNameString(textureName);
 
         lineStream >> lastParsedWord;
         ThrowIfTrue(lastParsedWord.compare("\"spectrum\""));
@@ -317,12 +387,114 @@ namespace PBRTParser
                 lineStream >> col2.b;
                 ParseExpectedWord(lineStream, "]");
             }
+
+            std::string fileName = GenerateCheckerboardTexture(
+                textureName,
+                uscale,
+                vscale,
+                col1,
+                col2);
+
+            m_TextureNameToFileName[textureName] = fileName;
         }
         else
         {
             ThrowIfTrue(true);
         }
     }
+
+    std::string PBRTParser::GenerateCheckerboardTexture(std::string fileName, float uScaleFloat, float vScaleFloat, Vector3 color1, Vector3 color2)
+    {
+        UINT uScale = (UINT)uScaleFloat;
+        UINT vScale = (UINT)vScaleFloat;
+
+        UINT textureWidth = uScale * 2;
+        UINT textureHeight = vScale * 2;
+        
+        std::vector<Vector3> imageData;
+        imageData.reserve(textureHeight * textureWidth);
+        for (UINT y = 0; y < textureHeight; y++)
+        {
+            for (UINT x = 0; x < textureWidth; x++)
+            {
+                bool EvenX = (x / uScale) % 2;
+                bool EvenY = (y / vScale) % 2;
+                imageData[x + y * textureWidth] = (EvenX == EvenY) ? color1 : color2;
+            }
+        }
+
+        GenerateBMPFile(fileName + ".bmp", imageData.data(), textureWidth, textureHeight);
+    }
+
+    void PBRTParser::GenerateBMPFile(std::string fileName, _In_reads_(width * height)Vector3 *pImageData, UINT width, UINT height)
+    {
+        std::ofstream bmpFile(fileName, std::ofstream::out | std::ofstream::binary | std::ofstream::app);
+        ThrowIfTrue(!bmpFile.is_open() || bmpFile.fail());
+
+        unsigned char *img = NULL;
+        int filesize = 54 + 3 * width*height;  //w is your image width, h is image height, both int
+        if (img)
+            free(img);
+        img = (unsigned char *)malloc(3 * width*height);
+        memset(img, 0, sizeof(img));
+
+        for (int i = 0; i<width; i++)
+        {
+            for (int j = 0; j<height; j++)
+            {
+
+                auto pixel = pImageData[i + j * width];
+
+                int x = i; 
+                int y = (height - 1) - j;
+                int r = pixel.r * 255;
+                int g = pixel.g * 255;
+                int b = pixel.b * 255;
+                if (r > 255) r = 255;
+                if (g > 255) g = 255;
+                if (b > 255) b = 255;
+                img[(x + y*width) * 3 + 2] = (unsigned char)(r);
+                img[(x + y*width) * 3 + 1] = (unsigned char)(g);
+                img[(x + y*width) * 3 + 0] = (unsigned char)(b);
+            }
+        }
+
+        unsigned char bmpfileheader[14] = { 'B','M', 0,0,0,0, 0,0, 0,0, 54,0,0,0 };
+        unsigned char bmpinfoheader[40] = { 40,0,0,0, 0,0,0,0, 0,0,0,0, 1,0, 24,0 };
+        unsigned char bmppad[3] = { 0,0,0 };
+
+        bmpfileheader[2] = (unsigned char)(filesize);
+        bmpfileheader[3] = (unsigned char)(filesize >> 8);
+        bmpfileheader[4] = (unsigned char)(filesize >> 16);
+        bmpfileheader[5] = (unsigned char)(filesize >> 24);
+
+        bmpinfoheader[4] = (unsigned char)(width);
+        bmpinfoheader[5] = (unsigned char)(width >> 8);
+        bmpinfoheader[6] = (unsigned char)(width >> 16);
+        bmpinfoheader[7] = (unsigned char)(width >> 24);
+        bmpinfoheader[8] = (unsigned char)(height);
+        bmpinfoheader[9] = (unsigned char)(height >> 8);
+        bmpinfoheader[10] = (unsigned char)(height >> 16);
+        bmpinfoheader[11] = (unsigned char)(height >> 24);
+
+        for (auto bit : bmpfileheader) bmpFile << bit;
+        for (auto bit : bmpinfoheader) bmpFile << bit;
+        for (int i = 0; i<height; i++)
+        {
+            for (int j = 0; j < width * 3; j++)
+            {
+                bmpFile << *(img + (width*(height - i - 1) * 3) + j);
+            }
+            for (UINT j = 0; j < (4 - (width * 3) % 4) % 4; j++)
+            {
+                bmpFile << 0;
+            }
+        }
+        
+        bmpFile.close();
+        ThrowIfTrue(bmpFile.fail());
+    }
+
 
     void PBRTParser::ParseMesh(std::ifstream &fileStream, SceneParser::Scene &outputScene)
     {
@@ -349,24 +521,13 @@ namespace PBRTParser
     {
         fileStream >> lastParsedWord;
         
-        if (!lastParsedWord.compare("PlyMesh"))
+        if (!lastParsedWord.compare("\"plymesh\""))
         {
-            fileStream >> lastParsedWord;
-            ThrowIfTrue(lastParsedWord.compare("\"string"), "PlyMesh expected to be prepended with \"string\"");
-            
-            fileStream >> lastParsedWord;
-            ThrowIfTrue(lastParsedWord.compare("filename\""), "string expected to be prepended with filename\"");
-            
-            fileStream >> lastParsedWord;
-            ThrowIfTrue(lastParsedWord.compare("["), "Expected \'[\'");
+            std::string ExpectedWords[] = { "\"string", "filename\"" };
+            ParseExpectedWords(fileStream, ExpectedWords, ARRAYSIZE(ExpectedWords));
 
-            fileStream >> lastParsedWord;
-            std::string correctedFileName = CorrectNameString(lastParsedWord.c_str());
-
-            PlyParser::PlyParser().Parse(correctedFileName, mesh);
-
-            fileStream >> lastParsedWord;
-            ThrowIfTrue(lastParsedWord.compare("]"), "Expected \']\'");
+            std::string correctedFileName = CorrectNameString(ParseString(fileStream));
+            PlyParser::PlyParser().Parse(m_relativeDirectory + correctedFileName, mesh);
         }
         else if (!lastParsedWord.compare("\"trianglemesh\""))
         {
