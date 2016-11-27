@@ -1,5 +1,5 @@
 Integrator "path" "integer maxdepth" [ 65 ] 
-Transform [ 0.00552692 -0.342144 -0.939631 -0 -0 0.939646 -0.342149 -0 -0.999985 -0.0018952 -0.00517328 -0 -0.0919892 -2.36787 26.2919 1]
+Transform [ 0.00552692 -0.342144 -0.939631 23.895 -0 0.939646 -0.342149 11.2207 -0.999985 -0.0018952 -0.00517328 0.0400773 0 0 0 1]
 Sampler "sobol" "integer pixelsamples" [ 64 ] 
 PixelFilter "triangle" "float xwidth" [ 1.000000 ] "float ywidth" [ 1.000000 ] 
 Film "image" "integer xresolution" [ 1280 ] "integer yresolution" [ 720 ] "string filename" [ "teapot.png" ] 

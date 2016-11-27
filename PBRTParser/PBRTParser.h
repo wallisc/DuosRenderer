@@ -125,6 +125,10 @@ class PBRTParser : public SceneParser::SceneParserClass
             return std::stringstream(std::string(pTempBuffer));
         }
 
+        static SceneParser::Vector3 ConvertToVector3(const glm::vec3 &vec)
+        {
+            return SceneParser::Vector3(vec.x, vec.y, vec.z);
+        }
 
         static SceneParser::Vector3 ConvertToVector3(const glm::vec4 &vec)
         {

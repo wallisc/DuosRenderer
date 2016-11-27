@@ -149,7 +149,7 @@ D3D11Renderer::D3D11Renderer(HWND WindowHandle, unsigned int width, unsigned int
 {
     UINT CreateDeviceFlags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
 #ifdef DEBUG
-    CreateDeviceFlags |= D3D11_CREATE_DEVICE_DEBUG;
+    //CreateDeviceFlags |= D3D11_CREATE_DEVICE_DEBUG;
 #endif
     D3D_FEATURE_LEVEL FeatureLevels = D3D_FEATURE_LEVEL_11_1;
     HRESULT hr = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, CreateDeviceFlags, &FeatureLevels, 1,
@@ -400,7 +400,7 @@ void D3D11Renderer::SetDefaultState()
     // Create the sample state
     D3D11_SAMPLER_DESC sampDesc;
     ZeroMemory(&sampDesc, sizeof(sampDesc));
-    sampDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+    sampDesc.Filter = D3D11_FILTER_MIN_MAG_POINT_MIP_LINEAR;
     sampDesc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
     sampDesc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
     sampDesc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;

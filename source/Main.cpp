@@ -23,8 +23,8 @@
 
 using namespace DirectX;
 
-UINT g_Width = 800;
-UINT g_Height = 600;
+UINT g_Width = 1280;
+UINT g_Height = 720;
 
 enum
 {
@@ -214,7 +214,7 @@ int WINAPI wWinMain( _In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 
     DXUTCreateWindow(L"Duos Renderer");
 
-    DXUTCreateDevice(D3D_FEATURE_LEVEL_11_1, true, 1024, 1024);
+    DXUTCreateDevice(D3D_FEATURE_LEVEL_11_1, true, g_Width, g_Height);
     DXUTMainLoop();
 
     return DXUTGetExitCode();
@@ -425,14 +425,23 @@ void InitSceneAndCamera(_In_ Renderer *pRenderer, _In_ EnvironmentMap *pEnvMap, 
     const float LensHeight = 2.0f;
     const float AspectRatio = (float)fileScene.m_Film.m_ResolutionX / fileScene.m_Film.m_ResolutionY;
     const float LensWidth = LensHeight * AspectRatio;
-    const float fov = fileScene.m_Camera.m_FieldOfView * M_PI / 180.0f;
 
-    const float FocalLength = LensWidth / (2.0f* tan(fov / 2.0f));
-    float VerticalFov = 2 * atan(LensHeight / (2.0f * FocalLength));
+    const float fovInRadians = fileScene.m_Camera.m_FieldOfView * M_PI / 180.0f;
+
+    float VerticalFov;
+    if (fileScene.m_Film.m_ResolutionY > fileScene.m_Film.m_ResolutionX)
+    {
+        const float FocalLength = LensWidth / (2.0f* tan(fovInRadians / 2.0f));
+        VerticalFov = 2 * atan(LensHeight / (2.0f * FocalLength));
+    }
+    else
+    {
+        VerticalFov = fovInRadians;
+    }
 
     CreateCameraDescriptor CameraDescriptor = {};
-    CameraDescriptor.m_Height = fileScene.m_Film.m_ResolutionX;
-    CameraDescriptor.m_Width = fileScene.m_Film.m_ResolutionY;
+    CameraDescriptor.m_Height = fileScene.m_Film.m_ResolutionY;
+    CameraDescriptor.m_Width = fileScene.m_Film.m_ResolutionX;
     CameraDescriptor.m_FocalPoint = ConvertVec3(fileScene.m_Camera.m_Position);
     CameraDescriptor.m_LookAt = ConvertVec3(fileScene.m_Camera.m_LookAt);
     CameraDescriptor.m_Up = ConvertVec3(fileScene.m_Camera.m_Up);
@@ -469,6 +478,9 @@ void CALLBACK OnFrameRender(_In_ ID3D11Device* pd3dDevice, _In_ ID3D11DeviceCont
     ID3D11Texture2D* pBackBuffer = nullptr;
     HRESULT hr = g_pSwapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), reinterpret_cast<void**>(&pBackBuffer));
     FAIL_CHK(FAILED(hr), "Failed to get the back buffer");
+    
+    DXGI_SWAP_CHAIN_DESC desc;
+    g_pSwapChain->GetDesc(&desc);
 
     if (g_ShowGoldenImage)
     {

@@ -16,6 +16,20 @@ namespace SceneParser
                 float u, v;
             };
         };
+
+        float &operator[](UINT i)
+        {
+            switch (i)
+            {
+            case 0:
+                return x;
+            case 1:
+                return y;
+            default:
+                assert(false);
+                return y;
+            }
+        }
     };
 
     struct Vector3
@@ -23,7 +37,21 @@ namespace SceneParser
         Vector3(float nX, float nY, float nZ) : x(nX), y(nY), z(nZ) {}
         Vector3() : Vector3(0, 0, 0) {}
 
-
+        float &operator[](UINT i)
+        {
+            switch(i)
+            {
+                case 0:
+                    return x;
+                case 1:
+                    return y;
+                case 2:
+                    return z;
+                default:
+                    assert(false);
+                    return z;
+            }
+        }
         union {
             struct {
                 float x, y, z;

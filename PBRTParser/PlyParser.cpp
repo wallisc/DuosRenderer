@@ -1,15 +1,34 @@
 #include "pch.h"
+#include <memory>
+#include <algorithm>
 
 using namespace SceneParser;
 using namespace std;
 
 namespace PlyParser
 {
-void ThrowIfTrue(bool expression, std::string errorMessage)
+void ThrowIfTrue(bool expression, std::string errorMessage = "")
 {
     if (expression)
     {
         throw new BadFormatException(errorMessage.c_str());
+    }
+}
+
+UINT8 PlyParser::BytesPerIntegerType(std::string type)
+{
+    if (!type.compare("uint8") || !type.compare("uchar"))
+    {
+        return 1;
+    }
+    else if (!type.compare("uint") || !type.compare("int"))
+    {
+        return 4;
+    }
+    else
+    {
+        ThrowIfTrue(true, "Integer type not implemented");
+        return 0;
     }
 }
 
@@ -22,12 +41,21 @@ void PlyParser::ParseHeader()
     {
         if (!lastParsedWord.compare("end_header"))
         {
+            char tempBuffer[50];
+            m_fileStream.getline(tempBuffer, ARRAYSIZE(tempBuffer)); // Consume the last newline character;
             break;
         }
         else if (!lastParsedWord.compare("property"))
         {
             m_fileStream >> lastParsedWord;
-            if (!lastParsedWord.compare("float"))
+            if (!lastParsedWord.compare("list"))
+            {
+                m_fileStream >> lastParsedWord;
+                m_BytesPerVertexCount = BytesPerIntegerType(lastParsedWord);
+                m_fileStream >> lastParsedWord;
+                m_BytesPerIndex = BytesPerIntegerType(lastParsedWord);
+            }
+            else if (!lastParsedWord.compare("float"))
             {
                 m_fileStream >> lastParsedWord;
                 if (!lastParsedWord.compare("x"))
@@ -83,23 +111,107 @@ void PlyParser::ParseHeader()
     }
 }
 
+UINT32 PlyParser::ParseVariableInteger(UINT8 bytePerInteger, void *pData)
+{
+    switch (bytePerInteger)
+    {
+    case 1:
+    {
+        return (UINT32)(*(UINT8*)pData);
+    }
+    case 4:
+    {
+        return (*(UINT32*)pData);
+    }
+    default:
+        ThrowIfTrue(true, "Unimplemented integer type");
+        return 0;
+    }
+}
+
 void PlyParser::ParseBody(SceneParser::Mesh &mesh)
 {
+    ThrowIfTrue(m_fileStream.fail());
+    ThrowIfTrue(m_fileStream.eof());
+    mesh.m_VertexBuffer.resize(m_numVertices);
+
+    const UINT vertexSize = m_elementLayout.size() * sizeof(FLOAT);
+    const UINT verticesPerBuffer = 150;
+    const UINT bufferSize = vertexSize * verticesPerBuffer;
+    std::unique_ptr<char[]> pLineBuffer = std::unique_ptr<char[]>(new char[bufferSize]);
+    char *pIterator = pLineBuffer.get();
+    
     for (UINT vertex = 0; vertex < m_numVertices; vertex++)
     {
+        if (vertex % verticesPerBuffer == 0)
+        {
+            UINT verticesLeft = m_numVertices - vertex;
+            UINT readSize = std::min(verticesLeft * vertexSize, bufferSize);
 
+            m_fileStream.read(pLineBuffer.get(), readSize);
+            ThrowIfTrue(m_fileStream.eof());
+            ThrowIfTrue(m_fileStream.fail(), strerror(errno));
+
+            pIterator = pLineBuffer.get();
+        }
+
+        Vertex &v = mesh.m_VertexBuffer[vertex];
+        float value;
+        for (auto element : m_elementLayout)
+        {
+            float* pValue = nullptr;
+            switch (element.first)
+            {
+            case POSITION:
+                pValue = &v.Position[element.second];
+                break;
+            case NORMAL:
+                pValue = &v.Normal[element.second];
+                break;
+            case TEXTURE:
+                pValue = &v.UV[element.second];
+                break;
+            }
+
+            *pValue = *(float *)pIterator;
+            pIterator += sizeof(float);
+        }
     }
 
+    const UINT faceSize = m_BytesPerVertexCount + 3 * m_BytesPerIndex;
+    const UINT facesPerBuffer = bufferSize / faceSize;
+    const UINT faceBufferSize = faceSize * facesPerBuffer;
     for (UINT face = 0; face < m_numFaces; face++)
+    {
+        if (face % facesPerBuffer == 0)
+        {
+            UINT facesLeft = m_numFaces - face;
+            UINT readSize = std::min(facesLeft * faceSize, faceBufferSize);
+            m_fileStream.read(pLineBuffer.get(), readSize);
+            ThrowIfTrue(m_fileStream.fail(), strerror(errno));
+
+            pIterator = pLineBuffer.get();
+        }
+
+        auto numIndicesPerFace = ParseVariableInteger(m_BytesPerVertexCount, pIterator);
+        ThrowIfTrue(numIndicesPerFace != 3, "Not supporting non-triangle faces");
+        pIterator += m_BytesPerVertexCount;
+
+        for (UINT faceIndex = 0; faceIndex < numIndicesPerFace; faceIndex++)
+        {
+            mesh.m_IndexBuffer.push_back((int)ParseVariableInteger(m_BytesPerIndex, pIterator));
+            pIterator += m_BytesPerIndex;
+        }
+    }
 }
 
 void PlyParser::Parse(const std::string &filename, SceneParser::Mesh &mesh)
 {
-    m_fileStream = ifstream(filename);
+    m_fileStream = ifstream(filename, ios::in | ios::binary);
     ThrowIfTrue(!m_fileStream.good(), "Failure opening file");
 
     ParseHeader();
-    ParseBody();
+    ParseBody(mesh);
 }
 
 }

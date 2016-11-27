@@ -8,6 +8,9 @@ namespace PlyParser
         void ParseHeader();
         void ParseBody(SceneParser::Mesh &mesh);
     private:
+        UINT8 BytesPerIntegerType(std::string type);
+        UINT32 ParseVariableInteger(UINT8 bytePerInteger, void *pData);
+
         std::ifstream m_fileStream;
         std::string lastParsedWord;
 
@@ -26,6 +29,9 @@ namespace PlyParser
             Y = 1,
             Z = 2,
         };
+
+        UINT8 m_BytesPerVertexCount;
+        UINT8 m_BytesPerIndex;
 
         typedef std::pair<ElementType, ElementIndex> Element;
         std::vector<Element> m_elementLayout;

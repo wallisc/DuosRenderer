@@ -177,6 +177,17 @@ PS_OUTPUT PS( PS_INPUT input) : SV_Target
     float3 totalSpecular = float3(0.0f, 0.0f, 0.0f);
     float totalFresnel = 0.0;
 
+    {
+#if USE_TEXTURE
+        float4 diffuse = DiffuseTexture.Sample(samLinear, input.Tex);
+#else
+        float4 diffuse = DiffuseColor;
+#endif
+        PS_OUTPUT output;
+        output.Color = diffuse;
+        return output;
+    }
+
     float ShadowMapDepth = shadowBuffer.Sample(samLinear, input.LightPos.xy).r;
     if (input.LightPos.z <= ShadowMapDepth + EPSILON && nDotL > 0.0)
     {
