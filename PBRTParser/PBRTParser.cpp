@@ -4,6 +4,8 @@
 using namespace SceneParser;
 using namespace std;
 
+#define TEAPOT_HACK 1
+
 namespace PBRTParser
 {
     void ThrowIfTrue(bool expression, std::string errorMessage = "")
@@ -128,9 +130,15 @@ namespace PBRTParser
 
         ThrowIfTrue(argCount != 1, "Camera arguments not formatted correctly");
 
-        outputScene.m_Camera.m_LookAt = ConvertToVector3(m_currentTransform * m_lookAt);
-        outputScene.m_Camera.m_Position = ConvertToVector3(m_currentTransform * m_camPos);
-        outputScene.m_Camera.m_Up = ConvertToVector3(m_currentTransform * m_camUp);
+        auto pfnHomogenize = [](const glm::vec4 &vec4) { return vec4 / vec4.w; };
+
+        outputScene.m_Camera.m_LookAt =   ConvertToVector3(pfnHomogenize(m_currentTransform * m_lookAt));
+        outputScene.m_Camera.m_Position = ConvertToVector3(pfnHomogenize(m_currentTransform * m_camPos));
+
+#ifndef TEAPOT_HACK
+        glm::vec4 normal = m_currentTransform * m_camUp;
+        outputScene.m_Camera.m_Up = ConvertToVector3(glm::normalize(glm::vec3(normal)));
+#endif
     }
 
     void PBRTParser::ParseFilm(std::ifstream &fileStream, SceneParser::Scene &outputScene)
@@ -247,7 +255,7 @@ namespace PBRTParser
                     ThrowIfTrue(false, "string not followed up with recognized token");
                 }
             }
-            else if (!lastParsedWord.compare("\"rgb"))
+            else if (!lastParsedWord.compare("\"rgb") || !lastParsedWord.compare("\"texture"))
             {
                 lineStream >> lastParsedWord;
                 if (!lastParsedWord.compare("Kd\""))
@@ -410,20 +418,23 @@ namespace PBRTParser
 
         UINT textureWidth = uScale * 2;
         UINT textureHeight = vScale * 2;
+        UINT CheckerBlockSize = 2;
         
         std::vector<Vector3> imageData;
-        imageData.reserve(textureHeight * textureWidth);
+        imageData.resize(textureHeight * textureWidth);
         for (UINT y = 0; y < textureHeight; y++)
         {
             for (UINT x = 0; x < textureWidth; x++)
             {
-                bool EvenX = (x / uScale) % 2;
-                bool EvenY = (y / vScale) % 2;
-                imageData[x + y * textureWidth] = (EvenX == EvenY) ? color1 : color2;
+                bool EvenX = (x / CheckerBlockSize) % 2;
+                bool EvenY = (y / CheckerBlockSize) % 2;
+                imageData[x + y * textureWidth] = (EvenX == EvenY) ? color2 : color1;
             }
         }
 
-        GenerateBMPFile(fileName + ".bmp", imageData.data(), textureWidth, textureHeight);
+        std::string filenameWithExtension = fileName + ".bmp";
+        GenerateBMPFile(filenameWithExtension, imageData.data(), textureWidth, textureHeight);
+        return filenameWithExtension;
     }
 
     void PBRTParser::GenerateBMPFile(std::string fileName, _In_reads_(width * height)Vector3 *pImageData, UINT width, UINT height)
@@ -700,8 +711,14 @@ namespace PBRTParser
 
     void PBRTParser::InitializeCameraDefaults(Camera &camera)
     {
+#if TEAPOT_HACK
+        m_lookAt = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
+        m_camPos = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+#else
         m_lookAt = glm::vec4(0.0f, 2.0f, 1.0f, 1.0f);
         m_camPos = glm::vec4(0.0f, 2.0f, 0.0f, 1.0f);
+#endif
+
         m_camUp = glm::vec4(0.0f, 1.0f, 0.0f, 0.0f);
 
         camera.m_FieldOfView = 90;
@@ -742,23 +759,23 @@ namespace PBRTParser
 
         m_currentTransform = glm::mat4(
             mat[0][0],
-            mat[0][1],
-            mat[0][2],
-            mat[0][3],
-
             mat[1][0],
-            mat[1][1],
-            mat[1][2],
-            mat[1][3],
-
             mat[2][0],
-            mat[2][1],
-            mat[2][2],
-            mat[2][3],
-
             mat[3][0],
+
+            mat[0][1],
+            mat[1][1],
+            mat[2][1],
             mat[3][1],
+
+            mat[0][2],
+            mat[1][2],
+            mat[2][2],
             mat[3][2],
+
+            mat[0][3],
+            mat[1][3],
+            mat[2][3],
             mat[3][3]);
     }
 }
