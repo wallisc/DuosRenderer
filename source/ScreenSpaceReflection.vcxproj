@@ -566,6 +566,26 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="D3D11Renderer.cpp" />
+    <ClCompile Include="DirectXTex\BC.cpp" />
+    <ClCompile Include="DirectXTex\BC4BC5.cpp" />
+    <ClCompile Include="DirectXTex\BC6HBC7.cpp" />
+    <ClCompile Include="DirectXTex\BCDirectCompute.cpp" />
+    <ClCompile Include="DirectXTex\DirectXTexCompress.cpp" />
+    <ClCompile Include="DirectXTex\DirectXTexCompressGPU.cpp" />
+    <ClCompile Include="DirectXTex\DirectXTexConvert.cpp" />
+    <ClCompile Include="DirectXTex\DirectXTexD3D11.cpp" />
+    <ClCompile Include="DirectXTex\DirectXTexDDS.cpp" />
+    <ClCompile Include="DirectXTex\DirectXTexFlipRotate.cpp" />
+    <ClCompile Include="DirectXTex\DirectXTexHDR.cpp" />
+    <ClCompile Include="DirectXTex\DirectXTexImage.cpp" />
+    <ClCompile Include="DirectXTex\DirectXTexMipmaps.cpp" />
+    <ClCompile Include="DirectXTex\DirectXTexMisc.cpp" />
+    <ClCompile Include="DirectXTex\DirectXTexNormalMaps.cpp" />
+    <ClCompile Include="DirectXTex\DirectXTexPMAlpha.cpp" />
+    <ClCompile Include="DirectXTex\DirectXTexResize.cpp" />
+    <ClCompile Include="DirectXTex\DirectXTexTGA.cpp" />
+    <ClCompile Include="DirectXTex\DirectXTexUtil.cpp" />
+    <ClCompile Include="DirectXTex\DirectXTexWIC.cpp" />
     <ClCompile Include="dxtk\Src\pch.cpp" />
     <ClCompile Include="dxtk\Src\WICTextureLoader.cpp" />
     <ClCompile Include="DXUT\Core\DDSTextureLoader.cpp" />
@@ -623,6 +643,13 @@
     <ClInclude Include="D3D11Canvas.h" />
     <ClInclude Include="D3D11Renderer.h" />
     <ClInclude Include="D3D11Util.h" />
+    <ClInclude Include="DirectXTex\BC.h" />
+    <ClInclude Include="DirectXTex\BCDirectCompute.h" />
+    <ClInclude Include="DirectXTex\DDS.h" />
+    <ClInclude Include="DirectXTex\DirectXTex.h" />
+    <ClInclude Include="DirectXTex\DirectXTexP.h" />
+    <ClInclude Include="DirectXTex\Filters.h" />
+    <ClInclude Include="DirectXTex\scoped.h" />
     <ClInclude Include="dxtk\Inc\DirectXHelpers.h" />
     <ClInclude Include="dxtk\Inc\WICTextureLoader.h" />
     <ClInclude Include="dxtk\Src\pch.h" />
@@ -692,6 +719,7 @@
     <None Include="assimp\inc\quaternion.inl" />
     <None Include="assimp\inc\vector2.inl" />
     <None Include="assimp\inc\vector3.inl" />
+    <None Include="DirectXTex\DirectXTex.inl" />
     <None Include="DXUT\Optional\DXUTOpt_2012.vcxproj" />
     <None Include="DXUT\Optional\DXUTOpt_2012.vcxproj.filters" />
     <None Include="embree\inc\rtcore.isph" />
