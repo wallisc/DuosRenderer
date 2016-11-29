@@ -27,6 +27,9 @@
     <Filter Include="Embree">
       <UniqueIdentifier>{414b7961-a621-4567-83d5-5c0684ff581d}</UniqueIdentifier>
     </Filter>
+    <Filter Include="DirectXTex">
+      <UniqueIdentifier>{98dae0cf-ba1a-414b-8120-47831e581808}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="D3D11Renderer.cpp" />
