@@ -10,6 +10,11 @@
 
 #define CLAMP(value, bottom, top) min(top, max(bottom, value))
 
+FORCEINLINE void ThrowFailure(HRESULT hr)
+{
+    FAIL_CHK(FAILED(hr), "Failed D3D11 operation");
+}
+
 struct CBPrecalcBRDFMaterial
 {
     DirectX::XMVECTOR roughness;

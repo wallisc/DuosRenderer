@@ -2,6 +2,7 @@
 #include "D3D11Util.h"
 #include "RendererException.h"
 #include "D3D11Canvas.h"
+#include "DirectXTex/DirectXTex.h"
 
 #include "dxtk/inc/WICTextureLoader.h"
 
@@ -663,45 +664,72 @@ CComPtr<ID3D11ShaderResourceView> D3D11EnvironmentTextureCube::CreateTextureCube
 {
     CComPtr<ID3D11Texture2D> pCubeResource;
     CComPtr<ID3D11ShaderResourceView> pShaderResourceView;
-    for (UINT i = 0; i < TEXTURES_PER_CUBE; i++)
-    {
-        CA2WEX<MAX_ALLOWED_STR_LENGTH> WideTextureName(textureNames[i]);
-        ID3D11Resource *pTempResource;
 
-        HRESULT hr = CreateWICTextureFromFileEx(
+    CA2WEX<MAX_ALLOWED_STR_LENGTH> WideTexture0Name(textureNames[0]);
+    std::wstring texture0Name(WideTexture0Name);
+    if (!texture0Name.substr(texture0Name.size() - 3, 3).compare(L"hdr"))
+    {
+        DirectX::TexMetadata texMetaData;
+        DirectX::ScratchImage scratchImage;
+        ThrowFailure(DirectX::LoadFromHDRFile(texture0Name.c_str(), &texMetaData, scratchImage));
+    
+        CComPtr<ID3D11Resource> pResource;
+        ThrowFailure(DirectX::CreateTextureEx(
             pDevice,
-            WideTextureName,
-            20 * 1024 * 1024,
+            scratchImage.GetImages(),
+            scratchImage.GetImageCount(),
+            texMetaData,
             D3D11_USAGE_DEFAULT,
             D3D11_BIND_SHADER_RESOURCE,
             0,
             0,
-            g_bGammaCorrectTextures,
-            &pTempResource,
-            nullptr);
+            false,
+            &pResource));
 
-        FAIL_CHK(FAILED(hr), "Failed to create texture from cube texture name");
-
-        if (i == 0)
+        ThrowFailure(pDevice->CreateShaderResourceView(pResource, nullptr, &pShaderResourceView));
+    }
+    else
+    {
+        for (UINT i = 0; i < TEXTURES_PER_CUBE; i++)
         {
-            D3D11_TEXTURE2D_DESC TextureDesc;
-            ID3D11Texture2D *pTempTexture;
-            pTempResource->QueryInterface<ID3D11Texture2D>(&pTempTexture);
-            pTempTexture->GetDesc(&TextureDesc);
+            CA2WEX<MAX_ALLOWED_STR_LENGTH> WideTextureName(textureNames[i]);
+            ID3D11Resource *pTempResource;
 
-            D3D11_TEXTURE2D_DESC TextureCubeDesc = CD3D11_TEXTURE2D_DESC(
-                TextureDesc.Format, TextureDesc.Width, TextureDesc.Height, TEXTURES_PER_CUBE, 1,
-                D3D11_BIND_SHADER_RESOURCE, D3D11_USAGE_DEFAULT, 0, 1, 0, D3D11_RESOURCE_MISC_TEXTURECUBE);
+            HRESULT hr = CreateWICTextureFromFileEx(
+                pDevice,
+                WideTextureName,
+                20 * 1024 * 1024,
+                D3D11_USAGE_DEFAULT,
+                D3D11_BIND_SHADER_RESOURCE,
+                0,
+                0,
+                g_bGammaCorrectTextures,
+                &pTempResource,
+                nullptr);
 
-            hr = pDevice->CreateTexture2D(&TextureCubeDesc, nullptr, &pCubeResource);
-            FAIL_CHK(FAILED(hr), "Failed to create texture cube");
+            FAIL_CHK(FAILED(hr), "Failed to create texture from cube texture name");
 
-            D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = CD3D11_SHADER_RESOURCE_VIEW_DESC(D3D11_SRV_DIMENSION_TEXTURECUBE, TextureCubeDesc.Format);
-            hr = pDevice->CreateShaderResourceView(pCubeResource, &srvDesc, &pShaderResourceView);
-            FAIL_CHK(FAILED(hr), "Failed to create SRV for texture cube");
+            if (i == 0)
+            {
+                D3D11_TEXTURE2D_DESC TextureDesc;
+                ID3D11Texture2D *pTempTexture;
+                pTempResource->QueryInterface<ID3D11Texture2D>(&pTempTexture);
+                pTempTexture->GetDesc(&TextureDesc);
+
+                D3D11_TEXTURE2D_DESC TextureCubeDesc = CD3D11_TEXTURE2D_DESC(
+                    TextureDesc.Format, TextureDesc.Width, TextureDesc.Height, TEXTURES_PER_CUBE, 1,
+                    D3D11_BIND_SHADER_RESOURCE, D3D11_USAGE_DEFAULT, 0, 1, 0, D3D11_RESOURCE_MISC_TEXTURECUBE);
+
+                hr = pDevice->CreateTexture2D(&TextureCubeDesc, nullptr, &pCubeResource);
+                FAIL_CHK(FAILED(hr), "Failed to create texture cube");
+
+                D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = CD3D11_SHADER_RESOURCE_VIEW_DESC(D3D11_SRV_DIMENSION_TEXTURECUBE, TextureCubeDesc.Format);
+                hr = pDevice->CreateShaderResourceView(pCubeResource, &srvDesc, &pShaderResourceView);
+                FAIL_CHK(FAILED(hr), "Failed to create SRV for texture cube");
+            }
+
+            pImmediateContext->CopySubresourceRegion(pCubeResource, ConvertRendererFaceToD3D11TextureFace((TextureFace)i), 0, 0, 0, pTempResource, 0, nullptr);
         }
-
-        pImmediateContext->CopySubresourceRegion(pCubeResource, ConvertRendererFaceToD3D11TextureFace((TextureFace)i), 0, 0, 0, pTempResource, 0, nullptr);
     }
     return pShaderResourceView;
 }
