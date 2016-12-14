@@ -404,6 +404,9 @@
     <FxCompile Include="FullscreenPlane_VS.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
+    <FxCompile Include="PanoramaToCubemap.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="ScreenSpaceReflection.rc">

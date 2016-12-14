@@ -299,7 +299,7 @@ namespace PBRTParser
             ThrowIfTrue(
                 outputScene.m_EnvironmentMap.m_FileName.size() > 0,
                 "Multiple environment maps defined");
-            outputScene.m_EnvironmentMap.m_FileName = CorrectNameString(ParseString(lineStream));
+            outputScene.m_EnvironmentMap.m_FileName = m_relativeDirectory + CorrectNameString(ParseString(lineStream));
         }
     }
 

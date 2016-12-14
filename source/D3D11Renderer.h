@@ -263,7 +263,7 @@ public:
 private:
     static const UINT cNumberOfPrefilteredCubes = ENVIRONMENT_TEXTURE_CUBES;
 
-    static CComPtr<ID3D11ShaderResourceView> CreateTextureCube(_In_ ID3D11Device *pDevice, _In_ ID3D11DeviceContext *pImmediateContext, _In_reads_(TEXTURES_PER_CUBE) char * const *textureNames);
+    CComPtr<ID3D11ShaderResourceView> CreateTextureCube(_In_ ID3D11Device *pDevice, _In_ ID3D11DeviceContext *pImmediateContext, _In_reads_(TEXTURES_PER_CUBE) char * const *textureNames);
     CComPtr<ID3D11ShaderResourceView> GenerateBakedReflectionCube(ID3D11ShaderResourceView *pCubeMap, float roughness);
 
     CComPtr<ID3D11ShaderResourceView> m_pEnvironmentTextureCube;
@@ -391,6 +391,18 @@ enum CUBE_FACES
     Z_NEGATIVE,
     NUM_CUBE_FACES
 };
+
+class CubeMapUtilities : public D3D11RendererChild
+{
+public:
+    CubeMapUtilities(D3D11Renderer *pRenderer);
+
+    CComPtr<ID3D11ShaderResourceView> ConvertPanoramaToTextureCube(CComPtr<ID3D11ShaderResourceView> pPanorama, UINT CubeWidth);
+private:
+    CComPtr<ID3D11SamplerState> m_pLinearSampler;
+    CComPtr<ID3D11PixelShader> m_pPixelShader;
+};
+
 class BRDFPrecomputationResouces : public D3D11RendererChild
 {
 public:
@@ -452,6 +464,7 @@ public:
     ID3D11DeviceContext *GetD3D11Context() { return m_pImmediateContext; }
     ID3D11Device *GetD3D11Device() { return m_pDevice; }
     BRDFPrecomputationResouces &GetBRDFPrecomputedResources() const { return *m_pBRDFPrecalculatedResources.get(); }
+    CubeMapUtilities &GetCubeMapUtilities() const { return *m_pCubeMapUtilities.get(); }
     ID3D11VertexShader *GetFullscreenVS() { return m_pFullscreenVS; }
 private:
     void SetDefaultState();
@@ -486,6 +499,7 @@ private:
     CComPtr<ID3D11PixelShader> m_pPassThroughPS;
     CComPtr<ID3D11VertexShader> m_pFullscreenVS;
     std::unique_ptr<BRDFPrecomputationResouces> m_pBRDFPrecalculatedResources;
+    std::unique_ptr<CubeMapUtilities> m_pCubeMapUtilities;
 };
 
 #define D3D11_RENDERER_CAST reinterpret_cast

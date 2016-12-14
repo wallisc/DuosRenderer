@@ -150,7 +150,7 @@ D3D11Renderer::D3D11Renderer(HWND WindowHandle, unsigned int width, unsigned int
 {
     UINT CreateDeviceFlags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
 #ifdef DEBUG
-    //CreateDeviceFlags |= D3D11_CREATE_DEVICE_DEBUG;
+    CreateDeviceFlags |= D3D11_CREATE_DEVICE_DEBUG;
 #endif
     D3D_FEATURE_LEVEL FeatureLevels = D3D_FEATURE_LEVEL_11_1;
     HRESULT hr = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, CreateDeviceFlags, &FeatureLevels, 1,
@@ -189,6 +189,7 @@ D3D11Renderer::D3D11Renderer(HWND WindowHandle, unsigned int width, unsigned int
     CompileShaders();
 
     m_pBRDFPrecalculatedResources = std::unique_ptr<BRDFPrecomputationResouces>(new BRDFPrecomputationResouces(this));
+    m_pCubeMapUtilities = std::unique_ptr<CubeMapUtilities>(new CubeMapUtilities(this));
 
     SetDefaultState();
 }
@@ -411,7 +412,6 @@ void D3D11Renderer::SetDefaultState()
     hr = m_pDevice->CreateSamplerState(&sampDesc, &m_pSamplerState);
     FAIL_CHK(FAILED(hr), "Failed creating the sampler state");
 
-    m_pImmediateContext->PSSetSamplers(0, 1, &m_pSamplerState);
     m_pImmediateContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 }
 
@@ -588,7 +588,8 @@ D3D11EnvironmentTextureCube::D3D11EnvironmentTextureCube(
     m_pPrefilteredTextureCube[0] = m_pEnvironmentTextureCube;
     for (UINT i = 1; i < cNumberOfPrefilteredCubes; i++)
     {
-        m_pPrefilteredTextureCube[i] = GenerateBakedReflectionCube(pCubeMap, (float)i / (float)(cNumberOfPrefilteredCubes - 1));
+        //m_pPrefilteredTextureCube[i] = GenerateBakedReflectionCube(pCubeMap, (float)i / (float)(cNumberOfPrefilteredCubes - 1));
+        m_pPrefilteredTextureCube[i] = pCubeMap;
     }
 }
 
@@ -673,7 +674,7 @@ CComPtr<ID3D11ShaderResourceView> D3D11EnvironmentTextureCube::CreateTextureCube
         DirectX::ScratchImage scratchImage;
         ThrowFailure(DirectX::LoadFromHDRFile(texture0Name.c_str(), &texMetaData, scratchImage));
     
-        CComPtr<ID3D11Resource> pResource;
+        CComPtr<ID3D11Resource> pPanorama;
         ThrowFailure(DirectX::CreateTextureEx(
             pDevice,
             scratchImage.GetImages(),
@@ -684,9 +685,12 @@ CComPtr<ID3D11ShaderResourceView> D3D11EnvironmentTextureCube::CreateTextureCube
             0,
             0,
             false,
-            &pResource));
+            &pPanorama));
 
-        ThrowFailure(pDevice->CreateShaderResourceView(pResource, nullptr, &pShaderResourceView));
+        CComPtr<ID3D11ShaderResourceView> pPanoramaSRV;
+        ThrowFailure(pDevice->CreateShaderResourceView(pPanorama, nullptr, &pPanoramaSRV));
+
+        pShaderResourceView = GetParent()->GetCubeMapUtilities().ConvertPanoramaToTextureCube(pPanoramaSRV, 512);
     }
     else
     {
@@ -912,6 +916,7 @@ void D3D11Renderer::DrawScene(Camera *pCamera, Scene *pScene, const RenderSettin
     m_pImmediateContext->ClearDepthStencilView(m_pDepthBuffer, D3D11_CLEAR_DEPTH, 1.0f, 0);
     m_pImmediateContext->ClearDepthStencilView(m_pShadowDepthBuffer, D3D11_CLEAR_DEPTH, 1.0f, 0);
     m_pImmediateContext->RSSetViewports(1, &m_viewport);
+    m_pImmediateContext->PSSetSamplers(0, 1, &m_pSamplerState);
 
 
     ID3D11Buffer *pCameraConstantBuffer = pD3D11Camera->GetCameraConstantBuffer();
@@ -1372,6 +1377,103 @@ float FloatRand()
     return rand() / (float)RAND_MAX;
 }
 
+CubeMapUtilities::CubeMapUtilities(D3D11Renderer *pRenderer) :
+    D3D11RendererChild(pRenderer)
+{
+    ID3D11Device *pDevice = GetParent()->GetD3D11Device();
+    
+    // Create the sample state
+    D3D11_SAMPLER_DESC sampDesc;
+    ZeroMemory(&sampDesc, sizeof(sampDesc));
+    sampDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+    sampDesc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
+    sampDesc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
+    sampDesc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
+    sampDesc.ComparisonFunc = D3D11_COMPARISON_NEVER;
+    sampDesc.MinLOD = 0;
+    sampDesc.MaxLOD = D3D11_FLOAT32_MAX;
+    ThrowFailure(pDevice->CreateSamplerState(&sampDesc, &m_pLinearSampler));
+
+    CComPtr<ID3DBlob> pPSBlob = nullptr;
+    CompileShaderHelper(L"PanoramaToCubemap.hlsl", "main", "ps_5_0", nullptr, &pPSBlob);
+    ThrowFailure(pDevice->CreatePixelShader(pPSBlob->GetBufferPointer(), pPSBlob->GetBufferSize(), nullptr, &m_pPixelShader));
+}
+
+CComPtr<ID3D11ShaderResourceView> CubeMapUtilities::ConvertPanoramaToTextureCube(CComPtr<ID3D11ShaderResourceView> pPanoramaSRV, UINT CubeWidth)
+{
+    ID3D11Device *pDevice = GetParent()->GetD3D11Device();
+    ID3D11DeviceContext *pContext= GetParent()->GetD3D11Context();
+
+    D3D11_TEXTURE2D_DESC panoramaDesc;
+    {
+        CComPtr<ID3D11Resource> pPanoramaResource;
+        pPanoramaSRV->GetResource(&pPanoramaResource);
+
+        CComPtr<ID3D11Texture2D> pPanoramaTexture2D;
+        ThrowFailure(pPanoramaResource->QueryInterface(&pPanoramaTexture2D));
+
+        pPanoramaTexture2D->GetDesc(&panoramaDesc);
+    }
+
+    const D3D11_TEXTURE2D_DESC cubemapDesc = CD3D11_TEXTURE2D_DESC(
+        panoramaDesc.Format,
+        CubeWidth,
+        CubeWidth,
+        6,
+        1,
+        D3D11_BIND_SHADER_RESOURCE,
+        D3D11_USAGE_DEFAULT,
+        0,
+        1,
+        0,
+        D3D11_RESOURCE_MISC_TEXTURECUBE);
+
+    CComPtr<ID3D11Texture2D> pCubemapTexture2D;
+    pDevice->CreateTexture2D(&cubemapDesc, nullptr, &pCubemapTexture2D);
+
+    CComPtr<ID3D11ShaderResourceView> pCubemapSRV;
+    pDevice->CreateShaderResourceView(pCubemapTexture2D, nullptr, &pCubemapSRV);
+    {
+        D3D11_TEXTURE2D_DESC stagingCubemapDesc = cubemapDesc;
+        stagingCubemapDesc.BindFlags = D3D11_BIND_RENDER_TARGET;
+        CComPtr<ID3D11Texture2D> pStagingCubemap;
+        pDevice->CreateTexture2D(&stagingCubemapDesc, nullptr, &pStagingCubemap);
+
+        ID3D11SamplerState *pSamplers[] = { m_pLinearSampler };
+        ID3D11ShaderResourceView *pSRVs[] = { pPanoramaSRV };
+
+        pContext->PSSetShaderResources(0, ARRAYSIZE(pSRVs), pSRVs);
+        pContext->PSSetSamplers(0, ARRAYSIZE(pSamplers), pSamplers);
+        pContext->IASetInputLayout(GetParent()->GetBRDFPrecomputedResources().GetInputLayout());
+        pContext->VSSetShader(GetParent()->GetBRDFPrecomputedResources().GetVertexShader(), nullptr, 0);
+        pContext->PSSetShader(m_pPixelShader, nullptr, 0);
+
+        const UINT pOffsets[] = { 0 };
+        const UINT pStrides[] = { GetParent()->GetBRDFPrecomputedResources().GetCubeMapVertexBufferStride() };
+        for (UINT face = 0; face < NUM_CUBE_FACES; face++)
+        {
+            ID3D11Buffer *pVBs[] = { GetParent()->GetBRDFPrecomputedResources().GetCubeMapVertexBuffer((CUBE_FACES)face) };
+            pContext->IASetVertexBuffers(0, 1, pVBs, pStrides, pOffsets);
+
+            CComPtr<ID3D11RenderTargetView> pRTVSlice;
+            CD3D11_RENDER_TARGET_VIEW_DESC rtvDesc(
+                D3D11_RTV_DIMENSION_TEXTURE2DARRAY,
+                panoramaDesc.Format,
+                0, 
+                face, 
+                1);
+            pDevice->CreateRenderTargetView(pStagingCubemap, &rtvDesc, &pRTVSlice);
+            
+            ID3D11RenderTargetView *pRTVs[] = { pRTVSlice };
+            pContext->OMSetRenderTargets(ARRAYSIZE(pRTVs), pRTVs, nullptr);
+            pContext->DrawInstanced(6, 1, 0, 0);
+        }
+
+        pContext->CopyResource(pCubemapTexture2D, pStagingCubemap);
+    }
+    return pCubemapSRV;
+}
+
 BRDFPrecomputationResouces::BRDFPrecomputationResouces(D3D11Renderer *pRenderer) :
     D3D11RendererChild(pRenderer)
 {
@@ -1415,11 +1517,11 @@ BRDFPrecomputationResouces::BRDFPrecomputationResouces(D3D11Renderer *pRenderer)
         XMVECTOR BottomRightViewVector;
         switch (face)
         {
-        case CUBE_FACES::X_POSITIVE:
-            TopLeftViewVector = XMVector3Normalize(XMVectorSet(1.0, 1.0, 1.0, 0.0f));
-            TopRightViewVector = XMVector3Normalize(XMVectorSet(1.0, 1.0, -1.0, 0.0f));
-            BottomLeftViewVector = XMVector3Normalize(XMVectorSet(1.0, -1.0, 1.0, 0.0f));
-            BottomRightViewVector = XMVector3Normalize(XMVectorSet(1.0, -1.0, -1.0, 0.0f));
+        case CUBE_FACES::X_NEGATIVE:
+            TopLeftViewVector = XMVector3Normalize(XMVectorSet(1.0, 1.0, -1.0, 0.0f));
+            TopRightViewVector = XMVector3Normalize(XMVectorSet(1.0, 1.0, 1.0, 0.0f));
+            BottomLeftViewVector = XMVector3Normalize(XMVectorSet(1.0, -1.0, -1.0, 0.0f));
+            BottomRightViewVector = XMVector3Normalize(XMVectorSet(1.0, -1.0, 1.0, 0.0f));
             break;
         case CUBE_FACES::Y_POSITIVE:
             TopLeftViewVector = XMVector3Normalize(XMVectorSet(1.0, 1.0, -1.0, 0.0f));
@@ -1433,11 +1535,11 @@ BRDFPrecomputationResouces::BRDFPrecomputationResouces(D3D11Renderer *pRenderer)
             BottomLeftViewVector = XMVector3Normalize(XMVectorSet(1.0, -1.0, 1.0, 0.0f));
             BottomRightViewVector = XMVector3Normalize(XMVectorSet(-1.0, -1.0, 1.0, 0.0f));
             break;
-        case CUBE_FACES::X_NEGATIVE:
-            TopLeftViewVector = XMVector3Normalize(XMVectorSet(-1.0, 1.0, -1.0, 0.0f));
-            TopRightViewVector = XMVector3Normalize(XMVectorSet(-1.0, 1.0, 1.0, 0.0f));
-            BottomLeftViewVector = XMVector3Normalize(XMVectorSet(-1.0, -1.0, -1.0, 0.0f));
-            BottomRightViewVector = XMVector3Normalize(XMVectorSet(-1.0, -1.0, 1.0, 0.0f));
+        case CUBE_FACES::X_POSITIVE:
+            TopLeftViewVector = XMVector3Normalize(XMVectorSet(-1.0, 1.0, 1.0, 0.0f));
+            TopRightViewVector = XMVector3Normalize(XMVectorSet(-1.0, 1.0, -1.0, 0.0f));
+            BottomLeftViewVector = XMVector3Normalize(XMVectorSet(-1.0, -1.0, 1.0, 0.0f));
+            BottomRightViewVector = XMVector3Normalize(XMVectorSet(-1.0, -1.0, -1.0, 0.0f));
             break;
         case CUBE_FACES::Y_NEGATIVE:
             TopLeftViewVector = XMVector3Normalize(XMVectorSet(1.0, -1.0, -1.0, 0.0f));
@@ -1446,10 +1548,10 @@ BRDFPrecomputationResouces::BRDFPrecomputationResouces(D3D11Renderer *pRenderer)
             BottomRightViewVector = XMVector3Normalize(XMVectorSet(-1.0, -1.0, 1.0, 0.0f));
             break;
         case CUBE_FACES::Z_NEGATIVE:
-            TopLeftViewVector = XMVector3Normalize(XMVectorSet(1.0, 1.0, -1.0, 0.0f));
-            TopRightViewVector = XMVector3Normalize(XMVectorSet(-1.0, 1.0, -1.0, 0.0f));
-            BottomLeftViewVector = XMVector3Normalize(XMVectorSet(1.0, -1.0, -1.0, 0.0f));
-            BottomRightViewVector = XMVector3Normalize(XMVectorSet(-1.0, -1.0, -1.0, 0.0f));
+            TopLeftViewVector = XMVector3Normalize(XMVectorSet(-1.0, 1.0, -1.0, 0.0f));
+            TopRightViewVector = XMVector3Normalize(XMVectorSet(1.0, 1.0, -1.0, 0.0f));
+            BottomLeftViewVector = XMVector3Normalize(XMVectorSet(-1.0, -1.0, -1.0, 0.0f));
+            BottomRightViewVector = XMVector3Normalize(XMVectorSet(1.0, -1.0, -1.0, 0.0f));
             break;
         default:
             assert(false);
