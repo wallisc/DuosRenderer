@@ -186,6 +186,29 @@ glm::vec3 RTImage::Sample(glm::vec2 uv)
         ConvertCharToFloat(pPixel[2]));
 }
 
+RTTexturePanorama::RTTexturePanorama() {}
+RTTexturePanorama::RTTexturePanorama(char *TextureName, bool IsSRGBTextureCube)
+{
+    m_pImage = RTImage(TextureName, IsSRGBTextureCube);
+}
+
+
+glm::vec3 RTTexturePanorama::Sample(glm::vec3 dir)
+{
+    dir = glm::normalize(dir);
+    glm::vec2 uv;
+    uv.y = acos(dir.y) / M_PI;
+    {
+        float p = atan2(dir.z, dir.x);
+        p = p > 0.0f ? p : p - M_PI * 2;
+        uv.x = p / (2 * M_PI);
+    }
+
+    assert(uv.x >= -EPSILON && uv.x <= 1.0f + EPSILON);
+    assert(uv.y >= -EPSILON && uv.y <= 1.0f + EPSILON);
+    return m_pImage.Sample(uv);
+}
+
 RTTextureCube::RTTextureCube() {}
 RTTextureCube::RTTextureCube(char **TextureNames, bool IsSRGBTextureCube)
 {
@@ -921,7 +944,17 @@ RTEnvironmentColor::RTEnvironmentColor(CreateEnvironmentColor *pCreateEnvironmen
 
 RTEnvironmentTextureCube::RTEnvironmentTextureCube(CreateEnvironmentTextureCube *pCreateEnvironmentTextureCube)
 {
-    m_TextureCube = RTTextureCube(pCreateEnvironmentTextureCube->m_TextureNames, true);
+    std::string texture0Name(pCreateEnvironmentTextureCube->m_TextureNames[0]);
+    if (texture0Name.substr(texture0Name.size() - 3, 3).compare("hdr"))
+    {
+        m_pTextureCube = std::unique_ptr<SphereciallySamplableTexture>(
+            new RTTexturePanorama(pCreateEnvironmentTextureCube->m_TextureNames[0], false));
+    }
+    else
+    {
+        m_pTextureCube = std::unique_ptr<SphereciallySamplableTexture>(
+            new RTTextureCube(pCreateEnvironmentTextureCube->m_TextureNames, true));
+    }
 }
 
 RTScene::RTScene(RTCDevice device, RTEnvironmentMap *pEnvironmentMap) :

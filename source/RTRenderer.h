@@ -9,6 +9,7 @@
 #include "embree/inc/rtcore_ray.h"
 
 #include <unordered_map>
+#include <memory>
 #include <algorithm>
 #include <windows.h>
 #include <minmax.h>
@@ -112,7 +113,24 @@ private:
     static const unsigned int cSizeofComponent = sizeof(unsigned char);
 };
 
-class RTTextureCube
+class SphereciallySamplableTexture
+{
+public:
+    virtual glm::vec3 Sample(glm::vec3 dir) = 0;
+};
+
+class RTTexturePanorama : public SphereciallySamplableTexture
+{
+public:
+    RTTexturePanorama();
+    RTTexturePanorama(char *TextureNames, bool IsSRGBTexture);
+    glm::vec3 Sample(glm::vec3 dir);
+    bool HasValidTexture() { return m_pImage.HasValidTexture(); }
+private:
+    RTImage m_pImage;
+};
+
+class RTTextureCube : public SphereciallySamplableTexture
 {
 public:
     RTTextureCube();
@@ -317,10 +335,10 @@ class RTEnvironmentTextureCube : public RTEnvironmentMap
 {
 public:
     RTEnvironmentTextureCube(CreateEnvironmentTextureCube *pCreateEnvironmentTextureCube);
-    glm::vec3 GetColor(glm::vec3 ray) { return m_TextureCube.Sample(ray); }
+    glm::vec3 GetColor(glm::vec3 ray) { return m_pTextureCube->Sample(ray); }
 
 private:
-    RTTextureCube m_TextureCube;
+    std::unique_ptr<SphereciallySamplableTexture> m_pTextureCube;
 };
 
 struct PixelRange
