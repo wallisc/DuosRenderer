@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 14
-VisualStudioVersion = 14.0.25420.1
+VisualStudioVersion = 14.0.24720.0
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "DuosRenderer", "source\ScreenSpaceReflection.vcxproj", "{D29C6982-A589-4081-89B1-91E78D7C41E2}"
 	ProjectSection(ProjectDependencies) = postProject
@@ -15,6 +15,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "PBRTParser", "PBRTParser\PB
 	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "GLM", "GLM\GLM.vcxproj", "{9000F15C-F1BF-44A5-B9D9-3771D04E4497}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "D3D12Renderer", "D3D12Renderer\D3D12Renderer.vcxproj", "{2FAFEA51-CF36-4D54-AB03-58521B4A3F5F}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -86,6 +88,22 @@ Global
 		{9000F15C-F1BF-44A5-B9D9-3771D04E4497}.Release|Win32.Build.0 = Release|Win32
 		{9000F15C-F1BF-44A5-B9D9-3771D04E4497}.Release|x64.ActiveCfg = Release|x64
 		{9000F15C-F1BF-44A5-B9D9-3771D04E4497}.Release|x64.Build.0 = Release|x64
+		{2FAFEA51-CF36-4D54-AB03-58521B4A3F5F}.Debug|ARM.ActiveCfg = Debug|Win32
+		{2FAFEA51-CF36-4D54-AB03-58521B4A3F5F}.Debug|Win32.ActiveCfg = Debug|Win32
+		{2FAFEA51-CF36-4D54-AB03-58521B4A3F5F}.Debug|Win32.Build.0 = Debug|Win32
+		{2FAFEA51-CF36-4D54-AB03-58521B4A3F5F}.Debug|x64.ActiveCfg = Debug|x64
+		{2FAFEA51-CF36-4D54-AB03-58521B4A3F5F}.Debug|x64.Build.0 = Debug|x64
+		{2FAFEA51-CF36-4D54-AB03-58521B4A3F5F}.Profile|ARM.ActiveCfg = Release|x64
+		{2FAFEA51-CF36-4D54-AB03-58521B4A3F5F}.Profile|ARM.Build.0 = Release|x64
+		{2FAFEA51-CF36-4D54-AB03-58521B4A3F5F}.Profile|Win32.ActiveCfg = Release|Win32
+		{2FAFEA51-CF36-4D54-AB03-58521B4A3F5F}.Profile|Win32.Build.0 = Release|Win32
+		{2FAFEA51-CF36-4D54-AB03-58521B4A3F5F}.Profile|x64.ActiveCfg = Release|x64
+		{2FAFEA51-CF36-4D54-AB03-58521B4A3F5F}.Profile|x64.Build.0 = Release|x64
+		{2FAFEA51-CF36-4D54-AB03-58521B4A3F5F}.Release|ARM.ActiveCfg = Release|Win32
+		{2FAFEA51-CF36-4D54-AB03-58521B4A3F5F}.Release|Win32.ActiveCfg = Release|Win32
+		{2FAFEA51-CF36-4D54-AB03-58521B4A3F5F}.Release|Win32.Build.0 = Release|Win32
+		{2FAFEA51-CF36-4D54-AB03-58521B4A3F5F}.Release|x64.ActiveCfg = Release|x64
+		{2FAFEA51-CF36-4D54-AB03-58521B4A3F5F}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
