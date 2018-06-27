@@ -70,3 +70,11 @@ ipch/PBRTPARSER-a1980417/PBRTPARSER-6bdf5d8f.ipch
 *.ipch
 DuosRenderer.VC.db
 *.opendb
+/.vs/DuosRenderer/v15/Solution.VC.db-wal
+/.vs/DuosRenderer/v15/Solution.VC.db-shm
+/.vs/DuosRenderer/v15/Solution.VC.db
+/.vs/DuosRenderer/v15/Browse.VC.db
+/.vs/DuosRenderer/v15/.suo
+/packages/WinPixEventRuntime.1.0.170918004/bin/WinPixEventRuntime_UAP.dll
+/packages/WinPixEventRuntime.1.0.170918004/bin/WinPixEventRuntime.dll
+/packages/WinPixEventRuntime.1.0.170918004

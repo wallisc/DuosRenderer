@@ -150,9 +150,9 @@ D3D11Renderer::D3D11Renderer(HWND WindowHandle, unsigned int width, unsigned int
 {
     UINT CreateDeviceFlags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
 #ifdef DEBUG
-    CreateDeviceFlags |= D3D11_CREATE_DEVICE_DEBUG;
+    //CreateDeviceFlags |= D3D11_CREATE_DEVICE_DEBUG;
 #endif
-    D3D_FEATURE_LEVEL FeatureLevels = D3D_FEATURE_LEVEL_11_1;
+    D3D_FEATURE_LEVEL FeatureLevels = D3D_FEATURE_LEVEL_11_0;
     HRESULT hr = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, CreateDeviceFlags, &FeatureLevels, 1,
         D3D11_SDK_VERSION, &m_pDevice, nullptr, &m_pImmediateContext);
     FAIL_CHK(FAILED(hr), "Failed D3D11CreateDevice");
@@ -1007,6 +1007,7 @@ void D3D11Renderer::DrawScene(Camera *pCamera, Scene *pScene, const RenderSettin
 
     PostProcess(m_pBasePassTexture.get(), m_pSwapchainRenderTargetView, RenderFlags);
     m_pImmediateContext->Flush();
+	Sleep(10);
 }
 
 class PostProcessPass : public D3D11Pass

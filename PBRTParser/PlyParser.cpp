@@ -150,7 +150,7 @@ void PlyParser::ParseBody(SceneParser::Mesh &mesh)
 
             m_fileStream.read(pLineBuffer.get(), readSize);
             ThrowIfTrue(m_fileStream.eof());
-            ThrowIfTrue(m_fileStream.fail(), strerror(errno));
+            ThrowIfTrue(m_fileStream.fail(), "Failed to open a file");
 
             pIterator = pLineBuffer.get();
         }
@@ -188,7 +188,7 @@ void PlyParser::ParseBody(SceneParser::Mesh &mesh)
             UINT facesLeft = m_numFaces - face;
             UINT readSize = std::min(facesLeft * faceSize, faceBufferSize);
             m_fileStream.read(pLineBuffer.get(), readSize);
-            ThrowIfTrue(m_fileStream.fail(), strerror(errno));
+            ThrowIfTrue(m_fileStream.fail(), "Failed to open a files");
 
             pIterator = pLineBuffer.get();
         }

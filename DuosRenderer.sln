@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 14
-VisualStudioVersion = 14.0.24720.0
+# Visual Studio 15
+VisualStudioVersion = 15.0.27703.2026
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "DuosRenderer", "source\ScreenSpaceReflection.vcxproj", "{D29C6982-A589-4081-89B1-91E78D7C41E2}"
 	ProjectSection(ProjectDependencies) = postProject
@@ -17,6 +17,10 @@ EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "GLM", "GLM\GLM.vcxproj", "{9000F15C-F1BF-44A5-B9D9-3771D04E4497}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "D3D12Renderer", "D3D12Renderer\D3D12Renderer.vcxproj", "{2FAFEA51-CF36-4D54-AB03-58521B4A3F5F}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "FallbackLayer", "D3D12RaytracingFallback\src\FallbackLayer.vcxproj", "{4BE280A6-1066-41CA-ACDD-6BB7E532508B}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "D3D12RaytracingSimpleLighting", "D3D12RaytracingSimpleLighting\D3D12RaytracingSimpleLighting.vcxproj", "{A0848C98-F5AA-431C-9E76-7F1E7EFA368C}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -104,8 +108,37 @@ Global
 		{2FAFEA51-CF36-4D54-AB03-58521B4A3F5F}.Release|Win32.Build.0 = Release|Win32
 		{2FAFEA51-CF36-4D54-AB03-58521B4A3F5F}.Release|x64.ActiveCfg = Release|x64
 		{2FAFEA51-CF36-4D54-AB03-58521B4A3F5F}.Release|x64.Build.0 = Release|x64
+		{4BE280A6-1066-41CA-ACDD-6BB7E532508B}.Debug|ARM.ActiveCfg = Debug|x64
+		{4BE280A6-1066-41CA-ACDD-6BB7E532508B}.Debug|Win32.ActiveCfg = Debug|x64
+		{4BE280A6-1066-41CA-ACDD-6BB7E532508B}.Debug|x64.ActiveCfg = Debug|x64
+		{4BE280A6-1066-41CA-ACDD-6BB7E532508B}.Debug|x64.Build.0 = Debug|x64
+		{4BE280A6-1066-41CA-ACDD-6BB7E532508B}.Profile|ARM.ActiveCfg = Profile|x64
+		{4BE280A6-1066-41CA-ACDD-6BB7E532508B}.Profile|Win32.ActiveCfg = Profile|x64
+		{4BE280A6-1066-41CA-ACDD-6BB7E532508B}.Profile|x64.ActiveCfg = Profile|x64
+		{4BE280A6-1066-41CA-ACDD-6BB7E532508B}.Profile|x64.Build.0 = Profile|x64
+		{4BE280A6-1066-41CA-ACDD-6BB7E532508B}.Release|ARM.ActiveCfg = Release|x64
+		{4BE280A6-1066-41CA-ACDD-6BB7E532508B}.Release|Win32.ActiveCfg = Release|x64
+		{4BE280A6-1066-41CA-ACDD-6BB7E532508B}.Release|x64.ActiveCfg = Release|x64
+		{4BE280A6-1066-41CA-ACDD-6BB7E532508B}.Release|x64.Build.0 = Release|x64
+		{A0848C98-F5AA-431C-9E76-7F1E7EFA368C}.Debug|ARM.ActiveCfg = Debug|x64
+		{A0848C98-F5AA-431C-9E76-7F1E7EFA368C}.Debug|Win32.ActiveCfg = Debug|x64
+		{A0848C98-F5AA-431C-9E76-7F1E7EFA368C}.Debug|x64.ActiveCfg = Debug|x64
+		{A0848C98-F5AA-431C-9E76-7F1E7EFA368C}.Debug|x64.Build.0 = Debug|x64
+		{A0848C98-F5AA-431C-9E76-7F1E7EFA368C}.Profile|ARM.ActiveCfg = Release|x64
+		{A0848C98-F5AA-431C-9E76-7F1E7EFA368C}.Profile|ARM.Build.0 = Release|x64
+		{A0848C98-F5AA-431C-9E76-7F1E7EFA368C}.Profile|Win32.ActiveCfg = Release|x64
+		{A0848C98-F5AA-431C-9E76-7F1E7EFA368C}.Profile|Win32.Build.0 = Release|x64
+		{A0848C98-F5AA-431C-9E76-7F1E7EFA368C}.Profile|x64.ActiveCfg = Release|x64
+		{A0848C98-F5AA-431C-9E76-7F1E7EFA368C}.Profile|x64.Build.0 = Release|x64
+		{A0848C98-F5AA-431C-9E76-7F1E7EFA368C}.Release|ARM.ActiveCfg = Release|x64
+		{A0848C98-F5AA-431C-9E76-7F1E7EFA368C}.Release|Win32.ActiveCfg = Release|x64
+		{A0848C98-F5AA-431C-9E76-7F1E7EFA368C}.Release|x64.ActiveCfg = Release|x64
+		{A0848C98-F5AA-431C-9E76-7F1E7EFA368C}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {6C439D6B-CCF7-4175-B7A6-4C409EEFBB1F}
 	EndGlobalSection
 EndGlobal
