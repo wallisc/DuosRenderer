@@ -13,14 +13,15 @@ D3D12DescriptorAllocator::D3D12DescriptorAllocator(ID3D12RaytracingFallbackDevic
 
 	ThrowIfFailed(m_pDevice->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&m_pDescriptorHeap)));
 
-	for (UINT i = 0; i < desc.NumDescriptors; i++)
+	for (UINT i = 0; i < desc.NumDescriptors; i += cMaxDescriptorTableSize)
 	{
 		m_FreeDescriptorSlotList.push_back(i);
 	}
 }
 
-D3D12Descriptor D3D12DescriptorAllocator::AllocateDescriptor()
+D3D12Descriptor D3D12DescriptorAllocator::AllocateDescriptor(UINT NumContiguousDesciptors)
 {
+	assert(NumContiguousDesciptors <= cMaxDescriptorTableSize);
 	auto descriptorIndex = m_FreeDescriptorSlotList.front();
 	m_FreeDescriptorSlotList.pop_front();
 	return D3D12Descriptor(m_pDevice, descriptorIndex, m_pDescriptorHeap);

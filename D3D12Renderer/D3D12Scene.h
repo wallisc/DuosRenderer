@@ -33,6 +33,11 @@ public:
 		return m_TopLevelAccelerationStructurePointer;
 	}
 
+	const D3D12Descriptor &GetEnvironmentMap()
+	{
+		return m_pEnvironmentMap->GetEnvironmentMapSRV();
+	}
+
 private:
 	D3D12BufferDescriptor BuildTopLevelAccelerationStructure(D3D12Context &context);
 

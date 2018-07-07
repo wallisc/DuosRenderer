@@ -78,6 +78,9 @@
     <ClInclude Include="RaytracingShared.h">
       <Filter>Shader Headers</Filter>
     </ClInclude>
+    <ClInclude Include="ShaderUtil.h">
+      <Filter>Shaders</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="stdafx.cpp">

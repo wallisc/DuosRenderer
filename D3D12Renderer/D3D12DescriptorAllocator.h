@@ -7,15 +7,23 @@ public:
 	D3D12Descriptor(ID3D12Device *pDevice, UINT DescriptorIndex, ID3D12DescriptorHeap *pHeap) :
 		m_Index(DescriptorIndex)
 	{
-		auto DescriptorSize = pDevice->GetDescriptorHandleIncrementSize(pHeap->GetDesc().Type);
+		m_DescriptorSize = pDevice->GetDescriptorHandleIncrementSize(pHeap->GetDesc().Type);
 		m_GpuDescriptorHandle = CD3DX12_GPU_DESCRIPTOR_HANDLE(
 			pHeap->GetGPUDescriptorHandleForHeapStart(),
 			m_Index,
-			DescriptorSize);
+			m_DescriptorSize);
 		m_CpuDescriptorHandle = CD3DX12_CPU_DESCRIPTOR_HANDLE(
 			pHeap->GetCPUDescriptorHandleForHeapStart(),
 			m_Index,
-			DescriptorSize);
+			m_DescriptorSize);
+	}
+
+	D3D12Descriptor& operator+=(const int index) {
+
+		m_Index += index;
+		m_GpuDescriptorHandle = m_GpuDescriptorHandle.Offset(index, m_DescriptorSize);
+		m_CpuDescriptorHandle = m_CpuDescriptorHandle.Offset(index, m_DescriptorSize);
+		return *this;
 	}
 
 	UINT Index() { return m_Index; }
@@ -31,8 +39,9 @@ public:
 
 private:
 	UINT m_Index = 0;
-	D3D12_GPU_DESCRIPTOR_HANDLE m_GpuDescriptorHandle = {};
-	D3D12_CPU_DESCRIPTOR_HANDLE m_CpuDescriptorHandle = {};
+	UINT m_DescriptorSize = 0;
+	CD3DX12_GPU_DESCRIPTOR_HANDLE m_GpuDescriptorHandle = {};
+	CD3DX12_CPU_DESCRIPTOR_HANDLE m_CpuDescriptorHandle = {};
 };
 
 static CComPtr<ID3D12Device> GetDevice(ID3D12RaytracingFallbackDevice *pFallbackDevice)
@@ -71,7 +80,7 @@ public:
 
 	D3D12BufferDescriptor AllocateRawUAVBuffer(UINT64 size, ID3D12Resource **ppOutputResource);
 	D3D12BufferDescriptor AllocateAccelerationStructureBuffer(UINT64 size, ID3D12Resource **ppOutputResource);
-	D3D12Descriptor AllocateDescriptor();
+	D3D12Descriptor AllocateDescriptor(UINT NumContiguousDesciptors = 1);
 
 	void DeleteDescriptor(D3D12Descriptor &descriptor);
 
@@ -80,6 +89,7 @@ private:
 	D3D12BufferDescriptor AllocateUAVBufferInternal(UINT64 size, D3D12_RESOURCE_STATES initialState, ID3D12Resource **ppOutputResource);
 
 	const UINT cDescriptorHeapSize = 100000;
+	const UINT cMaxDescriptorTableSize = 4;
 	
 	std::deque<UINT> m_FreeDescriptorSlotList;
 	CComPtr<ID3D12RaytracingFallbackDevice> m_pRaytracingDevice;

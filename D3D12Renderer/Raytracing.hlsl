@@ -1,16 +1,31 @@
 #define HLSL
 #include "RaytracingShared.h"
+#include "ShaderUtil.h"
 
 RaytracingAccelerationStructure Scene : register(t0, space0);
 RWTexture2D<float4> RenderTarget : register(u0);
 
 ConstantBuffer<SceneConstantBuffer> g_sceneCB : register(b0);
+Texture2D<float4> EnvironmentMap : SRV_REGISTER(EnvironmentMapSRVRegister);
+
+SamplerState LinearSampler: SAMPLER_REGISTER(LinearSamplerRegister);
 
 typedef BuiltInTriangleIntersectionAttributes MyAttributes;
 struct RayPayload
 {
 	float4 color;
 };
+
+float4 SampleEnvironmentMap(float3 dir)
+{
+	float2 uv;
+	float p = atan2(dir.z, dir.x);
+	p = p > 0 ? p : p + 2 * 3.14;
+	uv.x = p / (2 * 3.14);
+
+	uv.y = acos(dir.y) / (3.14);
+	return EnvironmentMap.SampleLevel(LinearSampler, uv, 0);
+}
 
 // Generate a ray in world space for a camera pixel corresponding to an index from the dispatched 2D grid.
 inline void GenerateCameraRay(uint2 index, out float3 origin, out float3 direction)
@@ -63,6 +78,5 @@ void MyClosestHitShader(inout RayPayload payload, in MyAttributes attr)
 [shader("miss")]
 void MyMissShader(inout RayPayload payload)
 {
-	float4 background = float4(0.0f, 0.2f, 0.4f, 1.0f);
-	payload.color = background;
+	payload.color = SampleEnvironmentMap(WorldRayDirection());
 }

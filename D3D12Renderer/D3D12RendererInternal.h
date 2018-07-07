@@ -34,6 +34,7 @@ private:
 		GlobalRSAccelerationStructureSlot = 0,
 		GlobalRSOutputUAVSlot,
 		GlobalRSConstantsSlot,
+		GlobalRSEnvironmentMapSlot,
 		GlobalRSNumSlots,
 	};
 

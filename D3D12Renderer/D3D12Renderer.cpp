@@ -93,6 +93,7 @@ void D3D12Renderer::DrawScene(Camera &camera, Scene &scene, const RenderSettings
 
 	pRaytracingCommandList->SetTopLevelAccelerationStructure(GlobalRSAccelerationStructureSlot, pD3D12Scene->GetTopLevelAccelerationStructure());
 	pCommandList->SetComputeRootDescriptorTable(GlobalRSOutputUAVSlot, m_OutputUAVDescriptor);
+	pCommandList->SetComputeRootDescriptorTable(GlobalRSEnvironmentMapSlot, pD3D12Scene->GetEnvironmentMap());
 	pCommandList->SetComputeRoot32BitConstants(GlobalRSConstantsSlot, SizeOfInUint32(sceneConstants), &sceneConstants, 0);
 
 	D3D12_FALLBACK_DISPATCH_RAYS_DESC dispatchRaysDesc = {};
@@ -141,7 +142,7 @@ shared_ptr<Material> D3D12Renderer::CreateMaterial(_In_ CreateMaterialDescriptor
 
 shared_ptr<EnvironmentMap> D3D12Renderer::CreateEnvironmentMap(CreateEnvironmentMapDescriptor &desc)
 {
-	return make_shared<D3D12EnvironmentMap>(m_Context.GetCommandQueue(), desc);
+	return make_shared<D3D12EnvironmentMap>(m_Context, desc);
 }
 
 shared_ptr<Scene> D3D12Renderer::CreateScene(shared_ptr<EnvironmentMap> pEnvironmentMap)
@@ -152,13 +153,19 @@ shared_ptr<Scene> D3D12Renderer::CreateScene(shared_ptr<EnvironmentMap> pEnviron
 void D3D12Renderer::InitializeRootSignature()
 {
 	auto uavRange = CD3DX12_DESCRIPTOR_RANGE1(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0);
+	auto environmentMapRange = CD3DX12_DESCRIPTOR_RANGE1(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, EnvironmentMapSRVRegister);
 
 	CD3DX12_ROOT_PARAMETER1 globalRootParameters[GlobalRSNumSlots];
 	globalRootParameters[GlobalRSAccelerationStructureSlot].InitAsShaderResourceView(0);
 	globalRootParameters[GlobalRSOutputUAVSlot].InitAsDescriptorTable(1, &uavRange);
+	globalRootParameters[GlobalRSEnvironmentMapSlot].InitAsDescriptorTable(1, &environmentMapRange);
 	globalRootParameters[GlobalRSConstantsSlot].InitAsConstants(20, 0);
 
-	auto globalRSDesc = CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC(ARRAYSIZE(globalRootParameters), globalRootParameters);
+	auto staticSampler = CD3DX12_STATIC_SAMPLER_DESC(LinearSamplerRegister, D3D12_FILTER_MIN_POINT_MAG_MIP_LINEAR);
+
+	auto globalRSDesc = CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC(
+		ARRAYSIZE(globalRootParameters), globalRootParameters,
+		1, &staticSampler);
 	
 	auto &device = m_Context.GetRaytracingDevice();
 	CComPtr<ID3DBlob> pSerializedBlob;

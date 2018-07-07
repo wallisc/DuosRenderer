@@ -83,7 +83,4 @@
       <Filter>Assets\Shaders</Filter>
     </CustomBuild>
   </ItemGroup>
-  <ItemGroup>
-    <None Include="readme.md" />
-  </ItemGroup>
 </Project>

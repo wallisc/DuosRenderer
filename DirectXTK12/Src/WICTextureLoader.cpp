@@ -795,7 +795,7 @@ HRESULT DirectX::CreateWICTextureFromFileEx(
         resourceUpload.Transition(
             *texture,
             D3D12_RESOURCE_STATE_COPY_DEST,
-            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+            D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
         // Generate mips?
         if (loadFlags & WIC_LOADER_MIP_AUTOGEN)

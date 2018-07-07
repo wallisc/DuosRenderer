@@ -1,4 +1,7 @@
 #pragma once
+#define EnvironmentMapSRVRegister 1
+#define LinearSamplerRegister 0
+
 #ifndef HLSL
 struct float4
 {

@@ -206,9 +206,6 @@ PrebuildCheck.bat</Command>
     </CustomBuild>
   </ItemGroup>
   <ItemGroup>
-    <None Include="readme.md" />
-  </ItemGroup>
-  <ItemGroup>
     <ProjectReference Include="..\D3D12Renderer\D3D12Renderer.vcxproj">
       <Project>{2fafea51-cf36-4d54-ab03-58521b4a3f5f}</Project>
     </ProjectReference>

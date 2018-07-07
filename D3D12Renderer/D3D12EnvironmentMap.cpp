@@ -3,12 +3,10 @@
 #include "WicTextureLoader.h"
 #include "ResourceUploadBatch.h"
 
-D3D12EnvironmentMap::D3D12EnvironmentMap(ID3D12CommandQueue &queue, CreateEnvironmentMapDescriptor &desc)
+D3D12EnvironmentMap::D3D12EnvironmentMap(D3D12Context &context, CreateEnvironmentMapDescriptor &desc)
 {
 	assert(desc.m_EnvironmentType == CreateEnvironmentMapDescriptor::TEXTURE_PANORAMA); // Only supporting pano's right now
-	CComPtr<ID3D12Device> pDevice;
-	ThrowIfFailed(queue.GetDevice(IID_PPV_ARGS(&pDevice)));
-	m_pDevice = pDevice.p;
+	m_pDevice = &context.GetDevice();
 
 	DirectX::ResourceUploadBatch uploadBatch(m_pDevice);
 	uploadBatch.Begin();
@@ -17,5 +15,14 @@ D3D12EnvironmentMap::D3D12EnvironmentMap(ID3D12CommandQueue &queue, CreateEnviro
 	std::wstring wideString = std::wstring(asciiStr.begin(), asciiStr.end());
 	ThrowIfFailed(DirectX::CreateWICTextureFromFile(m_pDevice, uploadBatch, wideString.c_str(), &m_pPanoramaTexture));
 
-	uploadBatch.End(&queue);
+	uploadBatch.End(&context.GetCommandQueue());
+
+	auto &panoramaDesc = m_pPanoramaTexture->GetDesc();
+	m_EnviromentMapDescriptor = context.GetDescriptorAllocator().AllocateDescriptor();
+	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+	srvDesc.Format = panoramaDesc.Format;
+	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+	srvDesc.Texture2D.MipLevels = 1;
+	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+	m_pDevice->CreateShaderResourceView(m_pPanoramaTexture, &srvDesc, m_EnviromentMapDescriptor);
 }
