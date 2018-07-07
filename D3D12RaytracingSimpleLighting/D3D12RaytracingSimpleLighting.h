@@ -145,7 +145,6 @@ private:
     void UpdateCameraMatrices();
     void InitializeScene();
     void RecreateD3D();
-    void DoRaytracing();
     void CreateConstantBuffers();
     void CreateDeviceDependentResources();
     void CreateWindowSizeDependentResources();
@@ -155,17 +154,9 @@ private:
     void SerializeAndCreateRaytracingRootSignature(D3D12_ROOT_SIGNATURE_DESC& desc, ComPtr<ID3D12RootSignature>* rootSig);
     void CreateRootSignatures();
     void CreateLocalRootSignatureSubobjects(CD3D12_STATE_OBJECT_DESC* raytracingPipeline);
-    void CreateRaytracingPipelineStateObject();
-    void CreateDescriptorHeap();
-    void CreateRaytracingOutputResource();
-    void BuildGeometry();
     void BuildAccelerationStructures();
-    void BuildShaderTables();
-    void SelectRaytracingAPI(RaytracingAPI type);
     void UpdateForSizeChange(UINT clientWidth, UINT clientHeight);
-    void CopyRaytracingOutputToBackbuffer();
     void CalculateFrameStats();
     UINT AllocateDescriptor(D3D12_CPU_DESCRIPTOR_HANDLE* cpuDescriptor, UINT descriptorIndexToUse = UINT_MAX);
     UINT CreateBufferSRV(D3DBuffer* buffer, UINT numElements, UINT elementSize);
-    WRAPPED_GPU_POINTER CreateFallbackWrappedPointer(ID3D12Resource* resource, UINT bufferNumElements);
 };

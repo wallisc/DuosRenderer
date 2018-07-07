@@ -1,35 +1,49 @@
 #pragma once
-#include "Renderer.h"
-#include <cassert> // TODO remove when everything is implemented
-#include <atlbase.h>
 
 class D3D12Renderer : public Renderer
 {
 public:
-    D3D12Renderer(ID3D12Device *pDevice);
+    D3D12Renderer(ID3D12CommandQueue *pCommandQueue);
 
-    virtual void SetCanvas(Canvas *pCanvas);
+	virtual void SetCanvas(std::shared_ptr<Canvas> pCanvas);
 
-    virtual void DrawScene(Camera *pCamera, Scene *pScene, const RenderSettings &RenderFlags){ assert(false); }
-    virtual Geometry *GetGeometryAtPixel(Camera *pCamera, Scene *pScene, Vec2 PixelCoord){ assert(false); }
+	virtual void DrawScene(Camera &camera, Scene &scene, const RenderSettings &RenderFlags);
 
-    virtual Geometry *CreateGeometry(_In_ CreateGeometryDescriptor *pCreateGeometryDescriptor){ assert(false); }
-    virtual void DestroyGeometry(_In_ Geometry *pGeometry){ assert(false); }
+	virtual std::shared_ptr<Geometry> CreateGeometry(_In_ CreateGeometryDescriptor &desc);
 
-    virtual Light *CreateLight(_In_ CreateLightDescriptor *pCreateLightDescriptor){ assert(false); }
-    virtual void DestroyLight(Light *pLight){ assert(false); }
+	virtual std::shared_ptr<Light> CreateLight(_In_ CreateLightDescriptor &desc);
 
-    virtual Camera *CreateCamera(_In_ CreateCameraDescriptor *pCreateCameraDescriptor){ assert(false); }
-    virtual void DestroyCamera(Camera *pCamera){ assert(false); }
+	virtual std::shared_ptr<Camera> CreateCamera(_In_ CreateCameraDescriptor &desc);
 
-    virtual Material *CreateMaterial(_In_ CreateMaterialDescriptor *pCreateMaterialDescriptor){ assert(false); }
-    virtual void DestroyMaterial(Material* pMaterial){ assert(false); }
+	virtual std::shared_ptr<Material> CreateMaterial(_In_ CreateMaterialDescriptor &desc);
 
-    virtual EnvironmentMap *CreateEnvironmentMap(CreateEnvironmentMapDescriptor *pCreateEnvironmnetMapDescriptor){ assert(false); }
-    virtual void DestroyEnviromentMap(EnvironmentMap *pEnvironmentMap){ assert(false); }
+	virtual  std::shared_ptr<EnvironmentMap> CreateEnvironmentMap(CreateEnvironmentMapDescriptor &desc);
 
-    virtual Scene *CreateScene(EnvironmentMap *pEnvironmentMap){ assert(false); }
-    virtual void DestroyScene(Scene *pScene){ assert(false); }
+	virtual std::shared_ptr<Scene> CreateScene(std::shared_ptr<EnvironmentMap> pEnvironmentMap);
+
 private:
-    CComPtr<ID3D12Device> m_pDevice;
+	void InitializeStateObject();
+	void InitializeRootSignature();
+
+	std::shared_ptr<D3D12Canvas> m_pCanvas = nullptr;
+
+	CComPtr<ID3D12RaytracingFallbackStateObject> m_pStateObject;
+
+	enum
+	{
+		GlobalRSAccelerationStructureSlot = 0,
+		GlobalRSOutputUAVSlot,
+		GlobalRSConstantsSlot,
+		GlobalRSNumSlots,
+	};
+
+	CComPtr<ID3D12RootSignature> m_pGlobalRootSignature;
+
+	CComPtr<ID3D12Resource> m_pOutputUAV;
+	CComPtr<ID3D12Resource> m_pHitGroupShaderTable;
+	CComPtr<ID3D12Resource> m_pMissShaderTable;
+	CComPtr<ID3D12Resource> m_pRaygenShaderTable;
+	D3D12Descriptor m_OutputUAVDescriptor;
+
+ 	D3D12Context m_Context;
 };

@@ -102,7 +102,7 @@ namespace SceneParser
     struct Mesh
     {
         Material *m_pMaterial;
-        std::vector<int> m_IndexBuffer;
+        std::vector<unsigned int> m_IndexBuffer;
         std::vector<Vertex> m_VertexBuffer;
 
         bool m_AreTangentsValid;

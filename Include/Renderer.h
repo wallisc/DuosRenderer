@@ -1,4 +1,5 @@
 #pragma once
+#include <memory>
 #include <vector>
 
 #define MAX_ALLOWED_STR_LENGTH 256
@@ -53,7 +54,7 @@ struct CreateGeometryDescriptor
     unsigned int m_NumIndices;
     unsigned int *m_pIndices;
 
-    Material *m_pMaterial;
+    std::shared_ptr<Material> m_pMaterial;
 };
 
 struct CreateMaterialDescriptor
@@ -147,6 +148,8 @@ public:
 
 class Light
 {
+public:
+	virtual ~Light() {};
 };
 
 class Transform
@@ -156,6 +159,7 @@ class Transform
 class Material
 {
 public:
+	virtual ~Material() {};
     virtual float GetRoughness() const = 0;
     virtual float GetReflectivity() const = 0;
 
@@ -166,29 +170,35 @@ public:
 class Transformable
 {
 public:
+	virtual ~Transformable() {};
     virtual void Translate(_In_ const Vec3 &translationVector) = 0;
     virtual void Rotate(float row, float yaw, float pitch) = 0;
 };
 
 class Camera : public Transformable
 {
+public:
+	virtual ~Camera() {};
 };
 
 class Geometry : public Transformable
 {
 public:
-    virtual Material *GetMaterial() const = 0;
+	virtual ~Geometry() {};
+    virtual Material &GetMaterial() const = 0;
 };
 
 class EnvironmentMap
 {
+public:
+	virtual ~EnvironmentMap() {};
 };
 
 class Scene
 {
 public:
-    virtual void AddGeometry(_In_ Geometry *pGeometry) = 0;
-    virtual void AddLight(_In_ Light *pLight) = 0;
+    virtual void AddGeometry(_In_ std::shared_ptr<Geometry> pGeometry) = 0;
+    virtual void AddLight(_In_ std::shared_ptr<Light> pLight) = 0;
 };
 
 struct RenderSettings
@@ -206,26 +216,19 @@ class Renderer
 public:
     virtual void SetCanvas(Canvas *pCanvas) = 0;
 
-    virtual void DrawScene(Camera *pCamera, Scene *pScene, const RenderSettings &RenderFlags) = 0;
-    virtual Geometry *GetGeometryAtPixel(Camera *pCamera, Scene *pScene, Vec2 PixelCoord) = 0;
+    virtual void DrawScene(Camera &camera, Scene &scene, const RenderSettings &RenderFlags) = 0;
 
-    virtual Geometry *CreateGeometry(_In_ CreateGeometryDescriptor *pCreateGeometryDescriptor) = 0;
-    virtual void DestroyGeometry(_In_ Geometry *pGeometry) = 0;
+    virtual std::shared_ptr<Geometry> CreateGeometry(_In_ CreateGeometryDescriptor &desc) = 0;
 
-    virtual Light *CreateLight(_In_ CreateLightDescriptor *pCreateLightDescriptor) = 0;
-    virtual void DestroyLight(Light *pLight) = 0;
+    virtual std::shared_ptr<Light> CreateLight(_In_ CreateLightDescriptor &desc) = 0;
 
-    virtual Camera *CreateCamera(_In_ CreateCameraDescriptor *pCreateCameraDescriptor) = 0;
-    virtual void DestroyCamera(Camera *pCamera) = 0;
+    virtual std::shared_ptr<Camera> CreateCamera(_In_ CreateCameraDescriptor &desc) = 0;
 
-    virtual Material *CreateMaterial(_In_ CreateMaterialDescriptor *pCreateMaterialDescriptor) = 0;
-    virtual void DestroyMaterial(Material* pMaterial) = 0;
+    virtual std::shared_ptr<Material> CreateMaterial(_In_ CreateMaterialDescriptor &desc) = 0;
 
-    virtual EnvironmentMap *CreateEnvironmentMap(CreateEnvironmentMapDescriptor *pCreateEnvironmnetMapDescriptor) = 0;
-    virtual void DestroyEnviromentMap(EnvironmentMap *pEnvironmentMap) = 0;
+    virtual  std::shared_ptr<EnvironmentMap> CreateEnvironmentMap(CreateEnvironmentMapDescriptor &desc) = 0;
 
-    virtual Scene *CreateScene(EnvironmentMap *pEnvironmentMap) = 0;
-    virtual void DestroyScene(Scene *pScene) = 0;
+    virtual std::shared_ptr<Scene> CreateScene(std::shared_ptr<EnvironmentMap> pEnvironmentMap) = 0;
 };
 
 

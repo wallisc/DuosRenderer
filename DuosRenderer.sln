@@ -17,10 +17,15 @@ EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "GLM", "GLM\GLM.vcxproj", "{9000F15C-F1BF-44A5-B9D9-3771D04E4497}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "D3D12Renderer", "D3D12Renderer\D3D12Renderer.vcxproj", "{2FAFEA51-CF36-4D54-AB03-58521B4A3F5F}"
+	ProjectSection(ProjectDependencies) = postProject
+		{945B8F0E-AE5F-447C-933A-9D069532D3E4} = {945B8F0E-AE5F-447C-933A-9D069532D3E4}
+	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "FallbackLayer", "D3D12RaytracingFallback\src\FallbackLayer.vcxproj", "{4BE280A6-1066-41CA-ACDD-6BB7E532508B}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "D3D12RaytracingSimpleLighting", "D3D12RaytracingSimpleLighting\D3D12RaytracingSimpleLighting.vcxproj", "{A0848C98-F5AA-431C-9E76-7F1E7EFA368C}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "DirectXTK12", "DirectXTK12\DirectXTK_Windows10.vcxproj", "{945B8F0E-AE5F-447C-933A-9D069532D3E4}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -134,6 +139,24 @@ Global
 		{A0848C98-F5AA-431C-9E76-7F1E7EFA368C}.Release|Win32.ActiveCfg = Release|x64
 		{A0848C98-F5AA-431C-9E76-7F1E7EFA368C}.Release|x64.ActiveCfg = Release|x64
 		{A0848C98-F5AA-431C-9E76-7F1E7EFA368C}.Release|x64.Build.0 = Release|x64
+		{945B8F0E-AE5F-447C-933A-9D069532D3E4}.Debug|ARM.ActiveCfg = Debug|ARM
+		{945B8F0E-AE5F-447C-933A-9D069532D3E4}.Debug|ARM.Build.0 = Debug|ARM
+		{945B8F0E-AE5F-447C-933A-9D069532D3E4}.Debug|Win32.ActiveCfg = Debug|Win32
+		{945B8F0E-AE5F-447C-933A-9D069532D3E4}.Debug|Win32.Build.0 = Debug|Win32
+		{945B8F0E-AE5F-447C-933A-9D069532D3E4}.Debug|x64.ActiveCfg = Debug|x64
+		{945B8F0E-AE5F-447C-933A-9D069532D3E4}.Debug|x64.Build.0 = Debug|x64
+		{945B8F0E-AE5F-447C-933A-9D069532D3E4}.Profile|ARM.ActiveCfg = Release|ARM
+		{945B8F0E-AE5F-447C-933A-9D069532D3E4}.Profile|ARM.Build.0 = Release|ARM
+		{945B8F0E-AE5F-447C-933A-9D069532D3E4}.Profile|Win32.ActiveCfg = Release|Win32
+		{945B8F0E-AE5F-447C-933A-9D069532D3E4}.Profile|Win32.Build.0 = Release|Win32
+		{945B8F0E-AE5F-447C-933A-9D069532D3E4}.Profile|x64.ActiveCfg = Release|x64
+		{945B8F0E-AE5F-447C-933A-9D069532D3E4}.Profile|x64.Build.0 = Release|x64
+		{945B8F0E-AE5F-447C-933A-9D069532D3E4}.Release|ARM.ActiveCfg = Release|ARM
+		{945B8F0E-AE5F-447C-933A-9D069532D3E4}.Release|ARM.Build.0 = Release|ARM
+		{945B8F0E-AE5F-447C-933A-9D069532D3E4}.Release|Win32.ActiveCfg = Release|Win32
+		{945B8F0E-AE5F-447C-933A-9D069532D3E4}.Release|Win32.Build.0 = Release|Win32
+		{945B8F0E-AE5F-447C-933A-9D069532D3E4}.Release|x64.ActiveCfg = Release|x64
+		{945B8F0E-AE5F-447C-933A-9D069532D3E4}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

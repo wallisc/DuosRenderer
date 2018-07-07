@@ -488,18 +488,11 @@ void DeviceResources::HandleDeviceLost()
 }
 
 // Prepare the command list and render target for rendering.
-void DeviceResources::Prepare(D3D12_RESOURCE_STATES beforeState)
+void DeviceResources::Prepare()
 {
     // Reset command list and allocator.
     ThrowIfFailed(m_commandAllocators[m_backBufferIndex]->Reset());
     ThrowIfFailed(m_commandList->Reset(m_commandAllocators[m_backBufferIndex].Get(), nullptr));
-
-    if (beforeState != D3D12_RESOURCE_STATE_RENDER_TARGET)
-    {
-        // Transition the render target into the correct state to allow for drawing into it.
-        D3D12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(m_renderTargets[m_backBufferIndex].Get(), beforeState, D3D12_RESOURCE_STATE_RENDER_TARGET);
-        m_commandList->ResourceBarrier(1, &barrier);
-    }
 }
 
 // Present the contents of the swap chain to the screen.
