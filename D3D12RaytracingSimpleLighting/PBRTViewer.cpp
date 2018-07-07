@@ -10,7 +10,7 @@
 //*********************************************************
 
 #include "stdafx.h"
-#include "D3D12RaytracingSimpleLighting.h"
+#include "PBRTViewer.h"
 #include "DirectXRaytracingHelper.h"
 #include "CompiledShaders\Raytracing.hlsl.h"
 
@@ -28,12 +28,12 @@ shared_ptr<DuosRenderer::Renderer> g_pRenderer;
 shared_ptr<DuosRenderer::Camera> g_pCamera;
 shared_ptr<DuosRenderer::Scene> g_pScene;
 
-const wchar_t* D3D12RaytracingSimpleLighting::c_hitGroupName = L"MyHitGroup";
-const wchar_t* D3D12RaytracingSimpleLighting::c_raygenShaderName = L"MyRaygenShader";
-const wchar_t* D3D12RaytracingSimpleLighting::c_closestHitShaderName = L"MyClosestHitShader";
-const wchar_t* D3D12RaytracingSimpleLighting::c_missShaderName = L"MyMissShader";
+const wchar_t* PBRTViewer::c_hitGroupName = L"MyHitGroup";
+const wchar_t* PBRTViewer::c_raygenShaderName = L"MyRaygenShader";
+const wchar_t* PBRTViewer::c_closestHitShaderName = L"MyClosestHitShader";
+const wchar_t* PBRTViewer::c_missShaderName = L"MyMissShader";
 
-D3D12RaytracingSimpleLighting::D3D12RaytracingSimpleLighting(UINT width, UINT height, std::wstring name) :
+PBRTViewer::PBRTViewer(UINT width, UINT height, std::wstring name) :
     DXSample(width, height, name),
     m_raytracingOutputResourceUAVDescriptorHeapIndex(UINT_MAX),
     m_curRotationAngleRad(0.0f),
@@ -43,7 +43,7 @@ D3D12RaytracingSimpleLighting::D3D12RaytracingSimpleLighting(UINT width, UINT he
     UpdateForSizeChange(width, height);
 }
 
-void D3D12RaytracingSimpleLighting::EnableDXRExperimentalFeatures(IDXGIAdapter1* adapter)
+void PBRTViewer::EnableDXRExperimentalFeatures(IDXGIAdapter1* adapter)
 {
     // DXR is an experimental feature and needs to be enabled before creating a D3D12 device.
     m_isDxrSupported = EnableRaytracing(adapter);
@@ -63,7 +63,7 @@ void D3D12RaytracingSimpleLighting::EnableDXRExperimentalFeatures(IDXGIAdapter1*
     }
 }
 
-void D3D12RaytracingSimpleLighting::OnInit()
+void PBRTViewer::OnInit()
 {
     m_deviceResources = std::make_unique<DeviceResources>(
         DXGI_FORMAT_R8G8B8A8_UNORM,
@@ -92,7 +92,7 @@ void D3D12RaytracingSimpleLighting::OnInit()
 }
 
 // Update camera matrices passed into the shader.
-void D3D12RaytracingSimpleLighting::UpdateCameraMatrices()
+void PBRTViewer::UpdateCameraMatrices()
 {
     auto frameIndex = m_deviceResources->GetCurrentFrameIndex();
 
@@ -108,7 +108,7 @@ void D3D12RaytracingSimpleLighting::UpdateCameraMatrices()
 }
 
 // Initialize scene rendering parameters.
-void D3D12RaytracingSimpleLighting::InitializeScene()
+void PBRTViewer::InitializeScene()
 {
     auto frameIndex = m_deviceResources->GetCurrentFrameIndex();
 
@@ -154,7 +154,7 @@ void D3D12RaytracingSimpleLighting::InitializeScene()
 }
 
 // Create constant buffers.
-void D3D12RaytracingSimpleLighting::CreateConstantBuffers()
+void PBRTViewer::CreateConstantBuffers()
 {
     auto device = m_deviceResources->GetD3DDevice();
     auto frameCount = m_deviceResources->GetBackBufferCount();
@@ -181,7 +181,7 @@ void D3D12RaytracingSimpleLighting::CreateConstantBuffers()
 }
 
 // Create resources that depend on the device.
-void D3D12RaytracingSimpleLighting::CreateDeviceDependentResources()
+void PBRTViewer::CreateDeviceDependentResources()
 {
     // Initialize raytracing pipeline.
 
@@ -198,7 +198,7 @@ void D3D12RaytracingSimpleLighting::CreateDeviceDependentResources()
     CreateConstantBuffers();
 }
 
-void D3D12RaytracingSimpleLighting::SerializeAndCreateRaytracingRootSignature(D3D12_ROOT_SIGNATURE_DESC& desc, ComPtr<ID3D12RootSignature>* rootSig)
+void PBRTViewer::SerializeAndCreateRaytracingRootSignature(D3D12_ROOT_SIGNATURE_DESC& desc, ComPtr<ID3D12RootSignature>* rootSig)
 {
     auto device = m_deviceResources->GetD3DDevice();
     ComPtr<ID3DBlob> blob;
@@ -216,7 +216,7 @@ void D3D12RaytracingSimpleLighting::SerializeAndCreateRaytracingRootSignature(D3
     }
 }
 
-void D3D12RaytracingSimpleLighting::CreateRootSignatures()
+void PBRTViewer::CreateRootSignatures()
 {
     auto device = m_deviceResources->GetD3DDevice();
 
@@ -256,7 +256,7 @@ void D3D12RaytracingSimpleLighting::CreateRootSignatures()
 }
 
 // Create raytracing device and command list.
-void D3D12RaytracingSimpleLighting::CreateRaytracingInterfaces()
+void PBRTViewer::CreateRaytracingInterfaces()
 {
     auto device = m_deviceResources->GetD3DDevice();
     auto commandList = m_deviceResources->GetCommandList();
@@ -278,7 +278,7 @@ void D3D12RaytracingSimpleLighting::CreateRaytracingInterfaces()
 
 // Local root signature and shader association
 // This is a root signature that enables a shader to have unique arguments that come from shader tables.
-void D3D12RaytracingSimpleLighting::CreateLocalRootSignatureSubobjects(CD3D12_STATE_OBJECT_DESC* raytracingPipeline)
+void PBRTViewer::CreateLocalRootSignatureSubobjects(CD3D12_STATE_OBJECT_DESC* raytracingPipeline)
 {
     // Local root signature to be used in a hit group.
     auto localRootSignature = raytracingPipeline->CreateSubobject<CD3D12_LOCAL_ROOT_SIGNATURE_SUBOBJECT>();
@@ -308,7 +308,7 @@ void D3D12RaytracingSimpleLighting::CreateLocalRootSignatureSubobjects(CD3D12_ST
 
 
 // Build acceleration structures needed for raytracing.
-void D3D12RaytracingSimpleLighting::BuildAccelerationStructures()
+void PBRTViewer::BuildAccelerationStructures()
 {
     auto device = m_deviceResources->GetD3DDevice();
     auto commandList = m_deviceResources->GetCommandList();
@@ -374,12 +374,12 @@ void D3D12RaytracingSimpleLighting::BuildAccelerationStructures()
     m_deviceResources->WaitForGpu();
 }
 
-void D3D12RaytracingSimpleLighting::OnKeyDown(UINT8 key)
+void PBRTViewer::OnKeyDown(UINT8 key)
 {
 }
 
 // Update frame-based values.
-void D3D12RaytracingSimpleLighting::OnUpdate()
+void PBRTViewer::OnUpdate()
 {
     m_timer.Tick();
     CalculateFrameStats();
@@ -399,7 +399,7 @@ void D3D12RaytracingSimpleLighting::OnUpdate()
 
 
 // Parse supplied command line args.
-void D3D12RaytracingSimpleLighting::ParseCommandLineArgs(WCHAR* argv[], int argc)
+void PBRTViewer::ParseCommandLineArgs(WCHAR* argv[], int argc)
 {
     DXSample::ParseCommandLineArgs(argv, argc);
 
@@ -418,25 +418,25 @@ void D3D12RaytracingSimpleLighting::ParseCommandLineArgs(WCHAR* argv[], int argc
 }
 
 // Update the application state with the new resolution.
-void D3D12RaytracingSimpleLighting::UpdateForSizeChange(UINT width, UINT height)
+void PBRTViewer::UpdateForSizeChange(UINT width, UINT height)
 {
     DXSample::UpdateForSizeChange(width, height);
 }
 
 // Create resources that are dependent on the size of the main window.
-void D3D12RaytracingSimpleLighting::CreateWindowSizeDependentResources()
+void PBRTViewer::CreateWindowSizeDependentResources()
 {
     UpdateCameraMatrices();
 }
 
 // Release resources that are dependent on the size of the main window.
-void D3D12RaytracingSimpleLighting::ReleaseWindowSizeDependentResources()
+void PBRTViewer::ReleaseWindowSizeDependentResources()
 {
     m_raytracingOutput.Reset();
 }
 
 // Release all resources that depend on the device.
-void D3D12RaytracingSimpleLighting::ReleaseDeviceDependentResources()
+void PBRTViewer::ReleaseDeviceDependentResources()
 {
     m_fallbackDevice.Reset();
     m_fallbackCommandList.Reset();
@@ -466,7 +466,7 @@ void D3D12RaytracingSimpleLighting::ReleaseDeviceDependentResources()
 
 }
 
-void D3D12RaytracingSimpleLighting::RecreateD3D()
+void PBRTViewer::RecreateD3D()
 {
     // Give GPU a chance to finish its execution in progress.
     try
@@ -481,7 +481,7 @@ void D3D12RaytracingSimpleLighting::RecreateD3D()
 }
 
 // Render the scene.
-void D3D12RaytracingSimpleLighting::OnRender()
+void PBRTViewer::OnRender()
 {
     if (!m_deviceResources->IsWindowVisible())
     {
@@ -499,7 +499,7 @@ void D3D12RaytracingSimpleLighting::OnRender()
     m_deviceResources->Present(D3D12_RESOURCE_STATE_PRESENT);
 }
 
-void D3D12RaytracingSimpleLighting::OnDestroy()
+void PBRTViewer::OnDestroy()
 {
     // Let GPU finish before releasing D3D resources.
     m_deviceResources->WaitForGpu();
@@ -507,21 +507,21 @@ void D3D12RaytracingSimpleLighting::OnDestroy()
 }
 
 // Release all device dependent resouces when a device is lost.
-void D3D12RaytracingSimpleLighting::OnDeviceLost()
+void PBRTViewer::OnDeviceLost()
 {
     ReleaseWindowSizeDependentResources();
     ReleaseDeviceDependentResources();
 }
 
 // Create all device dependent resources when a device is restored.
-void D3D12RaytracingSimpleLighting::OnDeviceRestored()
+void PBRTViewer::OnDeviceRestored()
 {
     CreateDeviceDependentResources();
     CreateWindowSizeDependentResources();
 }
 
 // Compute the average frames per second and million rays per second.
-void D3D12RaytracingSimpleLighting::CalculateFrameStats()
+void PBRTViewer::CalculateFrameStats()
 {
     static int frameCnt = 0;
     static double elapsedTime = 0.0f;
@@ -564,7 +564,7 @@ void D3D12RaytracingSimpleLighting::CalculateFrameStats()
 }
 
 // Handle OnSizeChanged message event.
-void D3D12RaytracingSimpleLighting::OnSizeChanged(UINT width, UINT height, bool minimized)
+void PBRTViewer::OnSizeChanged(UINT width, UINT height, bool minimized)
 {
     if (!m_deviceResources->WindowSizeChanged(width, height, minimized))
     {
@@ -579,7 +579,7 @@ void D3D12RaytracingSimpleLighting::OnSizeChanged(UINT width, UINT height, bool 
 
 // Allocate a descriptor and return its index. 
 // If the passed descriptorIndexToUse is valid, it will be used instead of allocating a new one.
-UINT D3D12RaytracingSimpleLighting::AllocateDescriptor(D3D12_CPU_DESCRIPTOR_HANDLE* cpuDescriptor, UINT descriptorIndexToUse)
+UINT PBRTViewer::AllocateDescriptor(D3D12_CPU_DESCRIPTOR_HANDLE* cpuDescriptor, UINT descriptorIndexToUse)
 {
     auto descriptorHeapCpuBase = m_descriptorHeap->GetCPUDescriptorHandleForHeapStart();
     if (descriptorIndexToUse >= m_descriptorHeap->GetDesc().NumDescriptors)
@@ -591,7 +591,7 @@ UINT D3D12RaytracingSimpleLighting::AllocateDescriptor(D3D12_CPU_DESCRIPTOR_HAND
 }
 
 // Create SRV for a buffer.
-UINT D3D12RaytracingSimpleLighting::CreateBufferSRV(D3DBuffer* buffer, UINT numElements, UINT elementSize)
+UINT PBRTViewer::CreateBufferSRV(D3DBuffer* buffer, UINT numElements, UINT elementSize)
 {
     auto device = m_deviceResources->GetD3DDevice();
 

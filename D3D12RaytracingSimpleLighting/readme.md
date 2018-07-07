@@ -19,7 +19,7 @@ Triangle normals are accessed from index and vertex buffers that are explicitly 
 ## Usage
 The sample starts with Fallback Layer implementation being used by default. The Fallback Layer will use raytracing driver if available, otherwise it will default to the compute fallback. This default behavior can be overriden via UI controls or input arguments.
 
-D3D12RaytracingSimpleLighting.exe [ -FL | -DXR ]
+PBRTViewer.exe [ -FL | -DXR ]
 * [-FL] - select Fallback Layer API with forced compute fallback path.
 * [-DXR] - select DirectX Raytracing API.
 
