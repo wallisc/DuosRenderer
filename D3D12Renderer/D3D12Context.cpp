@@ -53,10 +53,10 @@ D3D12Context::RaytracingCommandListAllocatorPair D3D12Context::CreateRaytracingC
 	raytracingPair.m_pAllocator = commandListAllocatorPair.m_pAllocator;
 	return raytracingPair;
 }
+
 void D3D12Context::ExecuteCommandList(ID3D12GraphicsCommandList *pCommandList)
 {
 	ID3D12CommandList *CommandLists[] = { pCommandList };
 	m_pQueue->ExecuteCommandLists(ARRAYSIZE(CommandLists), CommandLists);
 	m_pQueue->Signal(m_pFence, ++m_lastFenceValue);
 }
-

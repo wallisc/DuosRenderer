@@ -21,6 +21,8 @@ public:
 
 	virtual std::shared_ptr<Scene> CreateScene(std::shared_ptr<EnvironmentMap> pEnvironmentMap);
 
+	D3D12Context &GetContext() { return m_Context; }
+	ID3D12RaytracingFallbackStateObject &GetStateObject() { return *m_pStateObject; }
 private:
 	void InitializeStateObject();
 	void InitializeRootSignature();
@@ -62,3 +64,5 @@ private:
 
  	D3D12Context m_Context;
 };
+
+static const auto HitGroupExportName = L"MyHitGroup";

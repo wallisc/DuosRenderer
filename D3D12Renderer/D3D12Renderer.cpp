@@ -1,5 +1,5 @@
 #include "stdafx.h"
-#include "D3D12RaytracingPrototypeHelpers.hpp"
+#include "D3D12RaytracingHelpers.hpp"
 #include "CompiledShaders\Raytracing.h"
 
 using namespace std;
@@ -96,17 +96,18 @@ void D3D12Renderer::DrawScene(Camera &camera, Scene &scene, const RenderSettings
 	pCommandList->SetComputeRootDescriptorTable(GlobalRSEnvironmentMapSlot, pD3D12Scene->GetEnvironmentMap());
 	pCommandList->SetComputeRoot32BitConstants(GlobalRSConstantsSlot, SizeOfInUint32(sceneConstants), &sceneConstants, 0);
 
-	D3D12_FALLBACK_DISPATCH_RAYS_DESC dispatchRaysDesc = {};
-	dispatchRaysDesc.HitGroupTable.StartAddress = m_pHitGroupShaderTable->GetGPUVirtualAddress();
-	dispatchRaysDesc.HitGroupTable.SizeInBytes = dispatchRaysDesc.HitGroupTable.StrideInBytes = m_pHitGroupShaderTable->GetDesc().Width;
+	D3D12_DISPATCH_RAYS_DESC dispatchRaysDesc = {};
+	dispatchRaysDesc.HitGroupTable = pD3D12Scene->GetHitGroupTable();
 	dispatchRaysDesc.MissShaderTable.StartAddress = m_pMissShaderTable->GetGPUVirtualAddress();
-	dispatchRaysDesc.MissShaderTable.SizeInBytes = dispatchRaysDesc.HitGroupTable.StrideInBytes = m_pMissShaderTable->GetDesc().Width;
+	dispatchRaysDesc.MissShaderTable.SizeInBytes = m_pMissShaderTable->GetDesc().Width;
 	dispatchRaysDesc.RayGenerationShaderRecord.StartAddress = m_pRaygenShaderTable->GetGPUVirtualAddress();
 	dispatchRaysDesc.RayGenerationShaderRecord.SizeInBytes = m_pRaygenShaderTable->GetDesc().Width;
 	
 	dispatchRaysDesc.Height = outputResourceDesc.Height;
-	dispatchRaysDesc.Width = outputResourceDesc.Width;
-	pRaytracingCommandList->DispatchRays(m_pStateObject, &dispatchRaysDesc);
+	dispatchRaysDesc.Width = static_cast<UINT>(outputResourceDesc.Width);
+	dispatchRaysDesc.Depth = 1;
+	pRaytracingCommandList->SetPipelineState1(m_pStateObject);
+	pRaytracingCommandList->DispatchRays(&dispatchRaysDesc);
 
 	{
 		pCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::UAV(m_pOutputUAV));
@@ -147,7 +148,7 @@ shared_ptr<EnvironmentMap> D3D12Renderer::CreateEnvironmentMap(CreateEnvironment
 
 shared_ptr<Scene> D3D12Renderer::CreateScene(shared_ptr<EnvironmentMap> pEnvironmentMap)
 {
-	return make_shared<D3D12Scene>(m_Context, pEnvironmentMap);
+	return make_shared<D3D12Scene>(m_Context, GetStateObject(), pEnvironmentMap);
 }
 
 void D3D12Renderer::InitializeRootSignature()
@@ -179,14 +180,20 @@ void D3D12Renderer::InitializeRootSignature()
 	}
 
 	{
-		CD3DX12_DESCRIPTOR_RANGE1 descriptorTable[LocalDescriptorTableSize];
-		descriptorTable[LocalDescriptorTableIndexBufferIndex].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, IndexBufferSRVRegister);
-		descriptorTable[LocalDescriptorTableAttributeBufferIndex].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, AttributeBufferSRVRegister);
+		CD3DX12_DESCRIPTOR_RANGE1 descriptorTable[D3D12Geometry::GeometryDescriptorTableSize];
+		descriptorTable[D3D12Geometry::GeometryDescriptorTableIndexBufferSlot].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, IndexBufferSRVRegister, LocalRootSignatureRegisterSpace);
+		descriptorTable[D3D12Geometry::GeometryDescriptorTableAttributeBufferSlot].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, AttributeBufferSRVRegister, LocalRootSignatureRegisterSpace);
 
+#if 0
 		CD3DX12_ROOT_PARAMETER1 localRootParameters[LocalRSNumSlots];
 		localRootParameters[LocalRSDescriptorTableSlot].InitAsDescriptorTable(ARRAYSIZE(descriptorTable), descriptorTable);
+#else
+		CD3DX12_ROOT_PARAMETER1 localRootParameters[2];
+		localRootParameters[0].InitAsDescriptorTable(1, descriptorTable);
+		localRootParameters[1].InitAsDescriptorTable(1, &descriptorTable[1]);
+#endif
 
-		auto localRSDesc = CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC(ARRAYSIZE(localRootParameters), localRootParameters);
+		auto localRSDesc = CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC(ARRAYSIZE(localRootParameters), localRootParameters, 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE);
 
 		CComPtr<ID3DBlob> pSerializedBlob;
 		ThrowIfFailed(device.D3D12SerializeVersionedRootSignature(&localRSDesc, &pSerializedBlob, nullptr));
@@ -200,7 +207,6 @@ void D3D12Renderer::InitializeRootSignature()
 
 void D3D12Renderer::InitializeStateObject()
 {
-	auto HitGroupExportName = L"MyHitGroup";
 	auto MissExportName = L"MyMissShader";
 	auto RaygenExportName = L"MyRaygenShader";
 
@@ -228,9 +234,16 @@ void D3D12Renderer::InitializeStateObject()
 	hitGroup->SetClosestHitShaderImport(L"MyClosestHitShader");
 	hitGroup->SetHitGroupExport(HitGroupExportName);
 	
-	raytracingPipeline.CreateSubobject<CD3D12_ROOT_SIGNATURE_SUBOBJECT>()->SetRootSignature(m_pGlobalRootSignature);
+	raytracingPipeline.CreateSubobject<CD3D12_GLOBAL_ROOT_SIGNATURE_SUBOBJECT>()->SetRootSignature(m_pGlobalRootSignature);
 	raytracingPipeline.CreateSubobject<CD3D12_RAYTRACING_SHADER_CONFIG_SUBOBJECT>()->Config(16, 8);
 	raytracingPipeline.CreateSubobject<CD3D12_RAYTRACING_PIPELINE_CONFIG_SUBOBJECT>()->Config(1);
+
+	auto pHitGroupLocalRootSignature = raytracingPipeline.CreateSubobject<CD3D12_LOCAL_ROOT_SIGNATURE_SUBOBJECT>();
+	pHitGroupLocalRootSignature->SetRootSignature(m_pLocalRootSignature);
+
+	auto pLocalRootSignatureAssociation = raytracingPipeline.CreateSubobject<CD3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION_SUBOBJECT>();
+	pLocalRootSignatureAssociation->SetSubobjectToAssociate(*pHitGroupLocalRootSignature);
+	pLocalRootSignatureAssociation->AddExport(HitGroupExportName);
 
 	ThrowIfFailed(m_Context.GetRaytracingDevice().CreateStateObject(raytracingPipeline, IID_PPV_ARGS(&m_pStateObject)));
 

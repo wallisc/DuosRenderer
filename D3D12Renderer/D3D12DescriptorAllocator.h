@@ -18,6 +18,12 @@ public:
 			m_DescriptorSize);
 	}
 
+	D3D12Descriptor operator+(const int index) {
+
+		auto descriptor = *this;
+		return descriptor += index;
+	}
+
 	D3D12Descriptor& operator+=(const int index) {
 
 		m_Index += index;

@@ -10,8 +10,8 @@ Texture2D<float4> EnvironmentMap : SRV_REGISTER(EnvironmentMapSRVRegister);
 
 SamplerState LinearSampler: SAMPLER_REGISTER(LinearSamplerRegister);
 
-StructuredBuffer<uint> IndexBuffer : SRV_REGISTER_SPACE(IndexBufferSRVRegister, LocalRootSignatureRegisterSpace);
-StructuredBuffer<VertexAttribute> AttributeBuffer : SRV_REGISTER_SPACE(AttributeBufferSRVRegister, LocalRootSignatureRegisterSpace);
+Buffer<uint> IndexBuffer : SRV_REGISTER_SPACE(IndexBufferSRVRegister, LocalRootSignatureRegisterSpace);
+ByteAddressBuffer AttributeBuffer : SRV_REGISTER_SPACE(AttributeBufferSRVRegister, LocalRootSignatureRegisterSpace);
 
 typedef BuiltInTriangleIntersectionAttributes MyAttributes;
 struct RayPayload
@@ -66,16 +66,52 @@ void MyRaygenShader()
 	ray.TMin = 0.001;
 	ray.TMax = 10000.0;
 	RayPayload payload = { float4(0, 0, 0, 0) };
-	TraceRay(Scene, 0, ~0, 0, 0, 0, ray, payload);
+	TraceRay(Scene, 0, ~0, 0, 1, 0, ray, payload);
 
 	// Write the raytraced color to the output texture.
 	RenderTarget[DispatchRaysIndex()] = payload.color;
 }
 
+VertexAttribute GetVertexAttribute(uint index)
+{
+	// Appears to be a bug with structured buffer, working around it
+	// using a ByteAddressBuffer for now
+	VertexAttribute attr;
+	attr.Normal = asfloat(AttributeBuffer.Load3(index * 32));
+	attr.Tangent = asfloat(AttributeBuffer.Load3(index * 32 + 12));
+	attr.UV = asfloat(AttributeBuffer.Load2(index * 32 + 24));
+	return attr;
+}
+
+float3 CalculateValueFromBarycentrics(float3 v0, float3 v1, float3 v2, float2 barycentrics)
+{
+	return v0 + barycentrics.x * (v1 - v0) + barycentrics.y * (v2 - v0);
+}
+
+float2 CalculateValueFromBarycentrics(float2 v0, float2 v1, float2 v2, float2 barycentrics)
+{
+	return v0 + barycentrics.x * (v1 - v0) + barycentrics.y * (v2 - v0);
+}
+
+VertexAttribute GetAttributes(uint3 indicies, float2 barycentrics)
+{
+	VertexAttribute v0 = GetVertexAttribute(indicies.x);
+	VertexAttribute v1 = GetVertexAttribute(indicies.y);
+	VertexAttribute v2 = GetVertexAttribute(indicies.z);
+
+	VertexAttribute hitAttributes;
+	hitAttributes.Normal = normalize(CalculateValueFromBarycentrics(v0.Normal, v1.Normal, v2.Normal, barycentrics));
+	hitAttributes.Tangent = normalize(CalculateValueFromBarycentrics(v0.Tangent, v1.Tangent, v2.Tangent, barycentrics));
+	hitAttributes.UV = CalculateValueFromBarycentrics(v0.UV, v1.UV, v2.UV, barycentrics);
+
+	return hitAttributes;
+}
+
 [shader("closesthit")]
 void MyClosestHitShader(inout RayPayload payload, in MyAttributes attr)
 {
-	payload.color = float4(attr.barycentrics, 0, 1);
+	uint3 indices = uint3(IndexBuffer[PrimitiveIndex() * 3], IndexBuffer[PrimitiveIndex() * 3 + 1], IndexBuffer[PrimitiveIndex() * 3 + 2]);
+	payload.color = float4(GetAttributes(indices, attr.barycentrics).Normal, 1);
 }
 
 [shader("miss")]

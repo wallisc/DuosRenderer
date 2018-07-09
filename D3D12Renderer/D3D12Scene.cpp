@@ -1,5 +1,25 @@
 #include "stdafx.h"
 
+void D3D12Scene::BuildShaderTables(D3D12Context &context)
+{
+	static_assert(sizeof(HitGroupShaderRecord) % D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT == 0, L"Unaligned shader record size");
+
+	std::vector<HitGroupShaderRecord> shaderTable;
+	shaderTable.reserve(m_pGeometry.size());
+	for (auto pGeometry : m_pGeometry)
+	{
+		HitGroupShaderRecord shaderRecord = {};
+		memcpy(shaderRecord.ShaderIdentifier, m_stateObject.GetShaderIdentifier(HitGroupExportName), D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
+		shaderRecord.GeometryDescriptorTable = pGeometry->GetGeometryDescriptorTable();
+		shaderRecord.Dummy = CD3DX12_GPU_DESCRIPTOR_HANDLE(pGeometry->GetGeometryDescriptorTable()).Offset(context.GetDevice().GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV));
+		shaderTable.push_back(shaderRecord);
+	}
+
+	m_pHitGroupShaderTable = DeferredDeletionUniquePtr<ID3D12Resource>(&context);
+	context.UploadData(shaderTable.data(), shaderTable.size() * sizeof(shaderTable[0]), &m_pHitGroupShaderTable);
+}
+
+
 D3D12BufferDescriptor D3D12Scene::BuildTopLevelAccelerationStructure(D3D12Context &context)
 {
 	std::vector<D3D12_RAYTRACING_GEOMETRY_DESC> geometryDescs;
@@ -24,15 +44,17 @@ D3D12BufferDescriptor D3D12Scene::BuildTopLevelAccelerationStructure(D3D12Contex
 	{
 		// Get required sizes for an acceleration structure.
 		D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAGS buildFlags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
-		D3D12_GET_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO_DESC prebuildInfoDesc = {};
-		prebuildInfoDesc.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
-		prebuildInfoDesc.Flags = buildFlags;
-		prebuildInfoDesc.NumDescs = geometryDescs.size()  ;
 
-		D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO bottomLevelPrebuildInfo = {};
-		prebuildInfoDesc.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
-		prebuildInfoDesc.pGeometryDescs = geometryDescs.data();
-		raytracingDevice.GetRaytracingAccelerationStructurePrebuildInfo(&prebuildInfoDesc, &bottomLevelPrebuildInfo);
+		D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC bottomLevelBuildDesc = {};
+		D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS &bottomLevelInput = bottomLevelBuildDesc.Inputs;
+		bottomLevelInput.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
+		bottomLevelInput.Flags = buildFlags;
+		bottomLevelInput.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
+		bottomLevelInput.NumDescs = static_cast<UINT>(geometryDescs.size());
+		bottomLevelInput.pGeometryDescs = geometryDescs.data();
+
+		D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO bottomLevelPrebuildInfo;
+		raytracingDevice.GetRaytracingAccelerationStructurePrebuildInfo(&bottomLevelInput, &bottomLevelPrebuildInfo);
 		assert(bottomLevelPrebuildInfo.ResultDataMaxSizeInBytes > 0);
 
 		DeferredDeletionUniquePtr<ID3D12Resource> pScratchResource(&context);
@@ -47,25 +69,17 @@ D3D12BufferDescriptor D3D12Scene::BuildTopLevelAccelerationStructure(D3D12Contex
 			&m_pBottomLevelAccelerationStructure);
 
 		// Bottom Level Acceleration Structure desc
-		D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC bottomLevelBuildDesc = {};
-		{
-			bottomLevelBuildDesc.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
-			bottomLevelBuildDesc.Flags = buildFlags;
-			bottomLevelBuildDesc.ScratchAccelerationStructureData = { pScratchResource->GetGPUVirtualAddress(), pScratchResource->GetDesc().Width };
-			bottomLevelBuildDesc.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
-			bottomLevelBuildDesc.DestAccelerationStructureData = { m_pBottomLevelAccelerationStructure->GetGPUVirtualAddress(), bottomLevelPrebuildInfo.ResultDataMaxSizeInBytes };
-			bottomLevelBuildDesc.NumDescs = geometryDescs.size();
-			bottomLevelBuildDesc.pGeometryDescs = geometryDescs.data();
-		}
+		bottomLevelBuildDesc.ScratchAccelerationStructureData = pScratchResource->GetGPUVirtualAddress();
+		bottomLevelBuildDesc.DestAccelerationStructureData = m_pBottomLevelAccelerationStructure->GetGPUVirtualAddress();
 
-		pRaytracingCommandList->BuildRaytracingAccelerationStructure(&bottomLevelBuildDesc);
+		pRaytracingCommandList->BuildRaytracingAccelerationStructure(&bottomLevelBuildDesc, 0, nullptr);
 		pCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::UAV(m_pBottomLevelAccelerationStructure));
 	}
 
 	DeferredDeletionUniquePtr<ID3D12Resource> pInstanceDesc(&context);
 	{
 		D3D12_RAYTRACING_FALLBACK_INSTANCE_DESC instanceDesc = {};
-		instanceDesc.Transform[0] = instanceDesc.Transform[5] = instanceDesc.Transform[10] = 1;
+		instanceDesc.Transform[0][0] = instanceDesc.Transform[1][1] = instanceDesc.Transform[2][2] = 1;
 		instanceDesc.InstanceMask = 1;
 		instanceDesc.AccelerationStructure = bottomLevelPointer;
 		context.UploadData(&instanceDesc, sizeof(instanceDesc), &pInstanceDesc);
@@ -75,15 +89,17 @@ D3D12BufferDescriptor D3D12Scene::BuildTopLevelAccelerationStructure(D3D12Contex
 	D3D12BufferDescriptor topLevelDescriptor;
 	D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC topLevelBuildDesc = {};
 	{
+		D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS &topLevelInputs = topLevelBuildDesc.Inputs;
 		D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAGS buildFlags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
-		D3D12_GET_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO_DESC prebuildInfoDesc = {};
-		prebuildInfoDesc.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
-		prebuildInfoDesc.Flags = buildFlags;
-		prebuildInfoDesc.NumDescs = 1;
-		prebuildInfoDesc.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
+		topLevelInputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
+		topLevelInputs.Flags = buildFlags;
+		topLevelInputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
+		topLevelInputs.NumDescs = 1;
+		topLevelInputs.pGeometryDescs = nullptr;
+		topLevelInputs.InstanceDescs = pInstanceDesc->GetGPUVirtualAddress();
 
 		D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO topLevelPrebuildInfo = {};
-		raytracingDevice.GetRaytracingAccelerationStructurePrebuildInfo(&prebuildInfoDesc, &topLevelPrebuildInfo);
+		raytracingDevice.GetRaytracingAccelerationStructurePrebuildInfo(&topLevelInputs, &topLevelPrebuildInfo);
 
 		DeferredDeletionUniquePtr<ID3D12Resource> pScratchResource(&context);
 		AllocateUAVBuffer(
@@ -96,16 +112,11 @@ D3D12BufferDescriptor D3D12Scene::BuildTopLevelAccelerationStructure(D3D12Contex
 			topLevelPrebuildInfo.ResultDataMaxSizeInBytes,
 			&m_pTopLevelAccelerationStructure);
 
-		topLevelBuildDesc.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
-		topLevelBuildDesc.Flags = buildFlags;
-		topLevelBuildDesc.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
-		topLevelBuildDesc.DestAccelerationStructureData = { m_pTopLevelAccelerationStructure->GetGPUVirtualAddress(), topLevelPrebuildInfo.ResultDataMaxSizeInBytes };
-		topLevelBuildDesc.NumDescs = 1;
-		topLevelBuildDesc.pGeometryDescs = nullptr;
-		topLevelBuildDesc.InstanceDescs = pInstanceDesc->GetGPUVirtualAddress();
-		topLevelBuildDesc.ScratchAccelerationStructureData = { pScratchResource->GetGPUVirtualAddress(), pScratchResource->GetDesc().Width };
+		topLevelBuildDesc.DestAccelerationStructureData = m_pTopLevelAccelerationStructure->GetGPUVirtualAddress();
+		topLevelInputs.InstanceDescs = pInstanceDesc->GetGPUVirtualAddress();
+		topLevelBuildDesc.ScratchAccelerationStructureData = pScratchResource->GetGPUVirtualAddress();
 
-		pRaytracingCommandList->BuildRaytracingAccelerationStructure(&topLevelBuildDesc);
+		pRaytracingCommandList->BuildRaytracingAccelerationStructure(&topLevelBuildDesc, 0, nullptr);
 		pCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::UAV(m_pTopLevelAccelerationStructure));
 	}
 

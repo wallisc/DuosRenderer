@@ -11,20 +11,24 @@ public:
 	virtual void Translate(_In_ const Vec3 &translationVector) { assert(false); }
 	virtual void Rotate(float row, float yaw, float pitch) { assert(false); }
 
-	WRAPPED_GPU_POINTER GetBottomLevelAccelerationStructure()
-	{
-		return m_BottomLevelAccelerationStructurePointer;
-	}
-
 	D3D12_RAYTRACING_GEOMETRY_DESC GetGeometryDesc();
-private:
-	void BuildAccelerationStructure(D3D12Context &context);
 
-	D3D12BufferDescriptor m_BottomLevelAccelerationStructurePointer;
+	D3D12_GPU_DESCRIPTOR_HANDLE GetGeometryDescriptorTable()
+	{
+		return m_DescriptorTable;
+	}
+	enum GeometryDescriptorTable
+	{
+		GeometryDescriptorTableIndexBufferSlot = 0,
+		GeometryDescriptorTableAttributeBufferSlot,
+		GeometryDescriptorTableSize,
+	};
+
+private:
+	D3D12Descriptor m_DescriptorTable;
 	std::shared_ptr<Material> m_pMaterial;
 
 	CComPtr<ID3D12Resource> m_pAttributeBuffer;
 	CComPtr<ID3D12Resource> m_pVertexBuffer;
 	CComPtr<ID3D12Resource> m_pIndexBuffer;
-	CComPtr<ID3D12Resource> m_pBottomLevelAccelerationStructure;
 };
