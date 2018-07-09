@@ -17,9 +17,11 @@ D3D12Context::D3D12Context(ID3D12CommandQueue *pQueue, UINT NodeMask) :
 
 }
 
-void D3D12Context::UploadData(void *pData, UINT64 dataSize, ID3D12Resource **ppBuffer)
+void D3D12Context::UploadData(void *pData, UINT64 dataSize, ID3D12Resource **ppBuffer, bool bIsConstantBuffer)
 {
-	auto bufferDesc = CD3DX12_RESOURCE_DESC::Buffer(dataSize);
+	UINT allocationSize = bIsConstantBuffer ? max(dataSize, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT) : dataSize;
+
+	auto bufferDesc = CD3DX12_RESOURCE_DESC::Buffer(allocationSize);
 	auto heapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
 	ThrowIfFailed(m_pDevice->CreateCommittedResource(
 		&heapProperties, 

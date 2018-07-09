@@ -170,6 +170,7 @@
     <ClCompile Include="D3D12DescriptorAllocator.cpp" />
     <ClCompile Include="D3D12EnvironmentMap.cpp" />
     <ClCompile Include="D3D12Geometry.cpp" />
+    <ClCompile Include="D3D12Material.cpp" />
     <ClCompile Include="D3D12Renderer.cpp" />
     <ClCompile Include="D3D12Scene.cpp" />
     <ClCompile Include="stdafx.cpp">

@@ -138,7 +138,7 @@ shared_ptr<Camera> D3D12Renderer::CreateCamera(_In_ CreateCameraDescriptor &desc
 
 shared_ptr<Material> D3D12Renderer::CreateMaterial(_In_ CreateMaterialDescriptor &desc)
 {
-	return make_shared<D3D12Material>(desc);
+	return make_shared<D3D12Material>(m_Context, desc);
 }
 
 shared_ptr<EnvironmentMap> D3D12Renderer::CreateEnvironmentMap(CreateEnvironmentMapDescriptor &desc)

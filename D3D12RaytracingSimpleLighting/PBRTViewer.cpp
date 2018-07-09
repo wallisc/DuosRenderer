@@ -98,8 +98,7 @@ void PBRTViewer::UpdateCameraMatrices()
 
 	auto &camera = g_scene.m_Camera;
 	m_sceneCB[frameIndex].cameraPosition = XMVectorSet(camera.m_Position.x, camera.m_Position.y, camera.m_Position.z, 1.0);
-	//m_sceneCB[frameIndex].cameraPosition = XMVectorSet(0, 0, 0, 1.0);
-	float fovAngleY = 45;// camera.m_FieldOfView;
+	float fovAngleY = camera.m_FieldOfView;
     XMMATRIX view = XMMatrixLookAtLH(m_eye, m_at, m_up);
     XMMATRIX proj = XMMatrixPerspectiveFovLH(XMConvertToRadians(fovAngleY), m_aspectRatio, 1.0f, 125.0f);
     XMMATRIX viewProj = view * proj;
@@ -346,6 +345,23 @@ void PBRTViewer::BuildAccelerationStructures()
 
 
 	std::vector<std::vector<DuosRenderer::Vertex>> vertexBuffers(g_scene.m_Meshes.size());
+	std::unordered_map<std::string, shared_ptr<DuosRenderer::Material>> materialMap;
+	for (auto materialNameValuePair : g_scene.m_Materials)
+	{
+		auto &material = materialNameValuePair.second;
+		DuosRenderer::CreateMaterialDescriptor desc = {};
+		desc.m_DiffuseColor = pfnConvertVec3(material.m_Diffuse);
+		if (material.m_DiffuseTextureFilename.size() > 0)
+		{
+			desc.m_TextureName = material.m_DiffuseTextureFilename.c_str();
+		}
+		desc.m_Reflectivity = 0.5f; // TODO: Need to get from file
+		desc.m_Roughness = material.m_URoughness;
+
+		auto pMaterial = g_pRenderer->CreateMaterial(desc);
+		materialMap[material.m_MaterialName] = pMaterial;
+	}
+
 	for (UINT i = 0; i < g_scene.m_Meshes.size(); i++)
 	{
 		auto &mesh = g_scene.m_Meshes[i];
@@ -366,6 +382,9 @@ void PBRTViewer::BuildAccelerationStructures()
 			vertexBuffer.push_back(vertex);
 		}
 		desc.m_pVertices = vertexBuffer.data();
+		desc.m_pMaterial = materialMap[mesh.m_pMaterial->m_MaterialName];
+		assert(desc.m_pMaterial);
+		
 		auto pGeometry = g_pRenderer->CreateGeometry(desc);
 		g_pScene->AddGeometry(pGeometry);
 	}

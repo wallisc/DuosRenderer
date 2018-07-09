@@ -1,8 +1,9 @@
 #include "stdafx.h"
 
-D3D12Geometry::D3D12Geometry(D3D12Context &context, CreateGeometryDescriptor &desc) :
-	m_pMaterial(desc.m_pMaterial)
+D3D12Geometry::D3D12Geometry(D3D12Context &context, CreateGeometryDescriptor &desc)
 {
+	m_pMaterial = safe_dynamic_cast<D3D12Material>(desc.m_pMaterial);
+	
 	std::vector<Vec3> vertices;
 	std::vector<VertexAttribute> attributes;
 	for (UINT vertexIndex = 0; vertexIndex < desc.m_NumVertices; vertexIndex++)

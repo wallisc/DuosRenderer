@@ -3,7 +3,7 @@ class D3D12Context
 {
 public:
 	D3D12Context(ID3D12CommandQueue *pQueue, UINT NodeMask = 1);
-	void UploadData(void *pData, UINT64 dataSize, ID3D12Resource **ppBuffer);
+	void UploadData(void *pData, UINT64 dataSize, ID3D12Resource **ppBuffer, bool bIsConstantBuffer = false);
 
 	ID3D12Device &GetDevice() { return *m_pDevice; }
 	ID3D12RaytracingFallbackDevice &GetRaytracingDevice() { return *m_pRaytracingFallbackDevice; }

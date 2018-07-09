@@ -113,6 +113,9 @@
     <ClCompile Include="D3D12Camera.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="D3D12Material.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="Raytracing.hlsl">

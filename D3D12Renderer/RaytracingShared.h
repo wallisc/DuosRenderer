@@ -39,6 +39,15 @@ struct VertexAttribute
 	float2 UV;
 };
 
+struct MaterialConstants
+{
+	float Roughness;
+	float Reflectivity;
+	float Padding;
+	bool HasDiffuseTexture;
+	float4 DiffuseColor;
+};
+
 struct SceneConstantBuffer
 {
 	float4x4 projectionToWorld;

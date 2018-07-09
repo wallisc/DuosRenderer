@@ -7,6 +7,7 @@ public:
 	D3D12Geometry(D3D12Context &context, CreateGeometryDescriptor &desc);
 
 	virtual Material &GetMaterial() const { return *m_pMaterial; };
+	virtual D3D12Material &GetD3D12Material() const { return *m_pMaterial; };
 
 	virtual void Translate(_In_ const Vec3 &translationVector) { assert(false); }
 	virtual void Rotate(float row, float yaw, float pitch) { assert(false); }
@@ -26,7 +27,7 @@ public:
 
 private:
 	D3D12Descriptor m_DescriptorTable;
-	std::shared_ptr<Material> m_pMaterial;
+	std::shared_ptr<D3D12Material> m_pMaterial;
 
 	CComPtr<ID3D12Resource> m_pAttributeBuffer;
 	CComPtr<ID3D12Resource> m_pVertexBuffer;

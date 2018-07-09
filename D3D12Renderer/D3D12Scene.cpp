@@ -11,6 +11,7 @@ void D3D12Scene::BuildShaderTables(D3D12Context &context)
 		HitGroupShaderRecord shaderRecord = {};
 		memcpy(shaderRecord.ShaderIdentifier, m_stateObject.GetShaderIdentifier(HitGroupExportName), D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
 		shaderRecord.GeometryDescriptorTable = pGeometry->GetGeometryDescriptorTable();
+		shaderRecord.MaterialDescriptorTable = pGeometry->GetD3D12Material().GetDescriptorTable();
 		shaderTable.push_back(shaderRecord);
 	}
 
