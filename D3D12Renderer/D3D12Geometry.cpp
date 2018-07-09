@@ -4,17 +4,26 @@ D3D12Geometry::D3D12Geometry(D3D12Context &context, CreateGeometryDescriptor &de
 	m_pMaterial(desc.m_pMaterial)
 {
 	std::vector<Vec3> vertices;
+	std::vector<VertexAttribute> attributes;
 	for (UINT vertexIndex = 0; vertexIndex < desc.m_NumVertices; vertexIndex++)
 	{
 		auto &vertex = desc.m_pVertices[vertexIndex];
 		vertices.push_back(vertex.m_Position);
+
+		VertexAttribute attribute;
+		attribute.Normal = { vertex.m_Normal.x, vertex.m_Normal.y, vertex.m_Normal.z };
+		attribute.Tangent = { vertex.m_Tangent.x, vertex.m_Tangent.y, vertex.m_Tangent.z };
+		attribute.UV = { vertex.m_Tex.x, vertex.m_Tex.y };
+		attributes.push_back(attribute);
 	}
 
+	context.UploadData(attributes.data(), attributes.size() * sizeof(attributes[0]), &m_pAttributeBuffer);
 	context.UploadData(vertices.data(), vertices.size() * sizeof(vertices[0]), &m_pVertexBuffer);
 	if (desc.m_pIndices)
 	{
 		context.UploadData(desc.m_pIndices, desc.m_NumIndices * sizeof(desc.m_pIndices[0]), &m_pIndexBuffer);
 	}
+
 }
 
 D3D12_RAYTRACING_GEOMETRY_DESC D3D12Geometry::GetGeometryDesc()

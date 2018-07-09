@@ -10,6 +10,9 @@ Texture2D<float4> EnvironmentMap : SRV_REGISTER(EnvironmentMapSRVRegister);
 
 SamplerState LinearSampler: SAMPLER_REGISTER(LinearSamplerRegister);
 
+StructuredBuffer<uint> IndexBuffer : SRV_REGISTER_SPACE(IndexBufferSRVRegister, LocalRootSignatureRegisterSpace);
+StructuredBuffer<VertexAttribute> AttributeBuffer : SRV_REGISTER_SPACE(AttributeBufferSRVRegister, LocalRootSignatureRegisterSpace);
+
 typedef BuiltInTriangleIntersectionAttributes MyAttributes;
 struct RayPayload
 {

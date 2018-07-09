@@ -152,29 +152,50 @@ shared_ptr<Scene> D3D12Renderer::CreateScene(shared_ptr<EnvironmentMap> pEnviron
 
 void D3D12Renderer::InitializeRootSignature()
 {
-	auto uavRange = CD3DX12_DESCRIPTOR_RANGE1(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0);
-	auto environmentMapRange = CD3DX12_DESCRIPTOR_RANGE1(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, EnvironmentMapSRVRegister);
-
-	CD3DX12_ROOT_PARAMETER1 globalRootParameters[GlobalRSNumSlots];
-	globalRootParameters[GlobalRSAccelerationStructureSlot].InitAsShaderResourceView(0);
-	globalRootParameters[GlobalRSOutputUAVSlot].InitAsDescriptorTable(1, &uavRange);
-	globalRootParameters[GlobalRSEnvironmentMapSlot].InitAsDescriptorTable(1, &environmentMapRange);
-	globalRootParameters[GlobalRSConstantsSlot].InitAsConstants(20, 0);
-
-	auto staticSampler = CD3DX12_STATIC_SAMPLER_DESC(LinearSamplerRegister, D3D12_FILTER_MIN_POINT_MAG_MIP_LINEAR);
-
-	auto globalRSDesc = CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC(
-		ARRAYSIZE(globalRootParameters), globalRootParameters,
-		1, &staticSampler);
-	
 	auto &device = m_Context.GetRaytracingDevice();
-	CComPtr<ID3DBlob> pSerializedBlob;
-	ThrowIfFailed(device.D3D12SerializeVersionedRootSignature(&globalRSDesc, &pSerializedBlob, nullptr));
-	ThrowIfFailed(device.CreateRootSignature(
-		m_Context.GetNodeMask(),
-		pSerializedBlob->GetBufferPointer(),
-		pSerializedBlob->GetBufferSize(),
-		IID_PPV_ARGS(&m_pGlobalRootSignature)));
+	{
+		auto uavRange = CD3DX12_DESCRIPTOR_RANGE1(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0);
+		auto environmentMapRange = CD3DX12_DESCRIPTOR_RANGE1(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, EnvironmentMapSRVRegister);
+
+		CD3DX12_ROOT_PARAMETER1 globalRootParameters[GlobalRSNumSlots];
+		globalRootParameters[GlobalRSAccelerationStructureSlot].InitAsShaderResourceView(0);
+		globalRootParameters[GlobalRSOutputUAVSlot].InitAsDescriptorTable(1, &uavRange);
+		globalRootParameters[GlobalRSEnvironmentMapSlot].InitAsDescriptorTable(1, &environmentMapRange);
+		globalRootParameters[GlobalRSConstantsSlot].InitAsConstants(20, 0);
+
+		auto staticSampler = CD3DX12_STATIC_SAMPLER_DESC(LinearSamplerRegister, D3D12_FILTER_MIN_POINT_MAG_MIP_LINEAR);
+
+		auto globalRSDesc = CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC(
+			ARRAYSIZE(globalRootParameters), globalRootParameters,
+			1, &staticSampler);
+
+		CComPtr<ID3DBlob> pSerializedBlob;
+		ThrowIfFailed(device.D3D12SerializeVersionedRootSignature(&globalRSDesc, &pSerializedBlob, nullptr));
+		ThrowIfFailed(device.CreateRootSignature(
+			m_Context.GetNodeMask(),
+			pSerializedBlob->GetBufferPointer(),
+			pSerializedBlob->GetBufferSize(),
+			IID_PPV_ARGS(&m_pGlobalRootSignature)));
+	}
+
+	{
+		CD3DX12_DESCRIPTOR_RANGE1 descriptorTable[LocalDescriptorTableSize];
+		descriptorTable[LocalDescriptorTableIndexBufferIndex].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, IndexBufferSRVRegister);
+		descriptorTable[LocalDescriptorTableAttributeBufferIndex].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, AttributeBufferSRVRegister);
+
+		CD3DX12_ROOT_PARAMETER1 localRootParameters[LocalRSNumSlots];
+		localRootParameters[LocalRSDescriptorTableSlot].InitAsDescriptorTable(ARRAYSIZE(descriptorTable), descriptorTable);
+
+		auto localRSDesc = CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC(ARRAYSIZE(localRootParameters), localRootParameters);
+
+		CComPtr<ID3DBlob> pSerializedBlob;
+		ThrowIfFailed(device.D3D12SerializeVersionedRootSignature(&localRSDesc, &pSerializedBlob, nullptr));
+		ThrowIfFailed(device.CreateRootSignature(
+			m_Context.GetNodeMask(),
+			pSerializedBlob->GetBufferPointer(),
+			pSerializedBlob->GetBufferSize(),
+			IID_PPV_ARGS(&m_pLocalRootSignature)));
+	}
 }
 
 void D3D12Renderer::InitializeStateObject()

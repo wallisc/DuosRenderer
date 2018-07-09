@@ -23,6 +23,7 @@ private:
 	D3D12BufferDescriptor m_BottomLevelAccelerationStructurePointer;
 	std::shared_ptr<Material> m_pMaterial;
 
+	CComPtr<ID3D12Resource> m_pAttributeBuffer;
 	CComPtr<ID3D12Resource> m_pVertexBuffer;
 	CComPtr<ID3D12Resource> m_pIndexBuffer;
 	CComPtr<ID3D12Resource> m_pBottomLevelAccelerationStructure;

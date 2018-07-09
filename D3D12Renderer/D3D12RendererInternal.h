@@ -38,8 +38,22 @@ private:
 		GlobalRSNumSlots,
 	};
 
-	CComPtr<ID3D12RootSignature> m_pGlobalRootSignature;
+	enum
+	{
+		LocalDescriptorTableIndexBufferIndex = 0,
+		LocalDescriptorTableAttributeBufferIndex,
+		LocalDescriptorTableSize,
+	};
 
+	enum
+	{
+		LocalRSDescriptorTableSlot = 0,
+		LocalRSNumSlots,
+	};
+
+	CComPtr<ID3D12RootSignature> m_pGlobalRootSignature;
+	CComPtr<ID3D12RootSignature> m_pLocalRootSignature;
+	
 	CComPtr<ID3D12Resource> m_pOutputUAV;
 	CComPtr<ID3D12Resource> m_pHitGroupShaderTable;
 	CComPtr<ID3D12Resource> m_pMissShaderTable;
