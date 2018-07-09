@@ -184,14 +184,8 @@ void D3D12Renderer::InitializeRootSignature()
 		descriptorTable[D3D12Geometry::GeometryDescriptorTableIndexBufferSlot].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, IndexBufferSRVRegister, LocalRootSignatureRegisterSpace);
 		descriptorTable[D3D12Geometry::GeometryDescriptorTableAttributeBufferSlot].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, AttributeBufferSRVRegister, LocalRootSignatureRegisterSpace);
 
-#if 0
 		CD3DX12_ROOT_PARAMETER1 localRootParameters[LocalRSNumSlots];
 		localRootParameters[LocalRSDescriptorTableSlot].InitAsDescriptorTable(ARRAYSIZE(descriptorTable), descriptorTable);
-#else
-		CD3DX12_ROOT_PARAMETER1 localRootParameters[2];
-		localRootParameters[0].InitAsDescriptorTable(1, descriptorTable);
-		localRootParameters[1].InitAsDescriptorTable(1, &descriptorTable[1]);
-#endif
 
 		auto localRSDesc = CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC(ARRAYSIZE(localRootParameters), localRootParameters, 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE);
 
@@ -248,7 +242,6 @@ void D3D12Renderer::InitializeStateObject()
 	ThrowIfFailed(m_Context.GetRaytracingDevice().CreateStateObject(raytracingPipeline, IID_PPV_ARGS(&m_pStateObject)));
 
 	auto shaderIdentifierSize = m_Context.GetRaytracingDevice().GetShaderIdentifierSize();
-	m_Context.UploadData(m_pStateObject->GetShaderIdentifier(HitGroupExportName), shaderIdentifierSize, &m_pHitGroupShaderTable);
 	m_Context.UploadData(m_pStateObject->GetShaderIdentifier(MissExportName), shaderIdentifierSize, &m_pMissShaderTable);
 	m_Context.UploadData(m_pStateObject->GetShaderIdentifier(RaygenExportName), shaderIdentifierSize, &m_pRaygenShaderTable);
 }

@@ -45,8 +45,7 @@ public:
 	{
 		BYTE ShaderIdentifier[D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES];
 		D3D12_GPU_DESCRIPTOR_HANDLE GeometryDescriptorTable;
-		D3D12_GPU_DESCRIPTOR_HANDLE Dummy;
-		BYTE Padding[16];
+		BYTE Padding[24];
 	};
 
 	D3D12_GPU_VIRTUAL_ADDRESS_RANGE_AND_STRIDE GetHitGroupTable()

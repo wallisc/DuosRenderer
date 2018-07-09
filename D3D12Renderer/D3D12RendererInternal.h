@@ -57,7 +57,6 @@ private:
 	CComPtr<ID3D12RootSignature> m_pLocalRootSignature;
 	
 	CComPtr<ID3D12Resource> m_pOutputUAV;
-	CComPtr<ID3D12Resource> m_pHitGroupShaderTable;
 	CComPtr<ID3D12Resource> m_pMissShaderTable;
 	CComPtr<ID3D12Resource> m_pRaygenShaderTable;
 	D3D12Descriptor m_OutputUAVDescriptor;

@@ -11,7 +11,6 @@ void D3D12Scene::BuildShaderTables(D3D12Context &context)
 		HitGroupShaderRecord shaderRecord = {};
 		memcpy(shaderRecord.ShaderIdentifier, m_stateObject.GetShaderIdentifier(HitGroupExportName), D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
 		shaderRecord.GeometryDescriptorTable = pGeometry->GetGeometryDescriptorTable();
-		shaderRecord.Dummy = CD3DX12_GPU_DESCRIPTOR_HANDLE(pGeometry->GetGeometryDescriptorTable()).Offset(context.GetDevice().GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV));
 		shaderTable.push_back(shaderRecord);
 	}
 
