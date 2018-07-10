@@ -31,8 +31,10 @@ public:
 	void ExecuteCommandList(ID3D12GraphicsCommandList *pCommandList);
 	void DeferDelete(IUnknown *pUnknown)
 	{
-		m_DeferredDeletionQueue.emplace_back(pUnknown, m_lastFenceValue);
+		m_DeferredDeletionQueue.emplace_back(pUnknown, m_lastFenceValue + 1);
 	}
+
+	void ClearDeferDeletionQueue();
 	
 	UINT GetNodeMask() { return m_NodeMask; }
 private:
@@ -104,6 +106,6 @@ public:
 	{
 	}
 
-	DeferredDeletionUniquePtr<ID3D12GraphicsCommandList> m_pCommandList;
 	DeferredDeletionUniquePtr<ID3D12CommandAllocator> m_pAllocator;
+	DeferredDeletionUniquePtr<ID3D12GraphicsCommandList> m_pCommandList;
 };

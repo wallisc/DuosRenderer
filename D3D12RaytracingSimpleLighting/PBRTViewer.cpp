@@ -12,7 +12,6 @@
 #include "stdafx.h"
 #include "PBRTViewer.h"
 #include "DirectXRaytracingHelper.h"
-#include "CompiledShaders\Raytracing.hlsl.h"
 
 #include "D3D12Renderer.h"
 

@@ -62,3 +62,14 @@ void D3D12Context::ExecuteCommandList(ID3D12GraphicsCommandList *pCommandList)
 	m_pQueue->ExecuteCommandLists(ARRAYSIZE(CommandLists), CommandLists);
 	m_pQueue->Signal(m_pFence, ++m_lastFenceValue);
 }
+
+void D3D12Context::ClearDeferDeletionQueue()
+{
+	UINT completedFence = m_pFence->GetCompletedValue();
+	while (m_DeferredDeletionQueue.size() && m_DeferredDeletionQueue.front().second <= completedFence)
+	{
+
+		m_DeferredDeletionQueue.pop_front();
+	}
+}
+

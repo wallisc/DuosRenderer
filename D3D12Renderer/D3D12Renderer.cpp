@@ -162,6 +162,7 @@ void D3D12Renderer::DrawScene(Camera &camera, Scene &scene, const RenderSettings
 
 	pCommandList->Close();
 	context.ExecuteCommandList(pCommandList);
+	context.ClearDeferDeletionQueue();
 }
 
 shared_ptr<Geometry> D3D12Renderer::CreateGeometry(_In_ CreateGeometryDescriptor &desc)
