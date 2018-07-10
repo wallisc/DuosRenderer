@@ -81,6 +81,12 @@
     <ClInclude Include="ShaderUtil.h">
       <Filter>Shaders</Filter>
     </ClInclude>
+    <ClInclude Include="AverageSamplesPass.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="AverageSamplesShared.h">
+      <Filter>Shader Headers</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="stdafx.cpp">
@@ -116,9 +122,15 @@
     <ClCompile Include="D3D12Material.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="AverageSamplesPass.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="Raytracing.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="AverageSamples.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
   </ItemGroup>

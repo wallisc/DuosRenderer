@@ -4,7 +4,7 @@
 
 D3D12Material::D3D12Material(D3D12Context &context, CreateMaterialDescriptor &desc) : 
 	m_Roughness(desc.m_Roughness),
-	m_Reflectivity(desc.m_Reflectivity)
+	m_IndexOfRefraction(desc.m_IndexOfRefraction)
 {
 	auto &device = context.GetDevice();
 	DirectX::ResourceUploadBatch uploadBatch(&device);
@@ -24,7 +24,7 @@ D3D12Material::D3D12Material(D3D12Context &context, CreateMaterialDescriptor &de
 	MaterialConstants constants;
 	constants.HasDiffuseTexture = m_pDiffuseTexture != nullptr;
 	constants.DiffuseColor = { desc.m_DiffuseColor.x, desc.m_DiffuseColor.y, desc.m_DiffuseColor.z, 0.0f };
-	constants.Reflectivity = m_Reflectivity;
+	constants.IndexOfRefraction = m_IndexOfRefraction;
 	constants.Roughness = m_Roughness;
 
 	context.UploadData(&constants, sizeof(constants), &m_pMaterialConstants, true);

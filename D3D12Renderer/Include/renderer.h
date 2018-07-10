@@ -64,7 +64,7 @@ namespace DuosRenderer
 		const char *m_TextureName;
 		const char *m_NormalMapName;
 		Vec3 m_DiffuseColor;
-		REAL m_Reflectivity;
+		REAL m_IndexOfRefraction;
 		REAL m_Roughness;
 	};
 
@@ -177,10 +177,10 @@ namespace DuosRenderer
 	public:
 		virtual ~Material() {};
 		virtual float GetRoughness() const = 0;
-		virtual float GetReflectivity() const = 0;
+		virtual float GetIndexOfRefraction() const = 0;
 
 		virtual void SetRoughness(float Roughness) = 0;
-		virtual void SetReflectivity(float Reflectivity) = 0;
+		virtual void SetIndexOfRefraction(float IndexOfRefraction) = 0;
 	};
 
 	class Transformable

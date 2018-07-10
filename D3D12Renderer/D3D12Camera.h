@@ -10,10 +10,7 @@ public:
 	virtual void Translate(_In_ const Vec3 &translationVector) { assert(false); }
 	virtual void Rotate(float row, float yaw, float pitch) { assert(false); }
 
-	const SceneConstantBuffer &GetConstantData()
-	{
-		return m_Constants;
-	}
+	const SceneConstantBuffer &GetConstantData();
 
 private:
 	SceneConstantBuffer m_Constants;

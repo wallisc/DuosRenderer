@@ -8,12 +8,12 @@ public:
 
 	virtual ~D3D12Material() {};
 	virtual float GetRoughness() const { return m_Roughness; }
-	virtual float GetReflectivity() const { return m_Reflectivity; }
+	virtual float GetIndexOfRefraction() const { return m_IndexOfRefraction; }
 
 	D3D12_GPU_DESCRIPTOR_HANDLE GetDescriptorTable() { return m_DescriptorTable; }
 
 	virtual void SetRoughness(float Roughness) { m_Roughness = Roughness; assert(false); /*Need to update GPU resource*/ }
-	virtual void SetReflectivity(float Reflectivity) { m_Reflectivity = Reflectivity; assert(false); /*Need to update GPU resource*/ }
+	virtual void SetIndexOfRefraction(float IndexOfRefraction) { m_IndexOfRefraction = IndexOfRefraction; assert(false); /*Need to update GPU resource*/ }
 
 	enum MaterialDescriptorTable
 	{
@@ -27,5 +27,5 @@ private:
 	CComPtr<ID3D12Resource> m_pMaterialConstants;
 	D3D12Descriptor m_DescriptorTable;
 	float m_Roughness;
-	float m_Reflectivity;
+	float m_IndexOfRefraction;
 };

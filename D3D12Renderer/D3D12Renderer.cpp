@@ -10,7 +10,9 @@ shared_ptr<Renderer> CreateD3D12Renderer(ID3D12CommandQueue *pQueue)
 }
 
 D3D12Renderer::D3D12Renderer(ID3D12CommandQueue *pQueue) :
-	m_Context(pQueue)
+	m_Context(pQueue),
+	m_SampleCount(0),
+	m_AverageSamplesPass(m_Context.GetDevice(), 0)
 {
 	// Initialize the windows runtime for dxtk12
 	CoInitializeEx(nullptr, COINIT_SPEED_OVER_MEMORY | COINIT_MULTITHREADED);
@@ -25,9 +27,9 @@ void D3D12Renderer::SetCanvas(std::shared_ptr<Canvas> pCanvas)
 	bool bAllocateNewUAV = true;
 
 	m_pCanvas = dynamic_pointer_cast<D3D12Canvas>(pCanvas);
-	if (m_pOutputUAV)
+	if (m_pAveragedOutputUAV)
 	{
-		auto &uavDesc = m_pOutputUAV->GetDesc();
+		auto &uavDesc = m_pAveragedOutputUAV->GetDesc();
 		auto &canvasDesc = m_pCanvas->GetCanvasResource().GetDesc();
 		if (uavDesc.Width == canvasDesc.Width &&
 			uavDesc.Height == canvasDesc.Height)
@@ -36,8 +38,10 @@ void D3D12Renderer::SetCanvas(std::shared_ptr<Canvas> pCanvas)
 		}
 		else
 		{
-			descriptorAllocator.DeleteDescriptor(m_OutputUAVDescriptor);
-			m_pOutputUAV = nullptr;
+			descriptorAllocator.DeleteDescriptor(m_AveragedOutputUAVDescriptor);
+			descriptorAllocator.DeleteDescriptor(m_AccumulatedOutputUAVDescriptor);
+			m_pAveragedOutputUAV = nullptr;
+			m_pAccumulatedOutputUAV = nullptr;
 		}
 	}
 
@@ -50,24 +54,50 @@ void D3D12Renderer::SetCanvas(std::shared_ptr<Canvas> pCanvas)
 		uavResourceDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 		auto heapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
 
-		ThrowIfFailed(m_Context.GetDevice().CreateCommittedResource(
-			&heapProperties,
-			D3D12_HEAP_FLAG_NONE,
-			&uavResourceDesc,
-			D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-			nullptr,
-			IID_PPV_ARGS(&m_pOutputUAV)));
+		{
+			ThrowIfFailed(m_Context.GetDevice().CreateCommittedResource(
+				&heapProperties,
+				D3D12_HEAP_FLAG_NONE,
+				&uavResourceDesc,
+				D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+				nullptr,
+				IID_PPV_ARGS(&m_pAveragedOutputUAV)));
 
-		D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
-		uavDesc.Format = uavResourceDesc.Format;
-		uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
+			D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
+			uavDesc.Format = uavResourceDesc.Format;
+			uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
 
-		m_OutputUAVDescriptor = descriptorAllocator.AllocateDescriptor();
-		m_Context.GetDevice().CreateUnorderedAccessView(
-			m_pOutputUAV,
-			nullptr,
-			&uavDesc,
-			m_OutputUAVDescriptor);
+			m_AveragedOutputUAVDescriptor = descriptorAllocator.AllocateDescriptor();
+			m_Context.GetDevice().CreateUnorderedAccessView(
+				m_pAveragedOutputUAV,
+				nullptr,
+				&uavDesc,
+				m_AveragedOutputUAVDescriptor);
+		}
+
+		{
+			auto accumulatedUavDesc = uavResourceDesc;
+			accumulatedUavDesc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
+			ThrowIfFailed(m_Context.GetDevice().CreateCommittedResource(
+				&heapProperties,
+				D3D12_HEAP_FLAG_NONE,
+				&accumulatedUavDesc,
+				D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+				nullptr,
+				IID_PPV_ARGS(&m_pAccumulatedOutputUAV)));
+
+			D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
+			uavDesc.Format = accumulatedUavDesc.Format;
+			uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
+
+			m_AccumulatedOutputUAVDescriptor = descriptorAllocator.AllocateDescriptor();
+			m_Context.GetDevice().CreateUnorderedAccessView(
+				m_pAccumulatedOutputUAV,
+				nullptr,
+				&uavDesc,
+				m_AccumulatedOutputUAVDescriptor);
+		}
+
 	}
 }
 
@@ -87,12 +117,12 @@ void D3D12Renderer::DrawScene(Camera &camera, Scene &scene, const RenderSettings
 	pCommandList->SetComputeRootSignature(m_pGlobalRootSignature);
 	ID3D12DescriptorHeap *pHeaps[] = { &context.GetDescriptorAllocator().GetDescriptorHeap() };
 	pRaytracingCommandList->SetDescriptorHeaps(ARRAYSIZE(pHeaps), pHeaps);
-	auto &outputResourceDesc = m_pOutputUAV->GetDesc();
+	auto &outputResourceDesc = m_pAveragedOutputUAV->GetDesc();
 
-	auto &sceneConstants = pD3D12Camera->GetConstantData();;
+	auto &sceneConstants = pD3D12Camera->GetConstantData();
 
 	pRaytracingCommandList->SetTopLevelAccelerationStructure(GlobalRSAccelerationStructureSlot, pD3D12Scene->GetTopLevelAccelerationStructure());
-	pCommandList->SetComputeRootDescriptorTable(GlobalRSOutputUAVSlot, m_OutputUAVDescriptor);
+	pCommandList->SetComputeRootDescriptorTable(GlobalRSOutputUAVSlot, m_AccumulatedOutputUAVDescriptor);
 	pCommandList->SetComputeRootDescriptorTable(GlobalRSEnvironmentMapSlot, pD3D12Scene->GetEnvironmentMap());
 	pCommandList->SetComputeRoot32BitConstants(GlobalRSConstantsSlot, SizeOfInUint32(sceneConstants), &sceneConstants, 0);
 
@@ -100,6 +130,7 @@ void D3D12Renderer::DrawScene(Camera &camera, Scene &scene, const RenderSettings
 	dispatchRaysDesc.HitGroupTable = pD3D12Scene->GetHitGroupTable();
 	dispatchRaysDesc.MissShaderTable.StartAddress = m_pMissShaderTable->GetGPUVirtualAddress();
 	dispatchRaysDesc.MissShaderTable.SizeInBytes = m_pMissShaderTable->GetDesc().Width;
+	dispatchRaysDesc.MissShaderTable.StrideInBytes = sizeof(ShaderIdentifierOnlyShaderRecord);
 	dispatchRaysDesc.RayGenerationShaderRecord.StartAddress = m_pRaygenShaderTable->GetGPUVirtualAddress();
 	dispatchRaysDesc.RayGenerationShaderRecord.SizeInBytes = m_pRaygenShaderTable->GetDesc().Width;
 	
@@ -110,11 +141,23 @@ void D3D12Renderer::DrawScene(Camera &camera, Scene &scene, const RenderSettings
 	pRaytracingCommandList->DispatchRays(&dispatchRaysDesc);
 
 	{
-		pCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::UAV(m_pOutputUAV));
-		ScopedResourceBarrier rtvBarrier(pCommandList, &m_pCanvas->GetCanvasResource(), m_pCanvas->GetResourceSate(), D3D12_RESOURCE_STATE_COPY_DEST);
-		ScopedResourceBarrier uavBarrier(pCommandList, m_pOutputUAV, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE);
+		pCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::UAV(m_pAccumulatedOutputUAV));
+		m_AverageSamplesPass.AverageSamplesAndGammaCorrect(
+			pCommandList, 
+			++m_SampleCount, 
+			outputResourceDesc.Width, 
+			outputResourceDesc.Height, 
+			m_AccumulatedOutputUAVDescriptor, 
+			m_AveragedOutputUAVDescriptor);
 
-		pCommandList->CopyResource(&m_pCanvas->GetCanvasResource(), m_pOutputUAV);
+		pCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::UAV(m_pAveragedOutputUAV));
+	}
+
+	{
+		ScopedResourceBarrier rtvBarrier(pCommandList, &m_pCanvas->GetCanvasResource(), m_pCanvas->GetResourceSate(), D3D12_RESOURCE_STATE_COPY_DEST);
+		ScopedResourceBarrier uavBarrier(pCommandList, m_pAveragedOutputUAV, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE);
+
+		pCommandList->CopyResource(&m_pCanvas->GetCanvasResource(), m_pAveragedOutputUAV);
 	}
 
 	pCommandList->Close();
@@ -162,13 +205,15 @@ void D3D12Renderer::InitializeRootSignature()
 		globalRootParameters[GlobalRSAccelerationStructureSlot].InitAsShaderResourceView(0);
 		globalRootParameters[GlobalRSOutputUAVSlot].InitAsDescriptorTable(1, &uavRange);
 		globalRootParameters[GlobalRSEnvironmentMapSlot].InitAsDescriptorTable(1, &environmentMapRange);
-		globalRootParameters[GlobalRSConstantsSlot].InitAsConstants(20, 0);
+		globalRootParameters[GlobalRSConstantsSlot].InitAsConstants(SizeOfInUint32(SceneConstantBuffer), 0);
 
-		auto staticSampler = CD3DX12_STATIC_SAMPLER_DESC(LinearSamplerRegister, D3D12_FILTER_MIN_POINT_MAG_MIP_LINEAR);
+		D3D12_STATIC_SAMPLER_DESC staticSamplers[2];
+		staticSamplers[0] = CD3DX12_STATIC_SAMPLER_DESC(LinearSamplerRegister, D3D12_FILTER_MIN_POINT_MAG_MIP_LINEAR);
+		staticSamplers[1] = CD3DX12_STATIC_SAMPLER_DESC(PointSamplerRegister, D3D12_FILTER_MIN_MAG_MIP_POINT);
 
 		auto globalRSDesc = CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC(
 			ARRAYSIZE(globalRootParameters), globalRootParameters,
-			1, &staticSampler);
+			ARRAYSIZE(staticSamplers), staticSamplers);
 
 		CComPtr<ID3DBlob> pSerializedBlob;
 		ThrowIfFailed(device.D3D12SerializeVersionedRootSignature(&globalRSDesc, &pSerializedBlob, nullptr));
@@ -180,12 +225,17 @@ void D3D12Renderer::InitializeRootSignature()
 	}
 
 	{
-		CD3DX12_DESCRIPTOR_RANGE1 descriptorTable[D3D12Geometry::GeometryDescriptorTableSize];
-		descriptorTable[D3D12Geometry::GeometryDescriptorTableIndexBufferSlot].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, IndexBufferSRVRegister, LocalRootSignatureRegisterSpace);
-		descriptorTable[D3D12Geometry::GeometryDescriptorTableAttributeBufferSlot].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, AttributeBufferSRVRegister, LocalRootSignatureRegisterSpace);
+		CD3DX12_DESCRIPTOR_RANGE1 geometryDescriptorTable[D3D12Geometry::GeometryDescriptorTableSize];
+		geometryDescriptorTable[D3D12Geometry::GeometryDescriptorTableIndexBufferSlot].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, IndexBufferSRVRegister, LocalRootSignatureRegisterSpace);
+		geometryDescriptorTable[D3D12Geometry::GeometryDescriptorTableAttributeBufferSlot].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, AttributeBufferSRVRegister, LocalRootSignatureRegisterSpace);
+
+		CD3DX12_DESCRIPTOR_RANGE1 materialDescriptorTable[D3D12Material::MaterialDescriptorTableSize];
+		materialDescriptorTable[D3D12Material::MaterialDescriptorTableDiffuseTextureSlot].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, DiffuseTextureSRVRegister, LocalRootSignatureRegisterSpace);
+		materialDescriptorTable[D3D12Material::MaterialDescriptorTableMaterialConstantsSlot].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, MaterialCBVRegister, LocalRootSignatureRegisterSpace);
 
 		CD3DX12_ROOT_PARAMETER1 localRootParameters[LocalRSNumSlots];
-		localRootParameters[LocalRSDescriptorTableSlot].InitAsDescriptorTable(ARRAYSIZE(descriptorTable), descriptorTable);
+		localRootParameters[LocalRSGeometryDescriptorTableSlot].InitAsDescriptorTable(ARRAYSIZE(geometryDescriptorTable), geometryDescriptorTable);
+		localRootParameters[LocalRSMaterialDescriptorTableSlot].InitAsDescriptorTable(ARRAYSIZE(materialDescriptorTable), materialDescriptorTable);
 
 		auto localRSDesc = CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC(ARRAYSIZE(localRootParameters), localRootParameters, 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE);
 
@@ -201,25 +251,13 @@ void D3D12Renderer::InitializeRootSignature()
 
 void D3D12Renderer::InitializeStateObject()
 {
-	auto MissExportName = L"MyMissShader";
 	auto RaygenExportName = L"MyRaygenShader";
 
 	CD3D12_STATE_OBJECT_DESC raytracingPipeline{ D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE };
 
-	// DXIL library
-	// This contains the shaders and their entrypoints for the state object.
-	// Since shaders are not considered a subobject, they need to be passed in via DXIL library subobjects.
 	auto lib = raytracingPipeline.CreateSubobject<CD3D12_DXIL_LIBRARY_SUBOBJECT>();
 	D3D12_SHADER_BYTECODE libdxil = CD3DX12_SHADER_BYTECODE((void *)g_pRaytracing, ARRAYSIZE(g_pRaytracing));
 	lib->SetDXILLibrary(&libdxil);
-	// Define which shader exports to surface from the library.
-	// If no shader exports are defined for a DXIL library subobject, all shaders will be surfaced.
-	// In this sample, this could be ommited for convenience since the sample uses all shaders in the library. 
-	{
-		lib->DefineExport(RaygenExportName);
-		lib->DefineExport(L"MyClosestHitShader");
-		lib->DefineExport(MissExportName);
-	}
 
 	// Triangle hit group
 	// A hit group specifies closest hit, any hit and intersection shaders to be executed when a ray intersects the geometry's triangle/AABB.
@@ -229,8 +267,8 @@ void D3D12Renderer::InitializeStateObject()
 	hitGroup->SetHitGroupExport(HitGroupExportName);
 	
 	raytracingPipeline.CreateSubobject<CD3D12_GLOBAL_ROOT_SIGNATURE_SUBOBJECT>()->SetRootSignature(m_pGlobalRootSignature);
-	raytracingPipeline.CreateSubobject<CD3D12_RAYTRACING_SHADER_CONFIG_SUBOBJECT>()->Config(16, 8);
-	raytracingPipeline.CreateSubobject<CD3D12_RAYTRACING_PIPELINE_CONFIG_SUBOBJECT>()->Config(1);
+	raytracingPipeline.CreateSubobject<CD3D12_RAYTRACING_SHADER_CONFIG_SUBOBJECT>()->Config(sizeof(LightPayload), 8);
+	raytracingPipeline.CreateSubobject<CD3D12_RAYTRACING_PIPELINE_CONFIG_SUBOBJECT>()->Config(MaxLevelsOfRecursion);
 
 	auto pHitGroupLocalRootSignature = raytracingPipeline.CreateSubobject<CD3D12_LOCAL_ROOT_SIGNATURE_SUBOBJECT>();
 	pHitGroupLocalRootSignature->SetRootSignature(m_pLocalRootSignature);
@@ -242,7 +280,12 @@ void D3D12Renderer::InitializeStateObject()
 	ThrowIfFailed(m_Context.GetRaytracingDevice().CreateStateObject(raytracingPipeline, IID_PPV_ARGS(&m_pStateObject)));
 
 	auto shaderIdentifierSize = m_Context.GetRaytracingDevice().GetShaderIdentifierSize();
-	m_Context.UploadData(m_pStateObject->GetShaderIdentifier(MissExportName), shaderIdentifierSize, &m_pMissShaderTable);
+
+	ShaderIdentifierOnlyShaderRecord missShaderTable[NumberOfMissShaders];
+	memcpy(&missShaderTable[LightingMissShaderRecordIndex], m_pStateObject->GetShaderIdentifier(LightingMissShaderExportName), shaderIdentifierSize);
+	memcpy(&missShaderTable[OcclusionMissShaderRecordIndex], m_pStateObject->GetShaderIdentifier(OcclusionMissShaderExportName), shaderIdentifierSize);
+
+	m_Context.UploadData(missShaderTable, sizeof(missShaderTable), &m_pMissShaderTable);
 	m_Context.UploadData(m_pStateObject->GetShaderIdentifier(RaygenExportName), shaderIdentifierSize, &m_pRaygenShaderTable);
 }
 

@@ -19,3 +19,6 @@ std::shared_ptr<T> safe_dynamic_cast(const std::shared_ptr<U> &sp) {
 	}
 	return spCast;
 }
+
+template <typename T>
+T DivideAndRoundUp(T dividend, T divisor) { return (dividend - 1) / divisor + 1; }

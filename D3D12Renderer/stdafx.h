@@ -23,6 +23,7 @@ using namespace DuosRenderer;
 #include <cassert> // TODO remove when everything is implemented
 #include <atlbase.h>
 
+#include "AverageSamplesPass.h"
 #include "D3D12Canvas.h"
 #include "D3D12Util.h"
 #include "D3D12DescriptorAllocator.h"

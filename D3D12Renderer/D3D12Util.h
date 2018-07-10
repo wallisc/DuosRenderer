@@ -23,6 +23,17 @@ static void AllocateUAVBuffer(ID3D12Device &device, UINT64 bufferSize, ID3D12Res
 	AllocateGpuWriteBuffer(device, bufferSize, ppOutputResource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, pName);
 }
 
+static void CreateRootSignature(ID3D12Device &device, D3D12_VERSIONED_ROOT_SIGNATURE_DESC &desc, UINT NodeMask, ID3D12RootSignature **ppRootSignature)
+{
+	CComPtr<ID3DBlob> pSerializedBlob;
+	ThrowIfFailed(D3D12SerializeVersionedRootSignature(&desc, &pSerializedBlob, nullptr));
+	ThrowIfFailed(device.CreateRootSignature(
+		NodeMask,
+		pSerializedBlob->GetBufferPointer(),
+		pSerializedBlob->GetBufferSize(),
+		IID_PPV_ARGS(ppRootSignature)));
+}
+
 #define SizeOfInUint32(obj) ((sizeof(obj) - 1) / sizeof(UINT32) + 1)
 
 class ScopedResourceBarrier

@@ -31,6 +31,11 @@ private:
 
 	CComPtr<ID3D12RaytracingFallbackStateObject> m_pStateObject;
 
+	class ShaderIdentifierOnlyShaderRecord
+	{
+		byte m_ShaderIdentifier[D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES];
+	};
+
 	enum
 	{
 		GlobalRSAccelerationStructureSlot = 0,
@@ -49,19 +54,27 @@ private:
 
 	enum
 	{
-		LocalRSDescriptorTableSlot = 0,
+		LocalRSGeometryDescriptorTableSlot = 0,
+		LocalRSMaterialDescriptorTableSlot = 1,
 		LocalRSNumSlots,
 	};
 
 	CComPtr<ID3D12RootSignature> m_pGlobalRootSignature;
 	CComPtr<ID3D12RootSignature> m_pLocalRootSignature;
 	
-	CComPtr<ID3D12Resource> m_pOutputUAV;
+	CComPtr<ID3D12Resource> m_pAveragedOutputUAV;
+	CComPtr<ID3D12Resource> m_pAccumulatedOutputUAV;
 	CComPtr<ID3D12Resource> m_pMissShaderTable;
 	CComPtr<ID3D12Resource> m_pRaygenShaderTable;
-	D3D12Descriptor m_OutputUAVDescriptor;
+	D3D12Descriptor m_AccumulatedOutputUAVDescriptor;
+	D3D12Descriptor m_AveragedOutputUAVDescriptor;
+
+	UINT m_SampleCount;
 
  	D3D12Context m_Context;
+	AverageSamplesPass m_AverageSamplesPass;
 };
 
 static const auto HitGroupExportName = L"MyHitGroup";
+static const auto LightingMissShaderExportName = L"LightingMiss";
+static const auto OcclusionMissShaderExportName = L"OcclusionMiss";

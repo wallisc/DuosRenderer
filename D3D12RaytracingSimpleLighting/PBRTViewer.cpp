@@ -104,6 +104,7 @@ void PBRTViewer::UpdateCameraMatrices()
     XMMATRIX viewProj = view * proj;
 
     m_sceneCB[frameIndex].projectionToWorld = XMMatrixInverse(nullptr, viewProj);
+	m_sceneCB[frameIndex].time = static_cast<UINT>(time(nullptr));
 }
 
 // Initialize scene rendering parameters.
@@ -126,23 +127,6 @@ void PBRTViewer::InitializeScene()
 		m_up = { camera.m_Up.x, camera.m_Up.y, camera.m_Up.z, 0.0f };
         
         UpdateCameraMatrices();
-    }
-
-    // Setup lights.
-    {
-        // Initialize the lighting parameters.
-        XMFLOAT4 lightPosition;
-        XMFLOAT4 lightAmbientColor;
-        XMFLOAT4 lightDiffuseColor;
-
-        lightPosition = XMFLOAT4(0.0f, 1.8f, -3.0f, 0.0f);
-        m_sceneCB[frameIndex].lightPosition = XMLoadFloat4(&lightPosition);
-
-        lightAmbientColor = XMFLOAT4(0.5f, 0.5f, 0.5f, 1.0f);
-        m_sceneCB[frameIndex].lightAmbientColor = XMLoadFloat4(&lightAmbientColor);
-
-        lightDiffuseColor = XMFLOAT4(0.5f, 0.0f, 0.0f, 1.0f);
-        m_sceneCB[frameIndex].lightDiffuseColor = XMLoadFloat4(&lightDiffuseColor);
     }
 
     // Apply the initial values to all frames' buffer instances.
@@ -355,7 +339,7 @@ void PBRTViewer::BuildAccelerationStructures()
 		{
 			desc.m_TextureName = material.m_DiffuseTextureFilename.c_str();
 		}
-		desc.m_Reflectivity = 0.5f; // TODO: Need to get from file
+		desc.m_IndexOfRefraction = 1.5f; // TODO: Hack!
 		desc.m_Roughness = material.m_URoughness;
 
 		auto pMaterial = g_pRenderer->CreateMaterial(desc);
@@ -402,18 +386,6 @@ void PBRTViewer::OnUpdate()
 {
     m_timer.Tick();
     CalculateFrameStats();
-    float elapsedTime = static_cast<float>(m_timer.GetElapsedSeconds());
-    auto frameIndex = m_deviceResources->GetCurrentFrameIndex();
-    auto prevFrameIndex = m_deviceResources->GetPreviousFrameIndex();
-
-    // Rotate the second light around Y axis.
-    {
-        float secondsToRotateAround = 8.0f;
-        float angleToRotateBy = -360.0f * (elapsedTime / secondsToRotateAround);
-        XMMATRIX rotate = XMMatrixRotationY(XMConvertToRadians(angleToRotateBy));
-        const XMVECTOR& prevLightPosition = m_sceneCB[prevFrameIndex].lightPosition;
-        m_sceneCB[frameIndex].lightPosition = XMVector3Transform(prevLightPosition, rotate);
-    }
 }
 
 
