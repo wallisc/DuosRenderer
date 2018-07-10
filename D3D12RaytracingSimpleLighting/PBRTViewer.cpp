@@ -80,7 +80,7 @@ void PBRTViewer::OnInit()
     m_deviceResources->InitializeDXGIAdapter();
     EnableDXRExperimentalFeatures(m_deviceResources->GetAdapter());
 
-	PBRTParser::PBRTParser().Parse("..\\source\\Assets\\Teapot\\scene.pbrt", g_scene);
+	PBRTParser::PBRTParser().Parse("..\\Assets\\Teapot\\scene.pbrt", g_scene);
 
     m_deviceResources->CreateDeviceResources();
     m_deviceResources->CreateWindowSizeDependentResources();
