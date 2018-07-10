@@ -249,6 +249,7 @@ void MyClosestHitShader(inout LightPayload payload, in MyAttributes attr)
 
 	float4 reflectedlightColor = float4(0, 0, 0, 0);
 	float3 reflectionRayDirection = reflect(WorldRayDirection(), attributes.Normal);
+	reflectionRayDirection = normalize(reflectionRayDirection + 0.05 * float3(rand(), rand(), rand()));
 	float reflectivity = Fresnel_ShlicksApproximation(attributes.Normal, reflectionRayDirection, Material.IndexOfRefraction);
 	reflectivity = reflectivity;
 	if (reflectivity > 0.001)
